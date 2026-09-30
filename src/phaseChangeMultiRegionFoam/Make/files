@@ -1,0 +1,9 @@
+fluid/compressibleCourantNo.C
+solid/solidRegionDiffNo.C
+solid/pcmPhaseChangeModel.C
+solid/pcmNoneModel.C
+solid/pcmEhcModel.C
+solid/pcmEnthalpyPorosityModel.C
+phaseChangeMultiRegionFoam.C
+
+EXE = $(FOAM_USER_APPBIN)/phaseChangeMultiRegionFoam

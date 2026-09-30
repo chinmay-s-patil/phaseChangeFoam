@@ -1,0 +1,294 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     |
+    \\  /    A nd           | Website:  www.openfoam.com
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+
+#include "pcmEhcModel.H"
+#include "addToRunTimeSelectionTable.H"
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+namespace Foam
+{
+    defineTypeNameAndDebug(pcmEhcModel, 0);
+    addToRunTimeSelectionTable(pcmPhaseChangeModel, pcmEhcModel, dictionary);
+}
+
+// * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
+
+Foam::pcmEhcModel::pcmEhcModel
+(
+    const fvMesh& mesh,
+    const solidThermo& thermo
+)
+:
+    pcmPhaseChangeModel(mesh, thermo),
+    Tlm_(303.15),
+    Tum_(313.15),
+    Lm_(163000.0),
+    Tlf_(303.15),
+    Tuf_(313.15),
+    Lf_(163000.0),
+    hysteresisActive_(true),
+    historyLength_(5),
+    directionMethod_("slope"),
+    tolerance_(1e-6),
+    densityModel_("linear"),
+    rhoRef_(1967.0),
+    rhoSolid_(1967.0),
+    rhoLiquid_(1850.0),
+    thermoMode_("thermo"),
+    Cps_(1980.0),
+    Cpl_(2320.0),
+    ks_(0.50),
+    kl_(0.47),
+    CpEff_
+    (
+        IOobject("CpEff", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
+        thermo.Cp()
+    ),
+    rho_
+    (
+        IOobject("rhoPCM", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
+        thermo.rho()
+    ),
+    k_
+    (
+        IOobject("kPCM", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
+        thermo.kappa()
+    ),
+    heatingTrajectory_
+    (
+        IOobject("heatingTrajectory", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::NO_WRITE),
+        mesh,
+        dimensionedScalar("heatingTrajectory", dimless, 1.0)
+    ),
+    THistory_(),
+    timeHistory_()
+{
+    active_ = true;
+    readDict();
+    correct();
+}
+
+
+// * * * * * * * * * * * * * * Private Functions * * * * * * * * * * * * * * //
+
+void Foam::pcmEhcModel::readDict()
+{
+    IOobject dictIO
+    (
+        "phaseChangeDict",
+        mesh_.time().constant(),
+        mesh_,
+        IOobject::MUST_READ,
+        IOobject::NO_WRITE
+    );
+
+    IOdictionary phaseChangeDict(dictIO);
+    const dictionary& pcDict = phaseChangeDict.subDict("phaseChange");
+
+    if (pcDict.found("melting"))
+    {
+        const dictionary& meltDict = pcDict.subDict("melting");
+        Tlm_ = meltDict.lookupOrDefault<scalar>("T_lowerBound", 303.15);
+        Tum_ = meltDict.lookupOrDefault<scalar>("T_upperBound", 313.15);
+        Lm_ = meltDict.lookupOrDefault<scalar>("latentHeat", 163000.0);
+    }
+
+    if (pcDict.found("freezing"))
+    {
+        const dictionary& freezeDict = pcDict.subDict("freezing");
+        Tlf_ = freezeDict.lookupOrDefault<scalar>("T_lowerBound", 303.15);
+        Tuf_ = freezeDict.lookupOrDefault<scalar>("T_upperBound", 313.15);
+        Lf_ = freezeDict.lookupOrDefault<scalar>("latentHeat", 163000.0);
+    }
+
+    if (pcDict.found("hysteresis"))
+    {
+        const dictionary& hysDict = pcDict.subDict("hysteresis");
+        hysteresisActive_ = hysDict.lookupOrDefault<bool>("active", true);
+        historyLength_ = hysDict.lookupOrDefault<label>("historyLength", 5);
+
+        if (hysDict.found("directionDetection"))
+        {
+            const dictionary& dirDict = hysDict.subDict("directionDetection");
+            directionMethod_ = dirDict.lookupOrDefault<word>("method", "slope");
+            tolerance_ = dirDict.lookupOrDefault<scalar>("tolerance", 1e-6);
+        }
+    }
+
+    if (pcDict.found("density"))
+    {
+        const dictionary& densDict = pcDict.subDict("density");
+        densityModel_ = densDict.lookupOrDefault<word>("model", "linear");
+        rhoRef_ = densDict.lookupOrDefault<scalar>("rhoRef", 1967.0);
+        rhoSolid_ = densDict.lookupOrDefault<scalar>("rhoSolid", 1967.0);
+        rhoLiquid_ = densDict.lookupOrDefault<scalar>("rhoLiquid", 1850.0);
+    }
+
+    if (pcDict.found("thermophysical"))
+    {
+        const dictionary& thermoDict = pcDict.subDict("thermophysical");
+        thermoMode_ = thermoDict.lookupOrDefault<word>("mode", "thermo");
+
+        Cps_ = thermoDict.lookupOrDefault<scalar>("CpSolid", 1980.0);
+        Cpl_ = thermoDict.lookupOrDefault<scalar>("CpLiquid", 2320.0);
+        ks_ = thermoDict.lookupOrDefault<scalar>("kSolid", 0.50);
+        kl_ = thermoDict.lookupOrDefault<scalar>("kLiquid", 0.47);
+    }
+
+    Info<< "    EHC PCM Parameters loaded for region " << mesh_.name() << ":" << nl
+        << "      Melting Range: [" << Tlm_ << " - " << Tum_ << "] K, Latent Heat: " << Lm_ << " J/kg" << nl
+        << "      Freezing Range: [" << Tlf_ << " - " << Tuf_ << "] K, Latent Heat: " << Lf_ << " J/kg" << nl
+        << "      Hysteresis Window Length: " << historyLength_ << ", Method: " << directionMethod_ << nl
+        << "      Density Model: " << densityModel_ << " (rhoS=" << rhoSolid_ << ", rhoL=" << rhoLiquid_ << ")" << endl;
+}
+
+
+// * * * * * * * * * * * * * * Member Functions * * * * * * * * * * * * * * //
+
+void Foam::pcmEhcModel::correct()
+{
+    const volScalarField& T = thermo_.T();
+    scalar currentTime = mesh_.time().value();
+
+    if (timeHistory_.empty() || (currentTime > timeHistory_.back()))
+    {
+        if (static_cast<label>(THistory_.size()) >= historyLength_)
+        {
+            THistory_.erase(THistory_.begin());
+            timeHistory_.erase(timeHistory_.begin());
+        }
+
+        THistory_.push_back
+        (
+            volScalarField
+            (
+                IOobject("THist", mesh_.time().timeName(), mesh_, IOobject::NO_READ, IOobject::NO_WRITE),
+                T
+            )
+        );
+        timeHistory_.push_back(currentTime);
+    }
+
+    label N = static_cast<label>(THistory_.size());
+
+    // Evaluate thermo fields from thermo_ if in "thermo" mode
+    tmp<volScalarField> tCpThermo = thermo_.Cp();
+    tmp<volScalarField> tKappaThermo = thermo_.kappa();
+    const volScalarField& CpField = tCpThermo();
+    const volScalarField& KappaField = tKappaThermo();
+
+    forAll(T, cellI)
+    {
+        scalar dTdt = 0.0;
+
+        if (N >= 2)
+        {
+            scalar meanTime = 0.0;
+            scalar meanT = 0.0;
+            for (label j = 0; j < N; ++j)
+            {
+                meanTime += timeHistory_[j];
+                meanT += THistory_[j][cellI];
+            }
+            meanTime /= N;
+            meanT /= N;
+
+            scalar num = 0.0;
+            scalar den = 0.0;
+            for (label j = 0; j < N; ++j)
+            {
+                scalar dt = timeHistory_[j] - meanTime;
+                num += dt * (THistory_[j][cellI] - meanT);
+                den += dt * dt;
+            }
+
+            if (mag(den) > 1e-12)
+            {
+                dTdt = num / den;
+            }
+        }
+
+        if (dTdt > tolerance_)
+        {
+            heatingTrajectory_[cellI] = 1.0;
+        }
+        else if (dTdt < -tolerance_)
+        {
+            heatingTrajectory_[cellI] = 0.0;
+        }
+
+        bool isHeating = (heatingTrajectory_[cellI] > 0.5);
+
+        scalar Tcell = T[cellI];
+        scalar alphaL = 0.0;
+        scalar Tl = isHeating ? Tlm_ : Tlf_;
+        scalar Tu = isHeating ? Tum_ : Tuf_;
+        scalar L = isHeating ? Lm_ : Lf_;
+
+        if (Tcell <= Tl)
+        {
+            alphaL = 0.0;
+            phaseState_[cellI] = 0.0;
+        }
+        else if (Tcell >= Tu)
+        {
+            alphaL = 1.0;
+            phaseState_[cellI] = 2.0;
+        }
+        else
+        {
+            alphaL = (Tcell - Tl) / (Tu - Tl);
+            alphaL = max(0.0, min(1.0, alphaL));
+            phaseState_[cellI] = isHeating ? 1.0 : 3.0;
+        }
+
+        liquidFraction_[cellI] = alphaL;
+
+        scalar cpsVal = Cps_;
+        scalar cplVal = Cpl_;
+        scalar ksVal = ks_;
+        scalar klVal = kl_;
+
+        if (thermoMode_ == "thermo")
+        {
+            cpsVal = CpField[cellI];
+            cplVal = CpField[cellI];
+            ksVal = KappaField[cellI];
+            klVal = KappaField[cellI];
+        }
+
+        scalar cpBase = (1.0 - alphaL) * cpsVal + alphaL * cplVal;
+        scalar deltaCp = 0.0;
+        if (Tcell > Tl && Tcell < Tu)
+        {
+            deltaCp = L / (Tu - Tl);
+        }
+
+        CpEff_[cellI] = cpBase + deltaCp;
+
+        if (densityModel_ == "constant")
+        {
+            rho_[cellI] = rhoRef_;
+        }
+        else
+        {
+            rho_[cellI] = (1.0 - alphaL) * rhoSolid_ + alphaL * rhoLiquid_;
+        }
+
+        k_[cellI] = (1.0 - alphaL) * ksVal + alphaL * klVal;
+    }
+
+    liquidFraction_.correctBoundaryConditions();
+    phaseState_.correctBoundaryConditions();
+    CpEff_.correctBoundaryConditions();
+    rho_.correctBoundaryConditions();
+    k_.correctBoundaryConditions();
+}
+
+// ************************************************************************* //
