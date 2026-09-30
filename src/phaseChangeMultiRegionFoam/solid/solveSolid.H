@@ -4,19 +4,23 @@
         pcmModel.correct();
     }
 
+    tmp<volScalarField> tCpThermo = thermo.Cp();
     tmp<volScalarField> tCpEff = pcmModel.active() ? pcmModel.CpEff() : tmp<volScalarField>(thermo.Cp());
     tmp<volScalarField> trhoPCM = pcmModel.active() ? pcmModel.rho() : tmp<volScalarField>(thermo.rho());
     tmp<volScalarField> tkPCM = pcmModel.active() ? pcmModel.k() : tmp<volScalarField>(thermo.kappa());
 
-    // Effective diffusivity alpha = k / (rho * CpEff)
-    volScalarField alphaEff("alphaEff", tkPCM() / (trhoPCM() * tCpEff()));
+    // Sensible thermal diffusivity alpha = k / (rho * Cp_sensible)
+    volScalarField alpha("alpha", tkPCM() / (trhoPCM() * tCpThermo()));
+
+    // Effective heat capacity scaling ratio for transient term: rho * (CpEff / Cp_sensible)
+    volScalarField rhoCpRatio("rhoCpRatio", trhoPCM() * (tCpEff() / tCpThermo()));
 
     fvScalarMatrix hEqn
     (
-        fvm::ddt(betav*trhoPCM(), h)
+        fvm::ddt(betav*rhoCpRatio, h)
         - (
             thermo.isotropic()
-            ? fvm::laplacian(betav*alphaEff, h, "laplacian(alpha,h)")
+            ? fvm::laplacian(betav*alpha, h, "laplacian(alpha,h)")
             : fvm::laplacian(betav*taniAlpha(), h, "laplacian(alpha,h)")
         )
         ==

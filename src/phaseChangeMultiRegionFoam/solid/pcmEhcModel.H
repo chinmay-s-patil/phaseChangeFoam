@@ -96,6 +96,8 @@ public:
 
     virtual void correct() override;
 
+    virtual void updateHistory() override;
+
     virtual tmp<volScalarField> CpEff() const override
     {
         return CpEff_;

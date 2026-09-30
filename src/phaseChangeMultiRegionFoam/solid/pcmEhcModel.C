@@ -62,7 +62,7 @@ Foam::pcmEhcModel::pcmEhcModel
     ),
     heatingTrajectory_
     (
-        IOobject("heatingTrajectory", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::NO_WRITE),
+        IOobject("heatingTrajectory", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
         mesh,
         dimensionedScalar("heatingTrajectory", dimless, 1.0)
     ),
@@ -71,6 +71,7 @@ Foam::pcmEhcModel::pcmEhcModel
 {
     active_ = true;
     readDict();
+    updateHistory();
     correct();
 }
 
@@ -113,6 +114,13 @@ void Foam::pcmEhcModel::readDict()
         hysteresisActive_ = hysDict.lookupOrDefault<bool>("active", true);
         historyLength_ = hysDict.lookupOrDefault<label>("historyLength", 5);
 
+        if (historyLength_ < 2)
+        {
+            FatalIOErrorInFunction(hysDict)
+                << "hysteresis.historyLength must be >= 2"
+                << exit(FatalIOError);
+        }
+
         if (hysDict.found("directionDetection"))
         {
             const dictionary& dirDict = hysDict.subDict("directionDetection");
@@ -151,12 +159,24 @@ void Foam::pcmEhcModel::readDict()
 
 // * * * * * * * * * * * * * * Member Functions * * * * * * * * * * * * * * //
 
-void Foam::pcmEhcModel::correct()
+void Foam::pcmEhcModel::updateHistory()
 {
     const volScalarField& T = thermo_.T();
     scalar currentTime = mesh_.time().value();
 
-    if (timeHistory_.empty() || (currentTime > timeHistory_.back()))
+    if (timeHistory_.empty())
+    {
+        THistory_.push_back
+        (
+            volScalarField
+            (
+                IOobject("THist", mesh_.time().timeName(), mesh_, IOobject::NO_READ, IOobject::NO_WRITE),
+                T
+            )
+        );
+        timeHistory_.push_back(currentTime);
+    }
+    else if (currentTime > timeHistory_.back())
     {
         if (static_cast<label>(THistory_.size()) >= historyLength_)
         {
@@ -174,10 +194,32 @@ void Foam::pcmEhcModel::correct()
         );
         timeHistory_.push_back(currentTime);
     }
+    else if (currentTime == timeHistory_.back())
+    {
+        THistory_.back() = T;
+    }
+}
 
-    label N = static_cast<label>(THistory_.size());
+
+void Foam::pcmEhcModel::correct()
+{
+    const volScalarField& T = thermo_.T();
+    scalar currentTime = mesh_.time().value();
+
+    // Prepare evaluation time vector including current time step candidate
+    std::vector<scalar> times = timeHistory_;
+    bool includeCurrent = (times.empty() || (currentTime > times.back()));
+    if (includeCurrent)
+    {
+        times.push_back(currentTime);
+    }
+
+    label N = static_cast<label>(times.size());
+    label nHist = static_cast<label>(THistory_.size());
 
     // Evaluate thermo fields from thermo_ if in "thermo" mode
+    // Note: thermo mode uses single local sensible Cp and k provided by solidThermo.
+    // Separate solid and liquid properties require "custom" mode.
     tmp<volScalarField> tCpThermo = thermo_.Cp();
     tmp<volScalarField> tKappaThermo = thermo_.kappa();
     const volScalarField& CpField = tCpThermo();
@@ -187,40 +229,73 @@ void Foam::pcmEhcModel::correct()
     {
         scalar dTdt = 0.0;
 
-        if (N >= 2)
+        if (!hysteresisActive_)
         {
-            scalar meanTime = 0.0;
-            scalar meanT = 0.0;
-            for (label j = 0; j < N; ++j)
-            {
-                meanTime += timeHistory_[j];
-                meanT += THistory_[j][cellI];
-            }
-            meanTime /= N;
-            meanT /= N;
-
-            scalar num = 0.0;
-            scalar den = 0.0;
-            for (label j = 0; j < N; ++j)
-            {
-                scalar dt = timeHistory_[j] - meanTime;
-                num += dt * (THistory_[j][cellI] - meanT);
-                den += dt * dt;
-            }
-
-            if (mag(den) > 1e-12)
-            {
-                dTdt = num / den;
-            }
-        }
-
-        if (dTdt > tolerance_)
-        {
+            // Hysteresis inactive: default to heating/melting trajectory
             heatingTrajectory_[cellI] = 1.0;
         }
-        else if (dTdt < -tolerance_)
+        else if (directionMethod_ == "slope")
         {
-            heatingTrajectory_[cellI] = 0.0;
+            if (N >= 2)
+            {
+                scalar meanTime = 0.0;
+                scalar meanT = 0.0;
+                for (label j = 0; j < N; ++j)
+                {
+                    meanTime += times[j];
+                    scalar Tj = (includeCurrent && (j == N - 1)) ? T[cellI] : THistory_[min(j, nHist - 1)][cellI];
+                    meanT += Tj;
+                }
+                meanTime /= N;
+                meanT /= N;
+
+                scalar num = 0.0;
+                scalar den = 0.0;
+                for (label j = 0; j < N; ++j)
+                {
+                    scalar dt = times[j] - meanTime;
+                    scalar Tj = (includeCurrent && (j == N - 1)) ? T[cellI] : THistory_[min(j, nHist - 1)][cellI];
+                    num += dt * (Tj - meanT);
+                    den += dt * dt;
+                }
+
+                if (mag(den) > 1e-12)
+                {
+                    dTdt = num / den;
+                }
+            }
+
+            if (dTdt > tolerance_)
+            {
+                heatingTrajectory_[cellI] = 1.0;
+            }
+            else if (dTdt < -tolerance_)
+            {
+                heatingTrajectory_[cellI] = 0.0;
+            }
+        }
+        else if (directionMethod_ == "deltaT")
+        {
+            if (N >= 2)
+            {
+                scalar Tprev = nHist > 0 ? THistory_.back()[cellI] : T[cellI];
+                scalar deltaT = T[cellI] - Tprev;
+                if (deltaT > tolerance_)
+                {
+                    heatingTrajectory_[cellI] = 1.0;
+                }
+                else if (deltaT < -tolerance_)
+                {
+                    heatingTrajectory_[cellI] = 0.0;
+                }
+            }
+        }
+        else
+        {
+            FatalErrorInFunction
+                << "Unknown hysteresis direction method: " << directionMethod_
+                << nl << "Valid options are: 'slope', 'deltaT'"
+                << exit(FatalError);
         }
 
         bool isHeating = (heatingTrajectory_[cellI] > 0.5);

@@ -84,6 +84,9 @@ public:
     //- Correct phase fraction, state machine, and thermo fields
     virtual void correct() = 0;
 
+    //- Update trajectory history at completed timestep boundaries
+    virtual void updateHistory() {}
+
     //- Access liquid fraction field
     virtual const volScalarField& liquidFraction() const
     {

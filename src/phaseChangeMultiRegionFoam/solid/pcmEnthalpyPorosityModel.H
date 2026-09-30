@@ -18,6 +18,12 @@ namespace Foam
 
 /*---------------------------------------------------------------------------*\
                    Class pcmEnthalpyPorosityModel Declaration
+
+ Description
+    Enthalpy-Porosity PCM model for phase-change simulation.
+    Note: Full classical enthalpy-porosity with momentum damping (Darcy source)
+    requires a fluid region where UEqn is solved. In solid PCM regions, only
+    sensible heat conduction and latent heat source terms are active.
 \*---------------------------------------------------------------------------*/
 
 class pcmEnthalpyPorosityModel

@@ -212,6 +212,16 @@ int main(int argc, char *argv[])
             }
         }
 
+        forAll(solidRegions, i)
+        {
+            fvMesh& mesh = solidRegions[i];
+            #include "setRegionSolidFields.H"
+            if (pcmModel.active())
+            {
+                pcmModel.updateHistory();
+            }
+        }
+
         runTime.write();
 
         runTime.printExecutionTime(Info);
