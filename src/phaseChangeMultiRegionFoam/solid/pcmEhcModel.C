@@ -220,6 +220,7 @@ void Foam::pcmEhcModel::correct()
     // Evaluate thermo fields from thermo_ if in "thermo" mode
     // Note: thermo mode uses single local sensible Cp and k provided by solidThermo.
     // Separate solid and liquid properties require "custom" mode.
+    const volScalarField& Told = thermo_.T().oldTime();
     tmp<volScalarField> tCpThermo = thermo_.Cp();
     tmp<volScalarField> tKappaThermo = thermo_.kappa();
     const volScalarField& CpField = tCpThermo();
@@ -301,29 +302,46 @@ void Foam::pcmEhcModel::correct()
         bool isHeating = (heatingTrajectory_[cellI] > 0.5);
 
         scalar Tcell = T[cellI];
-        scalar alphaL = 0.0;
+        scalar ToldCell = Told[cellI];
+        scalar alphaL_curr = 0.0;
         scalar Tl = isHeating ? Tlm_ : Tlf_;
         scalar Tu = isHeating ? Tum_ : Tuf_;
         scalar L = isHeating ? Lm_ : Lf_;
 
         if (Tcell <= Tl)
         {
-            alphaL = 0.0;
+            alphaL_curr = 0.0;
             phaseState_[cellI] = 0.0;
         }
         else if (Tcell >= Tu)
         {
-            alphaL = 1.0;
+            alphaL_curr = 1.0;
             phaseState_[cellI] = 2.0;
         }
         else
         {
-            alphaL = (Tcell - Tl) / (Tu - Tl);
-            alphaL = max(0.0, min(1.0, alphaL));
+            alphaL_curr = (Tcell - Tl) / (Tu - Tl);
+            alphaL_curr = max(0.0, min(1.0, alphaL_curr));
             phaseState_[cellI] = isHeating ? 1.0 : 3.0;
         }
 
-        liquidFraction_[cellI] = alphaL;
+        liquidFraction_[cellI] = alphaL_curr;
+
+        // Evaluate alphaL at start-of-step temperature ToldCell for exact secant capacity
+        scalar alphaL_prev = 0.0;
+        if (ToldCell <= Tl)
+        {
+            alphaL_prev = 0.0;
+        }
+        else if (ToldCell >= Tu)
+        {
+            alphaL_prev = 1.0;
+        }
+        else
+        {
+            alphaL_prev = (ToldCell - Tl) / (Tu - Tl);
+            alphaL_prev = max(0.0, min(1.0, alphaL_prev));
+        }
 
         scalar cpsVal = Cps_;
         scalar cplVal = Cpl_;
@@ -338,14 +356,26 @@ void Foam::pcmEhcModel::correct()
             klVal = KappaField[cellI];
         }
 
-        scalar cpBase = (1.0 - alphaL) * cpsVal + alphaL * cplVal;
+        scalar cpBaseCurr = (1.0 - alphaL_curr) * cpsVal + alphaL_curr * cplVal;
+        scalar cpBasePrev = (1.0 - alphaL_prev) * cpsVal + alphaL_prev * cplVal;
+        scalar cpBase = 0.5 * (cpBaseCurr + cpBasePrev);
+
+        // Secant effective heat capacity over [T^n-1, T^n] for exact latent heat absorption
+        scalar deltaTStep = Tcell - ToldCell;
         scalar deltaCp = 0.0;
-        if (Tcell > Tl && Tcell < Tu)
+        if (mag(deltaTStep) > 1e-5)
         {
-            deltaCp = L / (Tu - Tl);
+            deltaCp = L * (alphaL_curr - alphaL_prev) / deltaTStep;
+        }
+        else
+        {
+            if (Tcell > Tl && Tcell < Tu)
+            {
+                deltaCp = L / (Tu - Tl);
+            }
         }
 
-        CpEff_[cellI] = cpBase + deltaCp;
+        CpEff_[cellI] = cpBase + max(0.0, deltaCp);
 
         if (densityModel_ == "constant")
         {
@@ -353,10 +383,179 @@ void Foam::pcmEhcModel::correct()
         }
         else
         {
-            rho_[cellI] = (1.0 - alphaL) * rhoSolid_ + alphaL * rhoLiquid_;
+            rho_[cellI] = (1.0 - alphaL_curr) * rhoSolid_ + alphaL_curr * rhoLiquid_;
         }
 
-        k_[cellI] = (1.0 - alphaL) * ksVal + alphaL * klVal;
+        k_[cellI] = (1.0 - alphaL_curr) * ksVal + alphaL_curr * klVal;
+    }
+
+    // Update boundary patch face values using secant formulation
+    forAll(T.boundaryField(), patchi)
+    {
+        const fvPatchScalarField& pT = T.boundaryField()[patchi];
+        const fvPatchScalarField& pTold = Told.boundaryField()[patchi];
+        fvPatchScalarField& pHeatTraj = heatingTrajectory_.boundaryFieldRef()[patchi];
+        fvPatchScalarField& pLiquidFraction = liquidFraction_.boundaryFieldRef()[patchi];
+        fvPatchScalarField& pPhaseState = phaseState_.boundaryFieldRef()[patchi];
+        fvPatchScalarField& pCpEff = CpEff_.boundaryFieldRef()[patchi];
+        fvPatchScalarField& pRho = rho_.boundaryFieldRef()[patchi];
+        fvPatchScalarField& pK = k_.boundaryFieldRef()[patchi];
+
+        const fvPatchScalarField& pCpThermo = CpField.boundaryField()[patchi];
+        const fvPatchScalarField& pKappaThermo = KappaField.boundaryField()[patchi];
+
+        forAll(pT, facei)
+        {
+            scalar dTdt = 0.0;
+
+            if (!hysteresisActive_)
+            {
+                pHeatTraj[facei] = 1.0;
+            }
+            else if (directionMethod_ == "slope")
+            {
+                if (N >= 2)
+                {
+                    scalar meanTime = 0.0;
+                    scalar meanT = 0.0;
+                    for (label j = 0; j < N; ++j)
+                    {
+                        meanTime += times[j];
+                        scalar Tj = (includeCurrent && (j == N - 1)) ? pT[facei] : THistory_[min(j, nHist - 1)].boundaryField()[patchi][facei];
+                        meanT += Tj;
+                    }
+                    meanTime /= N;
+                    meanT /= N;
+
+                    scalar num = 0.0;
+                    scalar den = 0.0;
+                    for (label j = 0; j < N; ++j)
+                    {
+                        scalar dt = times[j] - meanTime;
+                        scalar Tj = (includeCurrent && (j == N - 1)) ? pT[facei] : THistory_[min(j, nHist - 1)].boundaryField()[patchi][facei];
+                        num += dt * (Tj - meanT);
+                        den += dt * dt;
+                    }
+
+                    if (mag(den) > 1e-12)
+                    {
+                        dTdt = num / den;
+                    }
+                }
+
+                if (dTdt > tolerance_)
+                {
+                    pHeatTraj[facei] = 1.0;
+                }
+                else if (dTdt < -tolerance_)
+                {
+                    pHeatTraj[facei] = 0.0;
+                }
+            }
+            else if (directionMethod_ == "deltaT")
+            {
+                if (N >= 2)
+                {
+                    scalar Tprev = nHist > 0 ? THistory_.back().boundaryField()[patchi][facei] : pT[facei];
+                    scalar deltaT = pT[facei] - Tprev;
+                    if (deltaT > tolerance_)
+                    {
+                        pHeatTraj[facei] = 1.0;
+                    }
+                    else if (deltaT < -tolerance_)
+                    {
+                        pHeatTraj[facei] = 0.0;
+                    }
+                }
+            }
+
+            bool isHeating = (pHeatTraj[facei] > 0.5);
+
+            scalar Tface = pT[facei];
+            scalar ToldFace = pTold[facei];
+            scalar alphaL_curr = 0.0;
+            scalar Tl = isHeating ? Tlm_ : Tlf_;
+            scalar Tu = isHeating ? Tum_ : Tuf_;
+            scalar L = isHeating ? Lm_ : Lf_;
+
+            if (Tface <= Tl)
+            {
+                alphaL_curr = 0.0;
+                pPhaseState[facei] = 0.0;
+            }
+            else if (Tface >= Tu)
+            {
+                alphaL_curr = 1.0;
+                pPhaseState[facei] = 2.0;
+            }
+            else
+            {
+                alphaL_curr = (Tface - Tl) / (Tu - Tl);
+                alphaL_curr = max(0.0, min(1.0, alphaL_curr));
+                pPhaseState[facei] = isHeating ? 1.0 : 3.0;
+            }
+
+            pLiquidFraction[facei] = alphaL_curr;
+
+            scalar alphaL_prev = 0.0;
+            if (ToldFace <= Tl)
+            {
+                alphaL_prev = 0.0;
+            }
+            else if (ToldFace >= Tu)
+            {
+                alphaL_prev = 1.0;
+            }
+            else
+            {
+                alphaL_prev = (ToldFace - Tl) / (Tu - Tl);
+                alphaL_prev = max(0.0, min(1.0, alphaL_prev));
+            }
+
+            scalar cpsVal = Cps_;
+            scalar cplVal = Cpl_;
+            scalar ksVal = ks_;
+            scalar klVal = kl_;
+
+            if (thermoMode_ == "thermo")
+            {
+                cpsVal = pCpThermo[facei];
+                cplVal = pCpThermo[facei];
+                ksVal = pKappaThermo[facei];
+                klVal = pKappaThermo[facei];
+            }
+
+            scalar cpBaseCurr = (1.0 - alphaL_curr) * cpsVal + alphaL_curr * cplVal;
+            scalar cpBasePrev = (1.0 - alphaL_prev) * cpsVal + alphaL_prev * cplVal;
+            scalar cpBase = 0.5 * (cpBaseCurr + cpBasePrev);
+
+            scalar deltaTStep = Tface - ToldFace;
+            scalar deltaCp = 0.0;
+            if (mag(deltaTStep) > 1e-5)
+            {
+                deltaCp = L * (alphaL_curr - alphaL_prev) / deltaTStep;
+            }
+            else
+            {
+                if (Tface > Tl && Tface < Tu)
+                {
+                    deltaCp = L / (Tu - Tl);
+                }
+            }
+
+            pCpEff[facei] = cpBase + max(0.0, deltaCp);
+
+            if (densityModel_ == "constant")
+            {
+                pRho[facei] = rhoRef_;
+            }
+            else
+            {
+                pRho[facei] = (1.0 - alphaL_curr) * rhoSolid_ + alphaL_curr * rhoLiquid_;
+            }
+
+            pK[facei] = (1.0 - alphaL_curr) * ksVal + alphaL_curr * klVal;
+        }
     }
 
     liquidFraction_.correctBoundaryConditions();

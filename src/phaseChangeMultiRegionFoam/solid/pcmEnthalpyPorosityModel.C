@@ -47,7 +47,7 @@ Foam::pcmEnthalpyPorosityModel::pcmEnthalpyPorosityModel
     ),
     k_
     (
-        IOobject("kEP", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
+        IOobject("kPCM", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
         thermo.kappa()
     )
 {
@@ -129,6 +129,47 @@ void Foam::pcmEnthalpyPorosityModel::correct()
         rho_[cellI] = (1.0 - alphaL) * rhoSolid_ + alphaL * rhoLiquid_;
         Cp_[cellI] = CpField[cellI];
         k_[cellI] = KappaField[cellI];
+    }
+
+    forAll(T.boundaryField(), patchi)
+    {
+        const fvPatchScalarField& pT = T.boundaryField()[patchi];
+        fvPatchScalarField& pLiquidFraction = liquidFraction_.boundaryFieldRef()[patchi];
+        fvPatchScalarField& pPhaseState = phaseState_.boundaryFieldRef()[patchi];
+        fvPatchScalarField& pRho = rho_.boundaryFieldRef()[patchi];
+        fvPatchScalarField& pCp = Cp_.boundaryFieldRef()[patchi];
+        fvPatchScalarField& pK = k_.boundaryFieldRef()[patchi];
+
+        const fvPatchScalarField& pCpThermo = CpField.boundaryField()[patchi];
+        const fvPatchScalarField& pKappaThermo = KappaField.boundaryField()[patchi];
+
+        forAll(pT, facei)
+        {
+            scalar Tface = pT[facei];
+            scalar alphaL = 0.0;
+
+            if (Tface <= Tlm_)
+            {
+                alphaL = 0.0;
+                pPhaseState[facei] = 0.0;
+            }
+            else if (Tface >= Tum_)
+            {
+                alphaL = 1.0;
+                pPhaseState[facei] = 2.0;
+            }
+            else
+            {
+                alphaL = (Tface - Tlm_) / (Tum_ - Tlm_);
+                alphaL = max(0.0, min(1.0, alphaL));
+                pPhaseState[facei] = 1.0;
+            }
+
+            pLiquidFraction[facei] = alphaL;
+            pRho[facei] = (1.0 - alphaL) * rhoSolid_ + alphaL * rhoLiquid_;
+            pCp[facei] = pCpThermo[facei];
+            pK[facei] = pKappaThermo[facei];
+        }
     }
 
     liquidFraction_.correctBoundaryConditions();
