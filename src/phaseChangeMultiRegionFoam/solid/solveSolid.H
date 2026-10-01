@@ -1,8 +1,14 @@
 {
-    int nNonLinearCorr = pcmModel.active() ? pimple.getOrDefault<int>("nNonLinearCorrectors", 3) : 1;
+    int nNonLinearCorr = pimple.getOrDefault<int>("nNonLinearCorrectors", 25);
+    scalar nonLinearTol = pimple.getOrDefault<scalar>("nonLinearTolerance", 1e-4);
 
+    volScalarField Tprev("Tprev", thermo.T());
+
+    int actualIter = 0;
     for (int nlCorr = 0; nlCorr < nNonLinearCorr; ++nlCorr)
     {
+        actualIter = nlCorr + 1;
+
         if (pcmModel.active())
         {
             pcmModel.correct();
@@ -63,9 +69,17 @@
 
             thermo.correct();
 
+            scalar maxDeltaT = max(mag(thermo.T() - Tprev)).value();
+            Tprev = thermo.T();
+
             if (finalIter && (nlCorr == nNonLinearCorr - 1))
             {
                 mesh.data().setFinalIteration(false);
+            }
+
+            if (maxDeltaT < nonLinearTol && nlCorr > 0)
+            {
+                break;
             }
         }
     }
@@ -73,6 +87,7 @@
     if (!coupled)
     {
         Info<< "Min/max T:" << min(thermo.T()).value() << ' '
-            << max(thermo.T()).value() << endl;
+            << max(thermo.T()).value()
+            << " (non-linear iters: " << actualIter << ")" << endl;
     }
 }

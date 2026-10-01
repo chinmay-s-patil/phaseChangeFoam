@@ -1,1 +1,21 @@
-ideas/
+# OpenFOAM Build Artifacts
+Make/linux*
+*.o
+*.so
+*.dep
+
+# OpenFOAM Time Steps and Dynamic Code
+[1-9]*
+0.*
+!0/
+dynamicCode/
+log.*
+*.log
+
+# Python cache & temporary files
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Test Run Directories
+singleCellOvershoot_run/

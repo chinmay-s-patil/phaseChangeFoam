@@ -4,4 +4,7 @@ int nNonOrthCorr =
     pimple.getOrDefault<int>("nNonOrthogonalCorrectors", 0);
 
 int nNonLinearCorr =
-    pimple.getOrDefault<int>("nNonLinearCorrectors", 3);
+    pimple.getOrDefault<int>("nNonLinearCorrectors", 25);
+
+scalar nonLinearTol =
+    pimple.getOrDefault<scalar>("nonLinearTolerance", 1e-4);
