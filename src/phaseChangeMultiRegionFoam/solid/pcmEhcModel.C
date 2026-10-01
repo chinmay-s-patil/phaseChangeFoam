@@ -66,11 +66,37 @@ Foam::pcmEhcModel::pcmEhcModel
         mesh,
         dimensionedScalar("heatingTrajectory", dimless, 1.0)
     ),
+    liquidFraction_old_
+    (
+        IOobject("liquidFraction_old", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::NO_WRITE),
+        liquidFraction_
+    ),
+    heatingTrajectory_old_
+    (
+        IOobject("heatingTrajectory_old", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::NO_WRITE),
+        heatingTrajectory_
+    ),
     THistory_(),
     timeHistory_()
 {
     active_ = true;
     readDict();
+
+    // Fresh start initialization for liquidFraction_ if not read from disk
+    const volScalarField& Tinit = thermo_.T();
+    forAll(liquidFraction_, cellI)
+    {
+        scalar Tval = Tinit[cellI];
+        scalar alpha0 = (Tval <= Tlm_) ? 0.0 : ((Tval >= Tum_) ? 1.0 : (Tval - Tlm_) / (Tum_ - Tlm_));
+        if (mag(liquidFraction_[cellI]) < 1e-12 && Tval > Tlm_)
+        {
+            liquidFraction_[cellI] = alpha0;
+        }
+    }
+    liquidFraction_.correctBoundaryConditions();
+    liquidFraction_old_ = liquidFraction_;
+    heatingTrajectory_old_ = heatingTrajectory_;
+
     updateHistory();
     correct();
 }
@@ -161,6 +187,9 @@ void Foam::pcmEhcModel::readDict()
 
 void Foam::pcmEhcModel::updateHistory()
 {
+    liquidFraction_old_ = liquidFraction_;
+    heatingTrajectory_old_ = heatingTrajectory_;
+
     const volScalarField& T = thermo_.T();
     scalar currentTime = mesh_.time().value();
 
@@ -228,82 +257,11 @@ void Foam::pcmEhcModel::correct()
 
     forAll(T, cellI)
     {
-        scalar dTdt = 0.0;
-
-        if (!hysteresisActive_)
-        {
-            // Hysteresis inactive: default to heating/melting trajectory
-            heatingTrajectory_[cellI] = 1.0;
-        }
-        else if (directionMethod_ == "slope")
-        {
-            if (N >= 2)
-            {
-                scalar meanTime = 0.0;
-                scalar meanT = 0.0;
-                for (label j = 0; j < N; ++j)
-                {
-                    meanTime += times[j];
-                    scalar Tj = (includeCurrent && (j == N - 1)) ? T[cellI] : THistory_[min(j, nHist - 1)][cellI];
-                    meanT += Tj;
-                }
-                meanTime /= N;
-                meanT /= N;
-
-                scalar num = 0.0;
-                scalar den = 0.0;
-                for (label j = 0; j < N; ++j)
-                {
-                    scalar dt = times[j] - meanTime;
-                    scalar Tj = (includeCurrent && (j == N - 1)) ? T[cellI] : THistory_[min(j, nHist - 1)][cellI];
-                    num += dt * (Tj - meanT);
-                    den += dt * dt;
-                }
-
-                if (mag(den) > 1e-12)
-                {
-                    dTdt = num / den;
-                }
-            }
-
-            if (dTdt > tolerance_)
-            {
-                heatingTrajectory_[cellI] = 1.0;
-            }
-            else if (dTdt < -tolerance_)
-            {
-                heatingTrajectory_[cellI] = 0.0;
-            }
-        }
-        else if (directionMethod_ == "deltaT")
-        {
-            if (N >= 2)
-            {
-                scalar Tprev = nHist > 0 ? THistory_.back()[cellI] : T[cellI];
-                scalar deltaT = T[cellI] - Tprev;
-                if (deltaT > tolerance_)
-                {
-                    heatingTrajectory_[cellI] = 1.0;
-                }
-                else if (deltaT < -tolerance_)
-                {
-                    heatingTrajectory_[cellI] = 0.0;
-                }
-            }
-        }
-        else
-        {
-            FatalErrorInFunction
-                << "Unknown hysteresis direction method: " << directionMethod_
-                << nl << "Valid options are: 'slope', 'deltaT'"
-                << exit(FatalError);
-        }
-
-        bool isHeating = (heatingTrajectory_[cellI] > 0.5);
-
         scalar Tcell = T[cellI];
         scalar ToldCell = Told[cellI];
         scalar deltaTStep = Tcell - ToldCell;
+
+        bool isHeating = (heatingTrajectory_old_[cellI] > 0.5);
 
         if (!hysteresisActive_)
         {
@@ -322,6 +280,10 @@ void Foam::pcmEhcModel::correct()
                 isHeating = false;
                 heatingTrajectory_[cellI] = 0.0;
             }
+            else
+            {
+                heatingTrajectory_[cellI] = heatingTrajectory_old_[cellI];
+            }
         }
 
         scalar Tl = isHeating ? Tlm_ : Tlf_;
@@ -331,15 +293,10 @@ void Foam::pcmEhcModel::correct()
         scalar alpha_m_curr = (Tcell <= Tlm_) ? 0.0 : ((Tcell >= Tum_) ? 1.0 : (Tcell - Tlm_) / (Tum_ - Tlm_));
         scalar alpha_f_curr = (Tcell <= Tlf_) ? 0.0 : ((Tcell >= Tuf_) ? 1.0 : (Tcell - Tlf_) / (Tuf_ - Tlf_));
 
-        scalar alphaL_prev = liquidFraction_[cellI];
+        scalar alphaL_prev = liquidFraction_old_[cellI];
         if (!hysteresisActive_)
         {
             alphaL_prev = (ToldCell <= Tlm_) ? 0.0 : ((ToldCell >= Tum_) ? 1.0 : (ToldCell - Tlm_) / (Tum_ - Tlm_));
-        }
-        else
-        {
-            if (ToldCell <= min(Tlm_, Tlf_)) alphaL_prev = 0.0;
-            else if (ToldCell >= max(Tum_, Tuf_)) alphaL_prev = 1.0;
         }
 
         scalar alphaL_curr = 0.0;
@@ -422,7 +379,9 @@ void Foam::pcmEhcModel::correct()
         const fvPatchScalarField& pT = T.boundaryField()[patchi];
         const fvPatchScalarField& pTold = Told.boundaryField()[patchi];
         fvPatchScalarField& pHeatTraj = heatingTrajectory_.boundaryFieldRef()[patchi];
+        const fvPatchScalarField& pHeatTrajOld = heatingTrajectory_old_.boundaryField()[patchi];
         fvPatchScalarField& pLiquidFraction = liquidFraction_.boundaryFieldRef()[patchi];
+        const fvPatchScalarField& pLiquidFractionOld = liquidFraction_old_.boundaryField()[patchi];
         fvPatchScalarField& pPhaseState = phaseState_.boundaryFieldRef()[patchi];
         fvPatchScalarField& pCpEff = CpEff_.boundaryFieldRef()[patchi];
         fvPatchScalarField& pRho = rho_.boundaryFieldRef()[patchi];
@@ -437,7 +396,7 @@ void Foam::pcmEhcModel::correct()
             scalar ToldFace = pTold[facei];
             scalar deltaTStep = Tface - ToldFace;
 
-            bool isHeating = (pHeatTraj[facei] > 0.5);
+            bool isHeating = (pHeatTrajOld[facei] > 0.5);
 
             if (!hysteresisActive_)
             {
@@ -456,6 +415,10 @@ void Foam::pcmEhcModel::correct()
                     isHeating = false;
                     pHeatTraj[facei] = 0.0;
                 }
+                else
+                {
+                    pHeatTraj[facei] = pHeatTrajOld[facei];
+                }
             }
 
             scalar Tl = isHeating ? Tlm_ : Tlf_;
@@ -465,15 +428,10 @@ void Foam::pcmEhcModel::correct()
             scalar alpha_m_curr = (Tface <= Tlm_) ? 0.0 : ((Tface >= Tum_) ? 1.0 : (Tface - Tlm_) / (Tum_ - Tlm_));
             scalar alpha_f_curr = (Tface <= Tlf_) ? 0.0 : ((Tface >= Tuf_) ? 1.0 : (Tface - Tlf_) / (Tuf_ - Tlf_));
 
-            scalar alphaL_prev = pLiquidFraction[facei];
+            scalar alphaL_prev = pLiquidFractionOld[facei];
             if (!hysteresisActive_)
             {
                 alphaL_prev = (ToldFace <= Tlm_) ? 0.0 : ((ToldFace >= Tum_) ? 1.0 : (ToldFace - Tlm_) / (Tum_ - Tlm_));
-            }
-            else
-            {
-                if (ToldFace <= min(Tlm_, Tlf_)) alphaL_prev = 0.0;
-                else if (ToldFace >= max(Tum_, Tuf_)) alphaL_prev = 1.0;
             }
 
             scalar alphaL_curr = 0.0;

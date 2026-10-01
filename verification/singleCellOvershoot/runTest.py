@@ -282,6 +282,26 @@ def main():
         print("STATUS: CASE 4 FAILED!")
         all_passed = False
 
+    # --- Case 5: Mushy Start & Reversal (T0 = 305 K, alpha0 = 0.5) ---
+    # Start at T0 = 305 K inside melting window [300, 310 K] with initial alpha0 = 0.5
+    # Heat with Q = +360 kW for dt = 100 s => E_in = 3.6e7 J/m^3 => delta_H_mass = 36 kJ/kg
+    # Latent heat to melt 0.5 -> 0.8 = 0.3 * 100 kJ/kg = 30 kJ/kg (305 -> 308 K)
+    # Sensible heat 305 -> 308 K = 3 * 2000 = 6 kJ/kg
+    # Total enthalpy = 30 + 6 = 36 kJ/kg => T_exact = 308.000000 K, alphaL_exact = 0.800000
+    print("\n--- Case 5: Mushy Start State (T0 = 305 K, alpha0 = 0.5 -> T = 308 K, alphaL = 0.80) ---")
+    case5_dir = os.path.join(base_dir, "case5_mushyStart")
+    T5, a5, log5 = setup_single_cell_case(case5_dir, T0=305.0, Q_source=360000.0, L_heat=100000.0)
+    err5 = abs(T5 - 308.0)
+    err_a5 = abs(a5 - 0.80)
+    print(f"Simulated T = {T5:.6f} K, alphaL = {a5:.6f}")
+    print(f"Exact T     = 308.000000 K, alphaL = 0.800000")
+    print(f"Temperature Error = {err5:.6f} K, Alpha Error = {err_a5:.6f}")
+    if err5 < 0.001 and err_a5 < 0.001:
+        print("STATUS: CASE 5 PASSED!")
+    else:
+        print("STATUS: CASE 5 FAILED!")
+        all_passed = False
+
     print("\n=======================================================")
     print("      SINGLE-CELL VERIFICATION SUITE SUMMARY           ")
     print("=======================================================")
@@ -289,6 +309,7 @@ def main():
     print(f"Case 2 (Cooling Jump)   : {'PASSED' if err2 < 0.001 else 'FAILED'} (err = {err2:.6f} K)")
     print(f"Case 3 (Partial Melt)   : {'PASSED' if err3 < 0.001 else 'FAILED'} (err = {err3:.6f} K)")
     print(f"Case 4 (Realistic L)    : {'PASSED' if err4 < 0.001 else 'FAILED'} (err = {err4:.6f} K)")
+    print(f"Case 5 (Mushy Start)    : {'PASSED' if err5 < 0.001 else 'FAILED'} (err = {err5:.6f} K)")
     print("-------------------------------------------------------")
 
     if all_passed:

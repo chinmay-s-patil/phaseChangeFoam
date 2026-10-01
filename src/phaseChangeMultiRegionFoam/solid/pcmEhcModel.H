@@ -64,6 +64,10 @@ private:
     // Trajectory tracking (1.0 = heating, 0.0 = cooling)
     volScalarField heatingTrajectory_;
 
+    // Start-of-step stored fields for committed alphaL_old formulation across Picard iterations
+    volScalarField liquidFraction_old_;
+    volScalarField heatingTrajectory_old_;
+
     // Temperature history storage using std::vector
     std::vector<volScalarField> THistory_;
     std::vector<scalar> timeHistory_;

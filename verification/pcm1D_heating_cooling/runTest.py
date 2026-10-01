@@ -205,6 +205,7 @@ writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii;
     with open("2000/pcm/T", "r") as f:
         t_2000 = f.read()
     t_2000_cool = re.sub(r"(hot\s*\{\s*type\s+fixedValue;\s*value\s+uniform\s+)[0-9.]+(;\s*\})", r"\g<1>270.0\2", t_2000)
+    assert t_2000 != t_2000_cool, "Regex substitution failed to update hot patch boundary value!"
     with open("2000/pcm/T", "w") as f:
         f.write(t_2000_cool)
 
@@ -221,6 +222,10 @@ writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii;
     max_a_cool = max(alpha_cool)
     alpha_bounded = (min_a_cool >= -1e-6) and (max_a_cool <= 1.000001)
 
+    # Regression check against hysteresis OFF heating benchmark (mean_a = 0.2887, mean_T = 299.37 K)
+    reg_a_passed = abs(mean_a_heat - 0.2887) < 0.002
+    reg_T_passed = abs(mean_T_heat - 299.37) < 0.1
+
     # Enthalpy conservation check
     rho = 1000.0
     Cp = 2000.0
@@ -234,8 +239,8 @@ writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii;
     print("\n=======================================================")
     print("      HEATING & COOLING REVERSAL TEST RESULTS          ")
     print("=======================================================")
-    print(f"Heating Peak (t=2000s) Mean T     : {mean_T_heat:.2f} K")
-    print(f"Heating Peak (t=2000s) Mean alphaL : {mean_a_heat:.4f}")
+    print(f"Heating Peak (t=2000s) Mean T     : {mean_T_heat:.2f} K (Benchmark: 299.37 K, Pass={reg_T_passed})")
+    print(f"Heating Peak (t=2000s) Mean alphaL : {mean_a_heat:.4f} (Benchmark: 0.2887, Pass={reg_a_passed})")
     print(f"Heating Peak (t=2000s) Domain H    : {H_heat:.2f} J/m^2")
     print(f"Cooling End  (t=4000s) Mean T     : {mean_T_cool:.2f} K")
     print(f"Cooling End  (t=4000s) Mean alphaL : {mean_a_cool:.4f}")
@@ -244,11 +249,13 @@ writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii;
     print(f"Liquid Fraction Bounded [0, 1]     : {alpha_bounded} (min={min_a_cool:.6f}, max={max_a_cool:.6f})")
     print("-------------------------------------------------------")
 
-    if mean_a_heat > 0.25 and mean_a_cool < 0.05 and mean_T_cool < 290.0 and alpha_bounded:
+    if reg_a_passed and reg_T_passed and mean_a_cool < 0.05 and mean_T_cool < 290.0 and alpha_bounded:
         print("\nSTATUS: HEATING-COOLING REVERSAL VERIFICATION PASSED!")
-        print("The solver successfully simulated stateful hysteresis phase change reversal without unphysical bounds or energy corruption.")
+        print("The solver committed alphaL_old statefully, matching hysteresis OFF heating benchmark (alphaL=0.2887) identically.")
     else:
         print("\nSTATUS: TEST FAILED")
+        if not reg_a_passed or not reg_T_passed:
+            print(f"Reason: Heating phase regression failed (Mean alphaL={mean_a_heat:.4f} vs 0.2887, Mean T={mean_T_heat:.2f} K vs 299.37 K)")
         if not alpha_bounded:
             print(f"Reason: Liquid fraction out of bounds [0, 1]: min={min_a_cool}, max={max_a_cool}")
         sys.exit(1)
