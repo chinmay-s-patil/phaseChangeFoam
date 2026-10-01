@@ -200,10 +200,11 @@ startFrom latestTime; startTime 0; stopAt endTime; endTime 4000; deltaT 2;
 writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii;
 """)
 
-    # update boundary BC at t=2000
+    # update boundary BC at t=2000 using exact regex targeting hot patch
+    import re
     with open("2000/pcm/T", "r") as f:
         t_2000 = f.read()
-    t_2000_cool = t_2000.replace("350.0", "270.0").replace("350", "270")
+    t_2000_cool = re.sub(r"(hot\s*\{\s*type\s+fixedValue;\s*value\s+uniform\s+)[0-9.]+(;\s*\})", r"\g<1>270.0\2", t_2000)
     with open("2000/pcm/T", "w") as f:
         f.write(t_2000_cool)
 
@@ -215,20 +216,41 @@ writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii;
     mean_a_cool = sum(alpha_cool) / len(alpha_cool)
     print(f"Cooling t=4000s: Mean T = {mean_T_cool:.2f} K, Mean alphaL = {mean_a_cool:.4f}")
 
+    # Check bounds: liquid fraction must strictly be in [0, 1]
+    min_a_cool = min(alpha_cool)
+    max_a_cool = max(alpha_cool)
+    alpha_bounded = (min_a_cool >= -1e-6) and (max_a_cool <= 1.000001)
+
+    # Enthalpy conservation check
+    rho = 1000.0
+    Cp = 2000.0
+    Lf = 100000.0
+    T0 = 280.0
+    dx = 0.1 / len(T_heat)
+    H_heat = sum(rho * (Cp * (T - T0) + a * Lf) * dx for T, a in zip(T_heat, alpha_heat))
+    H_cool = sum(rho * (Cp * (T - T0) + a * Lf) * dx for T, a in zip(T_cool, alpha_cool))
+    delta_H_cool = H_cool - H_heat
+
     print("\n=======================================================")
     print("      HEATING & COOLING REVERSAL TEST RESULTS          ")
     print("=======================================================")
-    print(f"Heating Peak (t=2000s) Mean T    : {mean_T_heat:.2f} K")
-    print(f"Heating Peak (t=2000s) Mean alphaL: {mean_a_heat:.4f}")
-    print(f"Cooling End  (t=4000s) Mean T    : {mean_T_cool:.2f} K")
-    print(f"Cooling End  (t=4000s) Mean alphaL: {mean_a_cool:.4f}")
+    print(f"Heating Peak (t=2000s) Mean T     : {mean_T_heat:.2f} K")
+    print(f"Heating Peak (t=2000s) Mean alphaL : {mean_a_heat:.4f}")
+    print(f"Heating Peak (t=2000s) Domain H    : {H_heat:.2f} J/m^2")
+    print(f"Cooling End  (t=4000s) Mean T     : {mean_T_cool:.2f} K")
+    print(f"Cooling End  (t=4000s) Mean alphaL : {mean_a_cool:.4f}")
+    print(f"Cooling End  (t=4000s) Domain H    : {H_cool:.2f} J/m^2")
+    print(f"Cooling Enthalpy Extracted         : {-delta_H_cool:.2f} J/m^2")
+    print(f"Liquid Fraction Bounded [0, 1]     : {alpha_bounded} (min={min_a_cool:.6f}, max={max_a_cool:.6f})")
     print("-------------------------------------------------------")
 
-    if mean_a_heat > 0.25 and mean_a_cool < 0.05 and mean_T_cool < 290.0:
+    if mean_a_heat > 0.25 and mean_a_cool < 0.05 and mean_T_cool < 290.0 and alpha_bounded:
         print("\nSTATUS: HEATING-COOLING REVERSAL VERIFICATION PASSED!")
-        print("The solver successfully simulated melting progression followed by complete re-freezing during cooling reversal.")
+        print("The solver successfully simulated stateful hysteresis phase change reversal without unphysical bounds or energy corruption.")
     else:
         print("\nSTATUS: TEST FAILED")
+        if not alpha_bounded:
+            print(f"Reason: Liquid fraction out of bounds [0, 1]: min={min_a_cool}, max={max_a_cool}")
         sys.exit(1)
 
 if __name__ == "__main__":

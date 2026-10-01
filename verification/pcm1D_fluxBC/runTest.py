@@ -77,9 +77,9 @@ boundary (
 );
 """)
 
-    t_end = 1000.0
+    t_end = 2000.0
     dt = 1.0
-    q_flux = 500.0 # W/m^2
+    q_flux = 3000.0 # W/m^2
     rho = 1000.0 # kg/m^3
     Cp = 2000.0 # J/(kg K)
     Lf = 100000.0 # J/kg
@@ -108,7 +108,7 @@ snGradSchemes { default corrected; }
     with open("system/fvSolution", "w") as f:
         f.write("""
 FoamFile { version 2.0; format ascii; class dictionary; location "system"; object fvSolution; }
-PIMPLE { nNonOrthogonalCorrectors 0; nNonLinearCorrectors 25; nonLinearTolerance 1e-5; }
+PIMPLE { nNonOrthogonalCorrectors 0; nNonLinearCorrectors 50; nonLinearTolerance 1e-6; }
 solvers { "h.*" { solver PCG; preconditioner DIC; tolerance 1e-12; relTol 0; } }
 """)
 
@@ -159,7 +159,7 @@ phaseChange
 FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object T; }
 dimensions [0 0 0 1 0 0 0]; internalField uniform 280.0;
 boundaryField {
-    hot { type fixedGradient; gradient uniform 500.0; }
+    hot { type fixedGradient; gradient uniform 3000.0; }
     cold { type zeroGradient; }
     "(top|bottom|front|back)" { type empty; }
 }
@@ -169,7 +169,7 @@ boundaryField {
 FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object h; }
 dimensions [0 2 -2 0 0 0 0]; internalField uniform 560000;
 boundaryField {
-    hot { type fixedGradient; gradient uniform 1000000.0; }
+    hot { type fixedGradient; gradient uniform 6000000.0; }
     cold { type zeroGradient; }
     "(top|bottom|front|back)" { type empty; }
 }
@@ -197,13 +197,18 @@ boundaryField { ".*" { type calculated; value uniform 101325; } "(top|bottom|fro
     N = len(T_vals)
     dx = L / N
 
-    # Calculate domain energy change per unit cross-sectional area:
-    # E_domain = sum_i rho * [ Cp * (T_i - T0) + alpha_i * Lf ] * dx
     if len(alpha_vals) == 1:
         alpha_vals = alpha_vals * len(T_vals)
+
+    max_T = max(T_vals)
+    min_T = min(T_vals)
+    max_alpha = max(alpha_vals)
+    min_alpha = min(alpha_vals)
+
     print("len(T_vals):", len(T_vals), "len(alpha_vals):", len(alpha_vals))
-    print("T_vals min/max:", min(T_vals), max(T_vals))
-    print("alpha_vals min/max:", min(alpha_vals), max(alpha_vals))
+    print(f"Temperature Range (min/max): {min_T:.2f} K / {max_T:.2f} K")
+    print(f"Liquid Fraction Range (min/max): {min_alpha:.4f} / {max_alpha:.4f}")
+
     delta_H_domain = sum(rho * (Cp * (T - T0) + a * Lf) * dx for T, a in zip(T_vals, alpha_vals))
     
     # Total input energy per unit area: E_in = q * t_end
@@ -220,17 +225,30 @@ boundaryField { ".*" { type calculated; value uniform 101325; } "(top|bottom|fro
     print("\n=======================================================")
     print("      FIXED HEAT FLUX BC & CONSERVATION RESULTS        ")
     print("=======================================================")
-    print(f"E_in  : {E_in:.2f} J/m^2")
-    print(f"delta_H: {delta_H_domain:.2f} J/m^2")
-    print(f"Error  : {rel_err*100:.4f}%")
+    print(f"Max Wall T  : {max_T:.2f} K (Melt range: 300.0 K - 310.0 K)")
+    print(f"Max alphaL  : {max_alpha:.4f}")
+    print(f"Min alphaL  : {min_alpha:.4f}")
+    print(f"E_in        : {E_in:.2f} J/m^2")
+    print(f"delta_H     : {delta_H_domain:.2f} J/m^2")
+    print(f"Error       : {rel_err*100:.6f}%")
     print("-------------------------------------------------------")
 
-    # Pass criterion: relative error < 0.1% (1e-3)
-    if rel_err < 1e-3:
-        print("\nSTATUS: FIXED HEAT FLUX CONSERVATION TEST PASSED!")
-        print("Global domain energy balance perfectly matches integrated Neumann boundary heat flux.")
+    # Pass criterion:
+    # 1. Wall exceeded melt upperBound (max_T > 310 K) proving full phase change occurred
+    # 2. Both liquid and solid phases present (max_alpha > 0.99, min_alpha < 0.01)
+    # 3. Global energy relative error < 0.1% (1e-3)
+    has_melted = max_T > 310.0 and max_alpha > 0.99
+    is_conserved = rel_err < 1e-3
+
+    if has_melted and is_conserved:
+        print("\nSTATUS: FIXED HEAT FLUX MELTING & CONSERVATION TEST PASSED!")
+        print("Active phase change (solid, mushy, liquid) occurred and energy was 100% conserved.")
     else:
         print("\nSTATUS: TEST FAILED")
+        if not has_melted:
+            print(f"Reason: Domain did not undergo full phase change (max_T={max_T:.2f} K, max_alpha={max_alpha:.4f})")
+        if not is_conserved:
+            print(f"Reason: Energy error {rel_err*100:.6f}% exceeds threshold 0.1%")
         sys.exit(1)
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object T; }
 dimensions [0 0 0 1 0 0 0]; internalField uniform 280.0;
 boundaryField {
-    hot { type fixedGradient; gradient uniform 500.0; }
+    hot { type fixedGradient; gradient uniform 3000.0; }
     cold { type zeroGradient; }
     "(top|bottom|front|back)" { type empty; }
 }

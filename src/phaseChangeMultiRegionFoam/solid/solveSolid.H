@@ -86,6 +86,15 @@
 
     if (!coupled)
     {
+        if (actualIter == nNonLinearCorr && maxDeltaT >= nonLinearTol)
+        {
+            WarningInFunction
+                << "Solid region " << solidRegions[i].name()
+                << " did not converge within " << nNonLinearCorr
+                << " non-linear iterations (residual maxDeltaT = " << maxDeltaT
+                << " K > tol = " << nonLinearTol << " K)" << endl;
+        }
+
         Info<< "Min/max T:" << min(thermo.T()).value() << ' '
             << max(thermo.T()).value()
             << " (non-linear iters: " << actualIter << ")" << endl;
