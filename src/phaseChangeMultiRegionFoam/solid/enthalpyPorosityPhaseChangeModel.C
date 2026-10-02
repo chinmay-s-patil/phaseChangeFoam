@@ -32,6 +32,7 @@ Foam::enthalpyPorosityPhaseChangeModel::enthalpyPorosityPhaseChangeModel
     beta_(50e-6),
     Cu_(1e5),
     q_(1e-2),
+    relax_(0.2),
     rhoRef_(1967.0),
     rhoSolid_(1967.0),
     rhoLiquid_(1850.0),
@@ -78,12 +79,37 @@ void Foam::enthalpyPorosityPhaseChangeModel::readDict()
 
     readConvectionDict(pcDict);
 
-    if (pcDict.found("melting"))
+    if (!pcDict.found("melting"))
     {
-        const dictionary& meltDict = pcDict.subDict("melting");
-        Tlm_ = meltDict.lookupOrDefault<scalar>("T_lowerBound", 303.15);
-        Tum_ = meltDict.lookupOrDefault<scalar>("T_upperBound", 313.15);
-        Lm_ = meltDict.lookupOrDefault<scalar>("latentHeat", 163000.0);
+        FatalIOErrorInFunction(phaseChangeDict)
+            << "Missing required sub-dictionary 'melting' in 'phaseChange' for region "
+            << mesh_.name()
+            << exit(FatalIOError);
+    }
+    const dictionary& meltDict = pcDict.subDict("melting");
+    if (!meltDict.found("T_lowerBound") || !meltDict.found("T_upperBound") || !meltDict.found("latentHeat"))
+    {
+        FatalIOErrorInFunction(phaseChangeDict)
+            << "Sub-dictionary 'melting' in 'phaseChange' for region " << mesh_.name()
+            << " must contain 'T_lowerBound', 'T_upperBound', and 'latentHeat'."
+            << exit(FatalIOError);
+    }
+    Tlm_ = meltDict.get<scalar>("T_lowerBound");
+    Tum_ = meltDict.get<scalar>("T_upperBound");
+    Lm_ = meltDict.get<scalar>("latentHeat");
+
+    if (Tum_ <= Tlm_)
+    {
+        FatalIOErrorInFunction(phaseChangeDict)
+            << "Melting upper bound T_upperBound (" << Tum_
+            << " K) must be > T_lowerBound (" << Tlm_ << " K)"
+            << exit(FatalIOError);
+    }
+    if (Lm_ < 0.0)
+    {
+        FatalIOErrorInFunction(phaseChangeDict)
+            << "Latent heat Lm (" << Lm_ << ") must be >= 0"
+            << exit(FatalIOError);
     }
 
     if (pcDict.found("enthalpyPorosity"))
@@ -92,14 +118,31 @@ void Foam::enthalpyPorosityPhaseChangeModel::readDict()
         beta_ = epDict.lookupOrDefault<scalar>("beta", 50e-6);
         Cu_ = epDict.lookupOrDefault<scalar>("Cu", 1e5);
         q_ = epDict.lookupOrDefault<scalar>("q", 1e-2);
+        relax_ = epDict.lookupOrDefault<scalar>("relax", 0.2);
     }
+
+    tmp<volScalarField> tRhoThermoInit = thermo_.rho();
+    const volScalarField& rhoFieldInit = tRhoThermoInit();
+    scalar rhoThermoInit = rhoFieldInit.primitiveField().size() > 0 ? rhoFieldInit.primitiveField()[0] : 1000.0;
+    densityModel_ = "thermo";
+    rhoRef_ = rhoThermoInit;
+    rhoSolid_ = rhoThermoInit;
+    rhoLiquid_ = rhoThermoInit;
 
     if (pcDict.found("density"))
     {
         const dictionary& densDict = pcDict.subDict("density");
-        rhoRef_ = densDict.lookupOrDefault<scalar>("rhoRef", 1967.0);
-        rhoSolid_ = densDict.lookupOrDefault<scalar>("rhoSolid", 1967.0);
-        rhoLiquid_ = densDict.lookupOrDefault<scalar>("rhoLiquid", 1850.0);
+        densityModel_ = densDict.lookupOrDefault<word>("model", "thermo");
+        rhoRef_ = densDict.lookupOrDefault<scalar>("rhoRef", rhoThermoInit);
+        rhoSolid_ = densDict.lookupOrDefault<scalar>("rhoSolid", rhoThermoInit);
+        rhoLiquid_ = densDict.lookupOrDefault<scalar>("rhoLiquid", rhoThermoInit);
+    }
+
+    if (densityModel_ != "thermo" && densityModel_ != "constant" && densityModel_ != "linear")
+    {
+        FatalIOErrorInFunction(phaseChangeDict)
+            << "Unsupported density model '" << densityModel_ << "'. Expected 'thermo', 'constant', or 'linear'."
+            << exit(FatalIOError);
     }
 }
 
@@ -108,8 +151,10 @@ void Foam::enthalpyPorosityPhaseChangeModel::correct()
     const volScalarField& T = thermo_.T();
     tmp<volScalarField> tCp = thermo_.Cp();
     tmp<volScalarField> tKappa = thermo_.kappa();
+    tmp<volScalarField> tRhoThermo = thermo_.rho();
     const volScalarField& CpField = tCp();
     const volScalarField& KappaField = tKappa();
+    const volScalarField& rhoField = tRhoThermo();
 
     forAll(T, cellI)
     {
@@ -133,8 +178,19 @@ void Foam::enthalpyPorosityPhaseChangeModel::correct()
             phaseState_[cellI] = 1.0;
         }
 
-        phaseFraction_[cellI] = alphaL;
-        rho_[cellI] = (1.0 - alphaL) * rhoSolid_ + alphaL * rhoLiquid_;
+        phaseFraction_[cellI] = (1.0 - relax_)*phaseFraction_[cellI] + relax_*alphaL;
+        if (densityModel_ == "thermo")
+        {
+            rho_[cellI] = rhoField[cellI];
+        }
+        else if (densityModel_ == "constant")
+        {
+            rho_[cellI] = rhoRef_;
+        }
+        else
+        {
+            rho_[cellI] = (1.0 - alphaL) * rhoSolid_ + alphaL * rhoLiquid_;
+        }
         Cp_[cellI] = CpField[cellI];
         k_[cellI] = KappaField[cellI];
     }
@@ -150,6 +206,7 @@ void Foam::enthalpyPorosityPhaseChangeModel::correct()
 
         const fvPatchScalarField& pCpThermo = CpField.boundaryField()[patchi];
         const fvPatchScalarField& pKappaThermo = KappaField.boundaryField()[patchi];
+        const fvPatchScalarField& pRhoThermo = rhoField.boundaryField()[patchi];
 
         forAll(pT, facei)
         {
@@ -173,8 +230,19 @@ void Foam::enthalpyPorosityPhaseChangeModel::correct()
                 pPhaseState[facei] = 1.0;
             }
 
-            pPhaseFraction[facei] = alphaL;
-            pRho[facei] = (1.0 - alphaL) * rhoSolid_ + alphaL * rhoLiquid_;
+            pPhaseFraction[facei] = (1.0 - relax_)*pPhaseFraction[facei] + relax_*alphaL;
+            if (densityModel_ == "thermo")
+            {
+                pRho[facei] = pRhoThermo[facei];
+            }
+            else if (densityModel_ == "constant")
+            {
+                pRho[facei] = rhoRef_;
+            }
+            else
+            {
+                pRho[facei] = (1.0 - alphaL) * rhoSolid_ + alphaL * rhoLiquid_;
+            }
             pCp[facei] = pCpThermo[facei];
             pK[facei] = pKappaThermo[facei];
         }

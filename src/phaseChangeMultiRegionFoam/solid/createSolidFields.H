@@ -20,12 +20,14 @@
         Info<< "    Adding phase change model\n" << endl;
         phaseChangeModels.set(i, phaseChangeModel::New(solidRegions[i], thermos[i]));
 
-        if (phaseChangeModels[i].active() && !phaseChangeModels[i].suppressConvection())
+        if (phaseChangeModels[i].active() && !thermos[i].isotropic())
         {
-            WarningInFunction
-                << "Phase change model on solid region '" << solidRegions[i].name()
-                << "' does not suppress convection, but solid regions have no velocity solver. "
-                << "Convective transport and momentum source will be ignored." << endl;
+            FatalErrorInFunction
+                << "Phase change is active in solid region '" << solidRegions[i].name()
+                << "', but the region thermophysical model is anisotropic (!thermo.isotropic()).\n"
+                << "Phase change models compute isotropic effective thermal conductivity k(alpha);\n"
+                << "anisotropic phase change heat conduction is not supported."
+                << exit(FatalError);
         }
 
         Info<< "    Adding to radiations\n" << endl;

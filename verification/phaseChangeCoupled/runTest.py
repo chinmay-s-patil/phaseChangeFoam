@@ -375,7 +375,7 @@ def main():
         
         mean_a = sum(a_coupled) / len(a_coupled)
         
-        pass_t1 = (max_dT < 0.5 and max_da < 0.01 and interface_dT < 0.5 and mean_a > 0.05)
+        pass_t1 = (max_dT < 0.05 and max_da < 0.005 and interface_dT < 0.5 and mean_a > 0.05)
         
         print(f"Max T diff compared to single-region: {max_dT:.4f} K")
         print(f"Max alpha diff compared to single-region: {max_da:.6f}")

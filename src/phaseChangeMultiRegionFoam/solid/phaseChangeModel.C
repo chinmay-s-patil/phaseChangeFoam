@@ -7,6 +7,7 @@
 \*---------------------------------------------------------------------------*/
 
 #include "phaseChangeModel.H"
+#include <cctype>
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -120,16 +121,16 @@ Foam::autoPtr<Foam::phaseChangeModel> Foam::phaseChangeModel::New
     {
         IOdictionary phaseChangeDict(dictIO);
 
-        bool active = phaseChangeDict.lookupOrDefault<bool>("active", false);
+        bool active = phaseChangeDict.lookupOrDefault<bool>("active", true);
 
         if (active && phaseChangeDict.found("phaseChange"))
         {
             const dictionary& pcDict = phaseChangeDict.subDict("phaseChange");
-            bool pcActive = pcDict.lookupOrDefault<bool>("active", false);
+            bool pcActive = pcDict.lookupOrDefault<bool>("active", true);
 
             if (pcActive)
             {
-                word modeName = pcDict.lookupOrDefault<word>("phaseChangeMode", "EHC");
+                word modeName = pcDict.lookupOrDefault<word>("type", pcDict.lookupOrDefault<word>("phaseChangeMode", "ehc"));
 
                 Info<< "    Phase change ACTIVE for region " << mesh.name()
                     << " using mode: " << modeName << endl;
@@ -138,8 +139,30 @@ Foam::autoPtr<Foam::phaseChangeModel> Foam::phaseChangeModel::New
 
                 if (!cstrIter.good())
                 {
+                    auto toLowerStr = [](const word& w)
+                    {
+                        std::string s(w);
+                        for (char& c : s)
+                        {
+                            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                        }
+                        return s;
+                    };
+
+                    for (auto iter = dictionaryConstructorTablePtr_->cbegin(); iter != dictionaryConstructorTablePtr_->cend(); ++iter)
+                    {
+                        if (toLowerStr(iter.key()) == toLowerStr(modeName))
+                        {
+                            cstrIter = iter;
+                            break;
+                        }
+                    }
+                }
+
+                if (!cstrIter.good())
+                {
                     FatalErrorInFunction
-                        << "Unknown phaseChangeMode " << modeName
+                        << "Unknown phaseChange mode " << modeName
                         << " for region " << mesh.name() << nl << nl
                         << "Valid options are: "
                         << dictionaryConstructorTablePtr_->toc()

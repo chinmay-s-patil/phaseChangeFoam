@@ -191,13 +191,24 @@ void Foam::ehcPhaseChangeModel::readDict()
     IOdictionary phaseChangeDict(dictIO);
     const dictionary& pcDict = phaseChangeDict.subDict("phaseChange");
 
-    if (pcDict.found("melting"))
+    if (!pcDict.found("melting"))
     {
-        const dictionary& meltDict = pcDict.subDict("melting");
-        Tlm_ = meltDict.lookupOrDefault<scalar>("T_lowerBound", 303.15);
-        Tum_ = meltDict.lookupOrDefault<scalar>("T_upperBound", 313.15);
-        Lm_ = meltDict.lookupOrDefault<scalar>("latentHeat", 163000.0);
+        FatalIOErrorInFunction(phaseChangeDict)
+            << "Missing required sub-dictionary 'melting' in 'phaseChange' for region "
+            << mesh_.name()
+            << exit(FatalIOError);
     }
+    const dictionary& meltDict = pcDict.subDict("melting");
+    if (!meltDict.found("T_lowerBound") || !meltDict.found("T_upperBound") || !meltDict.found("latentHeat"))
+    {
+        FatalIOErrorInFunction(phaseChangeDict)
+            << "Sub-dictionary 'melting' in 'phaseChange' for region " << mesh_.name()
+            << " must contain 'T_lowerBound', 'T_upperBound', and 'latentHeat'."
+            << exit(FatalIOError);
+    }
+    Tlm_ = meltDict.get<scalar>("T_lowerBound");
+    Tum_ = meltDict.get<scalar>("T_upperBound");
+    Lm_ = meltDict.get<scalar>("latentHeat");
 
     readConvectionDict(pcDict);
 
@@ -253,24 +264,46 @@ void Foam::ehcPhaseChangeModel::readDict()
         reversalTol_ = hysDict.lookupOrDefault<scalar>("reversalTol", 1e-6);
     }
 
+    tmp<volScalarField> tRhoThermoInit = thermo_.rho();
+    const volScalarField& rhoFieldInit = tRhoThermoInit();
+    scalar rhoThermoInit = rhoFieldInit.primitiveField().size() > 0 ? rhoFieldInit.primitiveField()[0] : 1000.0;
+    densityModel_ = "thermo";
+    rhoRef_ = rhoThermoInit;
+    rhoSolid_ = rhoThermoInit;
+    rhoLiquid_ = rhoThermoInit;
+
     if (pcDict.found("density"))
     {
         const dictionary& densDict = pcDict.subDict("density");
-        densityModel_ = densDict.lookupOrDefault<word>("model", "linear");
-        rhoRef_ = densDict.lookupOrDefault<scalar>("rhoRef", 1967.0);
-        rhoSolid_ = densDict.lookupOrDefault<scalar>("rhoSolid", 1967.0);
-        rhoLiquid_ = densDict.lookupOrDefault<scalar>("rhoLiquid", 1850.0);
+        densityModel_ = densDict.lookupOrDefault<word>("model", "thermo");
+        rhoRef_ = densDict.lookupOrDefault<scalar>("rhoRef", rhoThermoInit);
+        rhoSolid_ = densDict.lookupOrDefault<scalar>("rhoSolid", rhoThermoInit);
+        rhoLiquid_ = densDict.lookupOrDefault<scalar>("rhoLiquid", rhoThermoInit);
     }
+
+    tmp<volScalarField> tCpThermoInit = thermo_.Cp();
+    const volScalarField& CpFieldInit = tCpThermoInit();
+    scalar CpThermoInit = CpFieldInit.primitiveField().size() > 0 ? CpFieldInit.primitiveField()[0] : 1000.0;
+
+    tmp<volScalarField> tKappaThermoInit = thermo_.kappa();
+    const volScalarField& kFieldInit = tKappaThermoInit();
+    scalar kThermoInit = kFieldInit.primitiveField().size() > 0 ? kFieldInit.primitiveField()[0] : 1.0;
+
+    thermoMode_ = "thermo";
+    Cps_ = CpThermoInit;
+    Cpl_ = CpThermoInit;
+    ks_ = kThermoInit;
+    kl_ = kThermoInit;
 
     if (pcDict.found("thermophysical"))
     {
         const dictionary& thermoDict = pcDict.subDict("thermophysical");
         thermoMode_ = thermoDict.lookupOrDefault<word>("mode", "thermo");
 
-        Cps_ = thermoDict.lookupOrDefault<scalar>("CpSolid", 1980.0);
-        Cpl_ = thermoDict.lookupOrDefault<scalar>("CpLiquid", 2320.0);
-        ks_ = thermoDict.lookupOrDefault<scalar>("kSolid", 0.50);
-        kl_ = thermoDict.lookupOrDefault<scalar>("kLiquid", 0.47);
+        Cps_ = thermoDict.lookupOrDefault<scalar>("CpSolid", CpThermoInit);
+        Cpl_ = thermoDict.lookupOrDefault<scalar>("CpLiquid", CpThermoInit);
+        ks_ = thermoDict.lookupOrDefault<scalar>("kSolid", kThermoInit);
+        kl_ = thermoDict.lookupOrDefault<scalar>("kLiquid", kThermoInit);
     }
 
     if (Cps_ <= 0.0 || Cpl_ <= 0.0)
@@ -285,10 +318,10 @@ void Foam::ehcPhaseChangeModel::readDict()
             << "Thermal conductivity (kSolid=" << ks_ << ", kLiquid=" << kl_ << ") must be > 0"
             << exit(FatalIOError);
     }
-    if (densityModel_ != "constant" && densityModel_ != "linear")
+    if (densityModel_ != "thermo" && densityModel_ != "constant" && densityModel_ != "linear")
     {
         FatalIOErrorInFunction(phaseChangeDict)
-            << "Unsupported density model '" << densityModel_ << "'. Expected 'constant' or 'linear'."
+            << "Unsupported density model '" << densityModel_ << "'. Expected 'thermo', 'constant', or 'linear'."
             << exit(FatalIOError);
     }
     if (thermoMode_ != "thermo" && thermoMode_ != "custom")
@@ -366,8 +399,10 @@ void Foam::ehcPhaseChangeModel::correct()
     const volScalarField& Told = thermo_.T().oldTime();
     tmp<volScalarField> tCpThermo = thermo_.Cp();
     tmp<volScalarField> tKappaThermo = thermo_.kappa();
+    tmp<volScalarField> tRhoThermo = thermo_.rho();
     const volScalarField& CpField = tCpThermo();
     const volScalarField& KappaField = tKappaThermo();
+    const volScalarField& rhoField = tRhoThermo();
 
     forAll(T, cellI)
     {
@@ -482,7 +517,11 @@ void Foam::ehcPhaseChangeModel::correct()
 
         CpEff_[cellI] = cpBase + max(0.0, deltaCp);
 
-        if (densityModel_ == "constant")
+        if (densityModel_ == "thermo")
+        {
+            rho_[cellI] = rhoField[cellI];
+        }
+        else if (densityModel_ == "constant")
         {
             rho_[cellI] = rhoRef_;
         }
@@ -510,6 +549,7 @@ void Foam::ehcPhaseChangeModel::correct()
 
         const fvPatchScalarField& pCpThermo = CpField.boundaryField()[patchi];
         const fvPatchScalarField& pKappaThermo = KappaField.boundaryField()[patchi];
+        const fvPatchScalarField& pRhoThermo = rhoField.boundaryField()[patchi];
 
         forAll(pT, facei)
         {
@@ -624,7 +664,11 @@ void Foam::ehcPhaseChangeModel::correct()
 
             pCpEff[facei] = cpBase + max(0.0, deltaCp);
 
-            if (densityModel_ == "constant")
+            if (densityModel_ == "thermo")
+            {
+                pRho[facei] = pRhoThermo[facei];
+            }
+            else if (densityModel_ == "constant")
             {
                 pRho[facei] = rhoRef_;
             }

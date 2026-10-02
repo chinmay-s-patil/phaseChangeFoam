@@ -42,8 +42,10 @@ private:
     scalar beta_; // Thermal expansion coefficient [1/K]
     scalar Cu_;   // Darcy penalty coefficient [kg/(m3 s)]
     scalar q_;    // Smoothing constant
+    scalar relax_; // Non-linear relaxation for phase fraction update
 
     // Parameters - Density & Thermo
+    word densityModel_;
     scalar rhoRef_;
     scalar rhoSolid_;
     scalar rhoLiquid_;
