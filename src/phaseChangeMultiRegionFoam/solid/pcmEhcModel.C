@@ -62,7 +62,8 @@ Foam::pcmEhcModel::pcmEhcModel
     (
         IOobject("heatingTrajectory", mesh.time().timeName(), mesh, IOobject::READ_IF_PRESENT, IOobject::AUTO_WRITE),
         mesh,
-        dimensionedScalar("heatingTrajectory", dimless, 1.0)
+        dimensionedScalar("heatingTrajectory", dimless, 1.0),
+        "calculated"
     ),
     liquidFraction_old_
     (
@@ -604,8 +605,6 @@ void Foam::pcmEhcModel::correct()
         }
     }
 
-    liquidFraction_.correctBoundaryConditions();
-    phaseState_.correctBoundaryConditions();
     CpEff_.correctBoundaryConditions();
     rho_.correctBoundaryConditions();
     k_.correctBoundaryConditions();

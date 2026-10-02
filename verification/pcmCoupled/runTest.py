@@ -172,7 +172,7 @@ FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; ob
 dimensions [0 0 0 1 0 0 0]; internalField uniform 280.0;
 boundaryField {
     pcm_cold { type fixedValue; value uniform 280.0; }
-    pcm_to_solid2 { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 280.0; Tnbr T; kappaMethod solidThermo; }
+    pcm_to_solid2 { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 280.0; Tnbr T; kappaMethod lookup; kappa kPCM; }
     emptyFaces { type empty; }
 }
 """)
@@ -253,7 +253,7 @@ def main():
 
     res2 = run_cmd(f"cd {case2_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=True)
     output_text = res2.stdout + res2.stderr
-    pass_t2 = ("has active phase change in a multi-region domain, but nOuterCorrectors = 1 < 2" in output_text)
+    pass_t2 = ("Phase change is active in a multi-region coupled domain, but nOuterCorrectors = 1 < 2" in output_text)
 
     print(f"nOuterCorr = 1 FatalError Triggered: {pass_t2}")
     print(f"Test 2 Status: {'PASSED' if pass_t2 else 'FAILED'}")

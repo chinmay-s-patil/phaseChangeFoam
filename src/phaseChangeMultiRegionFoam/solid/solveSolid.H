@@ -49,23 +49,6 @@
 
         if (pcmModel.active() && (nlCorr == 0))
         {
-            if ((solidRegions.size() > 1 || coupled) && nOuterCorr < 2)
-            {
-                FatalErrorInFunction
-                    << "Solid region " << solidRegions[i].name()
-                    << " has active phase change in a multi-region domain, but nOuterCorrectors = "
-                    << nOuterCorr << " < 2.\n"
-                    << "Multi-region phase change requires nOuterCorrectors >= 2 "
-                    << "to converge non-linear latent heat and temperature across region boundaries."
-                    << exit(FatalError);
-            }
-
-            if ((solidRegions.size() > 1 || coupled) && !warnedCoupled[i])
-            {
-                warnedCoupled[i] = true;
-                Info<< "Solid region " << solidRegions[i].name()
-                    << " active phase change multi-region coupled with nOuterCorrectors = " << nOuterCorr << endl;
-            }
         }
 
         if (coupled)

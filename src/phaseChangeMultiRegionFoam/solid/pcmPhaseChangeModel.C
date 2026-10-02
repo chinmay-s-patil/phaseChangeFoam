@@ -38,7 +38,8 @@ Foam::pcmPhaseChangeModel::pcmPhaseChangeModel
             IOobject::AUTO_WRITE
         ),
         mesh,
-        dimensionedScalar("liquidFraction", dimless, 0.0)
+        dimensionedScalar("liquidFraction", dimless, 0.0),
+        "calculated"
     ),
     phaseState_
     (
@@ -51,7 +52,8 @@ Foam::pcmPhaseChangeModel::pcmPhaseChangeModel
             IOobject::AUTO_WRITE
         ),
         mesh,
-        dimensionedScalar("phaseState", dimless, 0.0)
+        dimensionedScalar("phaseState", dimless, 0.0),
+        "calculated"
     )
 {}
 
