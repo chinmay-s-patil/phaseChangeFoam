@@ -48,7 +48,7 @@ def parse_openfoam_field(file_path):
     block = content[start_paren+1:end_paren].strip()
     return [float(x) for x in block.split()]
 
-def setup_single_cell_case(case_dir, T0, Q_source, L_heat, T_lm=300.0, T_um=310.0, T_lf=295.0, T_uf=305.0):
+def setup_single_cell_case(case_dir, T0, Q_source, L_heat, T_lm=300.0, T_um=310.0, T_lf=295.0, T_uf=305.0, alpha0=None, traj0=None, Cps=2000.0, Cpl=2000.0):
     os.makedirs(case_dir, exist_ok=True)
     os.chdir(case_dir)
     run_cmd("rm -rf [1-9]* 0.* constant/pcm/polyMesh constant/polyMesh")
@@ -128,10 +128,10 @@ FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm";
 radiationModel none;
 """)
     with open("constant/pcm/thermophysicalProperties", "w") as f:
-        f.write("""
-FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object thermophysicalProperties; }
-thermoType { type heSolidThermo; mixture pureMixture; transport constIso; thermo hConst; equationOfState rhoConst; specie specie; energy sensibleEnthalpy; }
-mixture { specie { molWeight 100; } transport { kappa 1.0; } thermodynamics { Cp 2000; Hf 0; } equationOfState { rho 1000; } }
+        f.write(f"""
+FoamFile {{ version 2.0; format ascii; class dictionary; location "constant/pcm"; object thermophysicalProperties; }}
+thermoType {{ type heSolidThermo; mixture pureMixture; transport constIso; thermo hConst; equationOfState rhoConst; specie specie; energy sensibleEnthalpy; }}
+mixture {{ specie {{ molWeight 100; }} transport {{ kappa 1.0; }} thermodynamics {{ Cp {Cps}; Hf 0; }} equationOfState {{ rho 1000; }} }}
 """)
     with open("constant/pcm/phaseChangeDict", "w") as f:
         f.write(f"""
@@ -142,15 +142,18 @@ phaseChange
     active true; phaseChangeMode EHC;
     melting {{ T_lowerBound {T_lm}; T_upperBound {T_um}; latentHeat {L_heat}; }}
     freezing {{ T_lowerBound {T_lf}; T_upperBound {T_uf}; latentHeat {L_heat}; }}
-    hysteresis {{ active true; historyLength 5; directionDetection {{ method deltaT; tolerance 1e-6; }} }}
+    hysteresis {{ active true; }}
     density {{ model linear; rhoRef 1000.0; rhoSolid 1000.0; rhoLiquid 1000.0; }}
-    thermophysical {{ mode custom; CpSolid 2000.0; CpLiquid 2000.0; kSolid 1.0; kLiquid 1.0; }}
+    thermophysical {{ mode custom; CpSolid {Cps}; CpLiquid {Cpl}; kSolid 1.0; kLiquid 1.0; }}
 }}
 """)
 
-    h0 = 2000.0 * T0
-    alpha0 = 0.0 if T0 <= T_lm else (1.0 if T0 >= T_um else (T0 - T_lm) / (T_um - T_lm))
-    traj0 = 1.0 if Q_source >= 0 else 0.0
+    if alpha0 is None:
+        alpha0 = 0.0 if T0 <= T_lm else (1.0 if T0 >= T_um else (T0 - T_lm) / (T_um - T_lm))
+    if traj0 is None:
+        traj0 = 1.0 if Q_source >= 0 else 0.0
+
+    h0 = Cps * T0 if alpha0 == 0.0 else (Cpl * T0 if alpha0 == 1.0 else (0.5 * (Cps + Cpl)) * T0)
 
     os.makedirs("0/pcm", exist_ok=True)
     with open("0/pcm/T", "w") as f:
@@ -208,10 +211,6 @@ def main():
     all_passed = True
 
     # --- Case 1: Single-Step Heating Overshoot ---
-    # T0 = 280 K, Q = 2.4 MW, dt = 100 s => E_in = 2.4e8 J => delta_H_mass = 240 kJ/kg
-    # Sensible heat 280->300 = 20*2000 = 40 kJ/kg
-    # Latent heat = 100 kJ/kg (300->310 K)
-    # Remaining sensible heat = 240 - 40 - 100 = 100 kJ/kg => Delta T = 100000/2000 = 50 K => T_exact = 350.0 K
     print("\n--- Case 1: Heating Jump Overshoot (T0 = 280 K -> 350 K in 1 step) ---")
     case1_dir = os.path.join(base_dir, "case1_heating")
     T1, a1, log1 = setup_single_cell_case(case1_dir, T0=280.0, Q_source=2400000.0, L_heat=100000.0)
@@ -226,11 +225,6 @@ def main():
         all_passed = False
 
     # --- Case 2: Single-Step Cooling Overshoot ---
-    # T0 = 350 K, Q = -2.2 MW, dt = 100 s => E_out = -2.2e8 J/m^3 => delta_H_mass = -220 kJ/kg
-    # Sensible heat 350->305 = 45*2000 = 90 kJ/kg
-    # Latent heat = 100 kJ/kg (305->295 K)
-    # Remaining sensible heat = 220 - 90 - 100 = 30 kJ/kg => Delta T = -30000/2000 = -15 K => T_exact = 295 - 15 = 280.0 K for exact piecewise, but 290.0 K for Backward-Euler secant formulation over single step.
-    # Enthalpy balance: 1000 * 2000 * (T_sim - 350) + 1000 * 100000 * (0 - 1) = -2.2e8 J/m^3 => T_exact = 290.000000 K
     print("\n--- Case 2: Cooling Jump Overshoot (T0 = 350 K -> 290 K in 1 step) ---")
     case2_dir = os.path.join(base_dir, "case2_cooling")
     T2, a2, log2 = setup_single_cell_case(case2_dir, T0=350.0, Q_source=-2200000.0, L_heat=100000.0)
@@ -245,11 +239,6 @@ def main():
         all_passed = False
 
     # --- Case 3: Partial Window Crossing ---
-    # T0 = 295 K, Q = 0.7 MW, dt = 100 s => E_in = 7.0e7 J/m^3 => delta_H_mass = 70 kJ/kg
-    # Sensible heat 295->300 = 5*2000 = 10 kJ/kg
-    # Latent heat 0->0.5 = 50 kJ/kg (300->305 K)
-    # Sensible heat 300->305 = 5*2000 = 10 kJ/kg
-    # Total enthalpy = 10 + 50 + 10 = 70 kJ/kg => T_exact = 305.000000 K, alphaL_exact = 0.500000
     print("\n--- Case 3: Partial Window Crossing (T0 = 295 K -> 305 K, alphaL = 0.50) ---")
     case3_dir = os.path.join(base_dir, "case3_partial")
     T3, a3, log3 = setup_single_cell_case(case3_dir, T0=295.0, Q_source=700000.0, L_heat=100000.0)
@@ -265,10 +254,6 @@ def main():
         all_passed = False
 
     # --- Case 4: Realistic Latent Heat (L = 163 kJ/kg) ---
-    # T0 = 280 K, Q = 3.03 MW, dt = 100 s => E_in = 3.03e8 J => delta_H_mass = 303 kJ/kg
-    # Sensible heat 280->300 = 20*2000 = 40 kJ/kg
-    # Latent heat = 163 kJ/kg (300->310 K)
-    # Remaining sensible heat = 303 - 40 - 163 = 100 kJ/kg => Delta T = 100000/2000 = 50 K => T_exact = 350.0 K
     print("\n--- Case 4: Realistic Latent Heat (L = 163 kJ/kg, T0 = 280 K -> 350 K) ---")
     case4_dir = os.path.join(base_dir, "case4_realisticL")
     T4, a4, log4 = setup_single_cell_case(case4_dir, T0=280.0, Q_source=3030000.0, L_heat=163000.0)
@@ -282,15 +267,10 @@ def main():
         print("STATUS: CASE 4 FAILED!")
         all_passed = False
 
-    # --- Case 5: Mushy Start & Reversal (T0 = 305 K, alpha0 = 0.5) ---
-    # Start at T0 = 305 K inside melting window [300, 310 K] with initial alpha0 = 0.5
-    # Heat with Q = +360 kW for dt = 100 s => E_in = 3.6e7 J/m^3 => delta_H_mass = 36 kJ/kg
-    # Latent heat to melt 0.5 -> 0.8 = 0.3 * 100 kJ/kg = 30 kJ/kg (305 -> 308 K)
-    # Sensible heat 305 -> 308 K = 3 * 2000 = 6 kJ/kg
-    # Total enthalpy = 30 + 6 = 36 kJ/kg => T_exact = 308.000000 K, alphaL_exact = 0.800000
+    # --- Case 5: Mushy Start & Heating (T0 = 305 K, alpha0 = 0.5) ---
     print("\n--- Case 5: Mushy Start State (T0 = 305 K, alpha0 = 0.5 -> T = 308 K, alphaL = 0.80) ---")
     case5_dir = os.path.join(base_dir, "case5_mushyStart")
-    T5, a5, log5 = setup_single_cell_case(case5_dir, T0=305.0, Q_source=360000.0, L_heat=100000.0)
+    T5, a5, log5 = setup_single_cell_case(case5_dir, T0=305.0, Q_source=360000.0, L_heat=100000.0, alpha0=0.5, traj0=1.0)
     err5 = abs(T5 - 308.0)
     err_a5 = abs(a5 - 0.80)
     print(f"Simulated T = {T5:.6f} K, alphaL = {a5:.6f}")
@@ -302,14 +282,70 @@ def main():
         print("STATUS: CASE 5 FAILED!")
         all_passed = False
 
+    # --- Case 6: Cooling Reversal Plateau (T0 = 308 K, alpha0 = 0.8 -> T = 306 K, alphaL = 0.80) ---
+    # T0 = 308 K, alpha0 = 0.8 on cooling trajectory (traj0 = 0.0). Q = -40 kW/m^3 => delta_H = -4 kJ/kg.
+    # Freeze window [295, 305 K]. Since 308->306 K > 305 K, alpha_f = 1.0 => alphaL = min(0.8, 1.0) = 0.8.
+    # Sensible heat only: Delta T = -4000 / 2000 = -2 K => T_exact = 306.0 K, alphaL_exact = 0.80.
+    print("\n--- Case 6: Cooling Reversal Plateau (T0 = 308 K, alpha0 = 0.8 -> T = 306 K, alphaL = 0.80) ---")
+    case6_dir = os.path.join(base_dir, "case6_coolingReversal")
+    T6, a6, log6 = setup_single_cell_case(case6_dir, T0=308.0, Q_source=-40000.0, L_heat=100000.0, alpha0=0.8, traj0=0.0)
+    err6 = abs(T6 - 306.0)
+    err_a6 = abs(a6 - 0.80)
+    print(f"Simulated T = {T6:.6f} K, alphaL = {a6:.6f}")
+    print(f"Exact T     = 306.000000 K, alphaL = 0.800000")
+    print(f"Temperature Error = {err6:.6f} K, Alpha Error = {err_a6:.6f}")
+    if err6 < 0.001 and err_a6 < 0.001:
+        print("STATUS: CASE 6 PASSED!")
+    else:
+        print("STATUS: CASE 6 FAILED!")
+        all_passed = False
+
+    # --- Case 7: Heating Reversal Plateau (T0 = 297 K, alpha0 = 0.2 -> T = 298 K, alphaL = 0.20) ---
+    # T0 = 297 K, alpha0 = 0.2 on heating trajectory (traj0 = 1.0). Q = +20 kW/m^3 => delta_H = +2 kJ/kg.
+    # Melt window [300, 310 K]. Since 297->298 K < 300 K, alpha_m = 0.0 => alphaL = max(0.2, 0.0) = 0.2.
+    # Sensible heat only: Delta T = +2000 / 2000 = +1 K => T_exact = 298.0 K, alphaL_exact = 0.20.
+    print("\n--- Case 7: Heating Reversal Plateau (T0 = 297 K, alpha0 = 0.2 -> T = 298 K, alphaL = 0.20) ---")
+    case7_dir = os.path.join(base_dir, "case7_heatingReversal")
+    T7, a7, log7 = setup_single_cell_case(case7_dir, T0=297.0, Q_source=20000.0, L_heat=100000.0, alpha0=0.2, traj0=1.0)
+    err7 = abs(T7 - 298.0)
+    err_a7 = abs(a7 - 0.20)
+    print(f"Simulated T = {T7:.6f} K, alphaL = {a7:.6f}")
+    print(f"Exact T     = 298.000000 K, alphaL = 0.200000")
+    print(f"Temperature Error = {err7:.6f} K, Alpha Error = {err_a7:.6f}")
+    if err7 < 0.001 and err_a7 < 0.001:
+        print("STATUS: CASE 7 PASSED!")
+    else:
+        print("STATUS: CASE 7 FAILED!")
+        all_passed = False
+
+    # --- Case 8: Unequal Solid & Liquid Cp (Cps = 1980, Cpl = 2320 J/(kg.K)) ---
+    # T0 = 280 K -> 350 K jump. cpBase = 0.5*(1980 + 2320) = 2150 J/(kg.K).
+    # Q = +2.505 MW/m^3 => delta_H = +250.5 kJ/kg. Sensible = 2150 * 70 = 150.5 kJ/kg, Latent = 100 kJ/kg.
+    # T_exact = 350.0 K, alphaL_exact = 1.0.
+    print("\n--- Case 8: Unequal Cp (Cps = 1980, Cpl = 2320 J/(kg.K), T0 = 280 K -> 350 K) ---")
+    case8_dir = os.path.join(base_dir, "case8_unequalCp")
+    T8, a8, log8 = setup_single_cell_case(case8_dir, T0=280.0, Q_source=2505000.0, L_heat=100000.0, Cps=1980.0, Cpl=2320.0)
+    err8 = abs(T8 - 350.0)
+    print(f"Simulated T = {T8:.6f} K, alphaL = {a8:.6f}")
+    print(f"Exact T     = 350.000000 K, alphaL = 1.000000")
+    print(f"Temperature Error = {err8:.6f} K")
+    if err8 < 0.001 and abs(a8 - 1.0) < 0.001:
+        print("STATUS: CASE 8 PASSED!")
+    else:
+        print("STATUS: CASE 8 FAILED!")
+        all_passed = False
+
     print("\n=======================================================")
     print("      SINGLE-CELL VERIFICATION SUITE SUMMARY           ")
     print("=======================================================")
-    print(f"Case 1 (Heating Jump)   : {'PASSED' if err1 < 0.001 else 'FAILED'} (err = {err1:.6f} K)")
-    print(f"Case 2 (Cooling Jump)   : {'PASSED' if err2 < 0.001 else 'FAILED'} (err = {err2:.6f} K)")
-    print(f"Case 3 (Partial Melt)   : {'PASSED' if err3 < 0.001 else 'FAILED'} (err = {err3:.6f} K)")
-    print(f"Case 4 (Realistic L)    : {'PASSED' if err4 < 0.001 else 'FAILED'} (err = {err4:.6f} K)")
-    print(f"Case 5 (Mushy Start)    : {'PASSED' if err5 < 0.001 else 'FAILED'} (err = {err5:.6f} K)")
+    print(f"Case 1 (Heating Jump)      : {'PASSED' if err1 < 0.001 else 'FAILED'} (err = {err1:.6f} K)")
+    print(f"Case 2 (Cooling Jump)      : {'PASSED' if err2 < 0.001 else 'FAILED'} (err = {err2:.6f} K)")
+    print(f"Case 3 (Partial Melt)      : {'PASSED' if err3 < 0.001 else 'FAILED'} (err = {err3:.6f} K)")
+    print(f"Case 4 (Realistic L)       : {'PASSED' if err4 < 0.001 else 'FAILED'} (err = {err4:.6f} K)")
+    print(f"Case 5 (Mushy Start)       : {'PASSED' if err5 < 0.001 else 'FAILED'} (err = {err5:.6f} K)")
+    print(f"Case 6 (Cooling Reversal)  : {'PASSED' if err6 < 0.001 else 'FAILED'} (err = {err6:.6f} K)")
+    print(f"Case 7 (Heating Reversal)  : {'PASSED' if err7 < 0.001 else 'FAILED'} (err = {err7:.6f} K)")
+    print(f"Case 8 (Unequal Cp)        : {'PASSED' if err8 < 0.001 else 'FAILED'} (err = {err8:.6f} K)")
     print("-------------------------------------------------------")
 
     if all_passed:

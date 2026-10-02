@@ -10,7 +10,6 @@
 #define pcmEhcModel_H
 
 #include "pcmPhaseChangeModel.H"
-#include <vector>
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -39,9 +38,6 @@ private:
 
     // Parameters - Hysteresis
     bool hysteresisActive_;
-    label historyLength_;
-    word directionMethod_;
-    scalar tolerance_;
 
     // Parameters - Density
     word densityModel_;
@@ -67,10 +63,6 @@ private:
     // Start-of-step stored fields for committed alphaL_old formulation across Picard iterations
     volScalarField liquidFraction_old_;
     volScalarField heatingTrajectory_old_;
-
-    // Temperature history storage using std::vector
-    std::vector<volScalarField> THistory_;
-    std::vector<scalar> timeHistory_;
 
     // Helper functions
     void readDict();

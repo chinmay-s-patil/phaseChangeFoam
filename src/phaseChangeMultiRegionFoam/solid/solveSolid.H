@@ -5,6 +5,7 @@
     volScalarField Tprev("Tprev", thermo.T());
 
     int actualIter = 0;
+    scalar maxDeltaT = 0.0;
     for (int nlCorr = 0; nlCorr < nNonLinearCorr; ++nlCorr)
     {
         actualIter = nlCorr + 1;
@@ -69,7 +70,7 @@
 
             thermo.correct();
 
-            scalar maxDeltaT = max(mag(thermo.T() - Tprev)).value();
+            maxDeltaT = max(mag(thermo.T() - Tprev)).value();
             Tprev = thermo.T();
 
             if (finalIter && (nlCorr == nNonLinearCorr - 1))

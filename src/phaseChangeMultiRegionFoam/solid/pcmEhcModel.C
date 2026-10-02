@@ -17,7 +17,7 @@ namespace Foam
     addToRunTimeSelectionTable(pcmPhaseChangeModel, pcmEhcModel, dictionary);
 }
 
-// * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
+// * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
 Foam::pcmEhcModel::pcmEhcModel
 (
@@ -33,9 +33,6 @@ Foam::pcmEhcModel::pcmEhcModel
     Tuf_(313.15),
     Lf_(163000.0),
     hysteresisActive_(true),
-    historyLength_(5),
-    directionMethod_("slope"),
-    tolerance_(1e-6),
     densityModel_("linear"),
     rhoRef_(1967.0),
     rhoSolid_(1967.0),
@@ -75,21 +72,19 @@ Foam::pcmEhcModel::pcmEhcModel
     (
         IOobject("heatingTrajectory_old", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::NO_WRITE),
         heatingTrajectory_
-    ),
-    THistory_(),
-    timeHistory_()
+    )
 {
     active_ = true;
     readDict();
 
     // Fresh start initialization for liquidFraction_ if not read from disk
-    const volScalarField& Tinit = thermo_.T();
-    forAll(liquidFraction_, cellI)
+    if (!liquidFraction_.headerOk())
     {
-        scalar Tval = Tinit[cellI];
-        scalar alpha0 = (Tval <= Tlm_) ? 0.0 : ((Tval >= Tum_) ? 1.0 : (Tval - Tlm_) / (Tum_ - Tlm_));
-        if (mag(liquidFraction_[cellI]) < 1e-12 && Tval > Tlm_)
+        const volScalarField& Tinit = thermo_.T();
+        forAll(liquidFraction_, cellI)
         {
+            scalar Tval = Tinit[cellI];
+            scalar alpha0 = (Tval <= Tlm_) ? 0.0 : ((Tval >= Tum_) ? 1.0 : (Tval - Tlm_) / (Tum_ - Tlm_));
             liquidFraction_[cellI] = alpha0;
         }
     }
@@ -138,21 +133,6 @@ void Foam::pcmEhcModel::readDict()
     {
         const dictionary& hysDict = pcDict.subDict("hysteresis");
         hysteresisActive_ = hysDict.lookupOrDefault<bool>("active", true);
-        historyLength_ = hysDict.lookupOrDefault<label>("historyLength", 5);
-
-        if (historyLength_ < 2)
-        {
-            FatalIOErrorInFunction(hysDict)
-                << "hysteresis.historyLength must be >= 2"
-                << exit(FatalIOError);
-        }
-
-        if (hysDict.found("directionDetection"))
-        {
-            const dictionary& dirDict = hysDict.subDict("directionDetection");
-            directionMethod_ = dirDict.lookupOrDefault<word>("method", "slope");
-            tolerance_ = dirDict.lookupOrDefault<scalar>("tolerance", 1e-6);
-        }
     }
 
     if (pcDict.found("density"))
@@ -178,7 +158,7 @@ void Foam::pcmEhcModel::readDict()
     Info<< "    EHC PCM Parameters loaded for region " << mesh_.name() << ":" << nl
         << "      Melting Range: [" << Tlm_ << " - " << Tum_ << "] K, Latent Heat: " << Lm_ << " J/kg" << nl
         << "      Freezing Range: [" << Tlf_ << " - " << Tuf_ << "] K, Latent Heat: " << Lf_ << " J/kg" << nl
-        << "      Hysteresis Window Length: " << historyLength_ << ", Method: " << directionMethod_ << nl
+        << "      Hysteresis Active: " << (hysteresisActive_ ? "true" : "false") << nl
         << "      Density Model: " << densityModel_ << " (rhoS=" << rhoSolid_ << ", rhoL=" << rhoLiquid_ << ")" << endl;
 }
 
@@ -189,66 +169,12 @@ void Foam::pcmEhcModel::updateHistory()
 {
     liquidFraction_old_ = liquidFraction_;
     heatingTrajectory_old_ = heatingTrajectory_;
-
-    const volScalarField& T = thermo_.T();
-    scalar currentTime = mesh_.time().value();
-
-    if (timeHistory_.empty())
-    {
-        THistory_.push_back
-        (
-            volScalarField
-            (
-                IOobject("THist", mesh_.time().timeName(), mesh_, IOobject::NO_READ, IOobject::NO_WRITE),
-                T
-            )
-        );
-        timeHistory_.push_back(currentTime);
-    }
-    else if (currentTime > timeHistory_.back())
-    {
-        if (static_cast<label>(THistory_.size()) >= historyLength_)
-        {
-            THistory_.erase(THistory_.begin());
-            timeHistory_.erase(timeHistory_.begin());
-        }
-
-        THistory_.push_back
-        (
-            volScalarField
-            (
-                IOobject("THist", mesh_.time().timeName(), mesh_, IOobject::NO_READ, IOobject::NO_WRITE),
-                T
-            )
-        );
-        timeHistory_.push_back(currentTime);
-    }
-    else if (currentTime == timeHistory_.back())
-    {
-        THistory_.back() = T;
-    }
 }
 
 
 void Foam::pcmEhcModel::correct()
 {
     const volScalarField& T = thermo_.T();
-    scalar currentTime = mesh_.time().value();
-
-    // Prepare evaluation time vector including current time step candidate
-    std::vector<scalar> times = timeHistory_;
-    bool includeCurrent = (times.empty() || (currentTime > times.back()));
-    if (includeCurrent)
-    {
-        times.push_back(currentTime);
-    }
-
-    label N = static_cast<label>(times.size());
-    label nHist = static_cast<label>(THistory_.size());
-
-    // Evaluate thermo fields from thermo_ if in "thermo" mode
-    // Note: thermo mode uses single local sensible Cp and k provided by solidThermo.
-    // Separate solid and liquid properties require "custom" mode.
     const volScalarField& Told = thermo_.T().oldTime();
     tmp<volScalarField> tCpThermo = thermo_.Cp();
     tmp<volScalarField> tKappaThermo = thermo_.kappa();
@@ -286,8 +212,6 @@ void Foam::pcmEhcModel::correct()
             }
         }
 
-        scalar Tl = isHeating ? Tlm_ : Tlf_;
-        scalar Tu = isHeating ? Tum_ : Tuf_;
         scalar L = isHeating ? Lm_ : Lf_;
 
         scalar alpha_m_curr = (Tcell <= Tlm_) ? 0.0 : ((Tcell >= Tum_) ? 1.0 : (Tcell - Tlm_) / (Tum_ - Tlm_));
@@ -306,15 +230,11 @@ void Foam::pcmEhcModel::correct()
         }
         else if (isHeating)
         {
-            if (Tcell <= Tlm_) alphaL_curr = 0.0;
-            else if (Tcell >= Tum_) alphaL_curr = 1.0;
-            else alphaL_curr = max(alphaL_prev, alpha_m_curr);
+            alphaL_curr = max(alphaL_prev, alpha_m_curr);
         }
         else
         {
-            if (Tcell <= Tlf_) alphaL_curr = 0.0;
-            else if (Tcell >= Tuf_) alphaL_curr = 1.0;
-            else alphaL_curr = min(alphaL_prev, alpha_f_curr);
+            alphaL_curr = min(alphaL_prev, alpha_f_curr);
         }
 
         alphaL_curr = max(0.0, min(1.0, alphaL_curr));
@@ -359,6 +279,13 @@ void Foam::pcmEhcModel::correct()
             }
         }
 
+        if (deltaCp < -1e-6)
+        {
+            WarningInFunction
+                << "Negative apparent heat capacity encountered (" << deltaCp
+                << " J/(kg.K)) at cell " << cellI << ". Clipping to zero." << endl;
+        }
+
         CpEff_[cellI] = cpBase + max(0.0, deltaCp);
 
         if (densityModel_ == "constant")
@@ -373,7 +300,7 @@ void Foam::pcmEhcModel::correct()
         k_[cellI] = (1.0 - alphaL_curr) * ksVal + alphaL_curr * klVal;
     }
 
-    // Update boundary patch face values using secant formulation
+    // Update boundary patch face values using pure min/max stateful hysteresis formulation
     forAll(T.boundaryField(), patchi)
     {
         const fvPatchScalarField& pT = T.boundaryField()[patchi];
@@ -421,8 +348,6 @@ void Foam::pcmEhcModel::correct()
                 }
             }
 
-            scalar Tl = isHeating ? Tlm_ : Tlf_;
-            scalar Tu = isHeating ? Tum_ : Tuf_;
             scalar L = isHeating ? Lm_ : Lf_;
 
             scalar alpha_m_curr = (Tface <= Tlm_) ? 0.0 : ((Tface >= Tum_) ? 1.0 : (Tface - Tlm_) / (Tum_ - Tlm_));
@@ -441,15 +366,11 @@ void Foam::pcmEhcModel::correct()
             }
             else if (isHeating)
             {
-                if (Tface <= Tlm_) alphaL_curr = 0.0;
-                else if (Tface >= Tum_) alphaL_curr = 1.0;
-                else alphaL_curr = max(alphaL_prev, alpha_m_curr);
+                alphaL_curr = max(alphaL_prev, alpha_m_curr);
             }
             else
             {
-                if (Tface <= Tlf_) alphaL_curr = 0.0;
-                else if (Tface >= Tuf_) alphaL_curr = 1.0;
-                else alphaL_curr = min(alphaL_prev, alpha_f_curr);
+                alphaL_curr = min(alphaL_prev, alpha_f_curr);
             }
 
             alphaL_curr = max(0.0, min(1.0, alphaL_curr));
@@ -492,6 +413,13 @@ void Foam::pcmEhcModel::correct()
                 {
                     deltaCp = L / (Tuf_ - Tlf_);
                 }
+            }
+
+            if (deltaCp < -1e-6)
+            {
+                WarningInFunction
+                    << "Negative apparent heat capacity encountered (" << deltaCp
+                    << " J/(kg.K)) at patch face " << facei << ". Clipping to zero." << endl;
             }
 
             pCpEff[facei] = cpBase + max(0.0, deltaCp);

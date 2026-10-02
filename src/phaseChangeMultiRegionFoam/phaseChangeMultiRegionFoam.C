@@ -214,8 +214,7 @@ int main(int argc, char *argv[])
 
         forAll(solidRegions, i)
         {
-            fvMesh& mesh = solidRegions[i];
-            #include "setRegionSolidFields.H"
+            pcmPhaseChangeModel& pcmModel = pcmModels[i];
             if (pcmModel.active())
             {
                 pcmModel.updateHistory();

@@ -4,6 +4,7 @@ import sys
 import subprocess
 import math
 import shutil
+import re
 
 def find_solver():
     user_appbin = os.environ.get("FOAM_USER_APPBIN")
@@ -16,7 +17,7 @@ def find_solver():
         return path
     home = os.environ.get("HOME", "/home/lavender")
     matches = [
-        os.path.join(home, "OpenFOAM", f"lavender-v2412/platforms/linux64GccDPInt32Opt/bin/phaseChangeMultiRegionFoam")
+        os.path.join(home, "OpenFOAM", "lavender-v2412/platforms/linux64GccDPInt32Opt/bin/phaseChangeMultiRegionFoam")
     ]
     for m in matches:
         if os.path.exists(m):
@@ -30,7 +31,7 @@ def run_cmd(cmd, cwd=None):
         sys.exit(1)
     return res.stdout
 
-def parse_openfoam_field(file_path):
+def parse_openfoam_field(file_path, num_cells=100):
     if not os.path.exists(file_path):
         return []
     with open(file_path, 'r') as f:
@@ -41,7 +42,8 @@ def parse_openfoam_field(file_path):
     sub = content[idx:idx+200]
     if "uniform" in sub and "nonuniform" not in sub:
         val_str = sub.split("uniform")[1].split(";")[0].strip()
-        return [float(val_str)]
+        val = float(val_str)
+        return [val] * num_cells
     start_paren = content.find("(", idx)
     end_paren = content.find(")", start_paren)
     if start_paren == -1 or end_paren == -1:
@@ -83,7 +85,7 @@ boundary (
 FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
 application phaseChangeMultiRegionFoam;
 startFrom startTime; startTime 0; stopAt endTime; endTime 2000; deltaT 2;
-writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii;
+writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii;
 """)
 
     with open("system/fvSchemes", "w") as f:
@@ -139,7 +141,7 @@ phaseChange
     active true; phaseChangeMode EHC;
     melting { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 100000.0; }
     freezing { T_lowerBound 295.0; T_upperBound 305.0; latentHeat 100000.0; }
-    hysteresis { active true; historyLength 5; directionDetection { method slope; tolerance 1e-6; } }
+    hysteresis { active true; }
     density { model linear; rhoRef 1000.0; rhoSolid 1000.0; rhoLiquid 1000.0; }
     thermophysical { mode custom; CpSolid 2000.0; CpLiquid 2000.0; kSolid 1.0; kLiquid 1.0; }
 }
@@ -191,17 +193,15 @@ boundaryField { ".*" { type calculated; value uniform 101325; } "(top|bottom|fro
 
     # Run Phase 2: Cooling Reversal (2000 -> 4000s) with T_hot switched to 270 K
     print("\n--- Running Phase 2: Cooling Reversal (t = 2000 -> 4000 s, T_hot = 270 K) ---")
-    # Update controlDict for Phase 2
     with open("system/controlDict", "w") as f:
         f.write("""
 FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
 application phaseChangeMultiRegionFoam;
 startFrom latestTime; startTime 0; stopAt endTime; endTime 4000; deltaT 2;
-writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii;
+writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii;
 """)
 
     # update boundary BC at t=2000 using exact regex targeting hot patch
-    import re
     with open("2000/pcm/T", "r") as f:
         t_2000 = f.read()
     t_2000_cool = re.sub(r"(hot\s*\{\s*type\s+fixedValue;\s*value\s+uniform\s+)[0-9.]+(;\s*\})", r"\g<1>270.0\2", t_2000)
@@ -226,7 +226,10 @@ writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii;
     reg_a_passed = abs(mean_a_heat - 0.2887) < 0.002
     reg_T_passed = abs(mean_T_heat - 299.37) < 0.1
 
-    # Enthalpy conservation check
+    # Assert cooling mean T at 4000s is 286.02 K (+/- 0.1 K)
+    reg_T_cool_passed = abs(mean_T_cool - 286.02) < 0.10
+
+    # Enthalpy balance
     rho = 1000.0
     Cp = 2000.0
     Lf = 100000.0
@@ -234,7 +237,11 @@ writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii;
     dx = 0.1 / len(T_heat)
     H_heat = sum(rho * (Cp * (T - T0) + a * Lf) * dx for T, a in zip(T_heat, alpha_heat))
     H_cool = sum(rho * (Cp * (T - T0) + a * Lf) * dx for T, a in zip(T_cool, alpha_cool))
-    delta_H_cool = H_cool - H_heat
+    delta_H_extracted = H_heat - H_cool
+    delta_H_MJ = delta_H_extracted / 1e6
+
+    # Extracted cooling enthalpy benchmark: 5.558 MJ/m^2 (expected 5.56 MJ/m^2 +/- 0.5%)
+    reg_H_cool_passed = abs(delta_H_MJ - 5.558) / 5.558 < 0.005
 
     print("\n=======================================================")
     print("      HEATING & COOLING REVERSAL TEST RESULTS          ")
@@ -242,20 +249,24 @@ writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii;
     print(f"Heating Peak (t=2000s) Mean T     : {mean_T_heat:.2f} K (Benchmark: 299.37 K, Pass={reg_T_passed})")
     print(f"Heating Peak (t=2000s) Mean alphaL : {mean_a_heat:.4f} (Benchmark: 0.2887, Pass={reg_a_passed})")
     print(f"Heating Peak (t=2000s) Domain H    : {H_heat:.2f} J/m^2")
-    print(f"Cooling End  (t=4000s) Mean T     : {mean_T_cool:.2f} K")
+    print(f"Cooling End  (t=4000s) Mean T     : {mean_T_cool:.2f} K (Benchmark: 286.02 K, Pass={reg_T_cool_passed})")
     print(f"Cooling End  (t=4000s) Mean alphaL : {mean_a_cool:.4f}")
     print(f"Cooling End  (t=4000s) Domain H    : {H_cool:.2f} J/m^2")
-    print(f"Cooling Enthalpy Extracted         : {-delta_H_cool:.2f} J/m^2")
+    print(f"Cooling Enthalpy Extracted         : {delta_H_extracted:.2f} J/m^2 ({delta_H_MJ:.4f} MJ/m^2, Pass={reg_H_cool_passed})")
     print(f"Liquid Fraction Bounded [0, 1]     : {alpha_bounded} (min={min_a_cool:.6f}, max={max_a_cool:.6f})")
     print("-------------------------------------------------------")
 
-    if reg_a_passed and reg_T_passed and mean_a_cool < 0.05 and mean_T_cool < 290.0 and alpha_bounded:
+    if reg_a_passed and reg_T_passed and reg_T_cool_passed and reg_H_cool_passed and alpha_bounded:
         print("\nSTATUS: HEATING-COOLING REVERSAL VERIFICATION PASSED!")
-        print("The solver committed alphaL_old statefully, matching hysteresis OFF heating benchmark (alphaL=0.2887) identically.")
+        print("The solver committed alphaL_old statefully without edge shortcut artifacts, matching 286.02 K cooling mean T and 5.56 MJ/m^2 extracted enthalpy.")
     else:
         print("\nSTATUS: TEST FAILED")
         if not reg_a_passed or not reg_T_passed:
             print(f"Reason: Heating phase regression failed (Mean alphaL={mean_a_heat:.4f} vs 0.2887, Mean T={mean_T_heat:.2f} K vs 299.37 K)")
+        if not reg_T_cool_passed:
+            print(f"Reason: Cooling mean T at 4000s failed (Mean T={mean_T_cool:.2f} K vs 286.02 K)")
+        if not reg_H_cool_passed:
+            print(f"Reason: Cooling enthalpy extracted failed ({delta_H_MJ:.4f} MJ/m^2 vs 5.558 MJ/m^2)")
         if not alpha_bounded:
             print(f"Reason: Liquid fraction out of bounds [0, 1]: min={min_a_cool}, max={max_a_cool}")
         sys.exit(1)
