@@ -88,6 +88,13 @@ Foam::pcmEhcModel::pcmEhcModel
             liquidFraction_[cellI] = alpha0;
         }
     }
+
+    // Clamp initial liquidFraction_ to valid range [0, 1]
+    forAll(liquidFraction_, cellI)
+    {
+        liquidFraction_[cellI] = max(0.0, min(1.0, liquidFraction_[cellI]));
+    }
+
     liquidFraction_.correctBoundaryConditions();
     liquidFraction_old_ = liquidFraction_;
     heatingTrajectory_old_ = heatingTrajectory_;
@@ -121,12 +128,39 @@ void Foam::pcmEhcModel::readDict()
         Lm_ = meltDict.lookupOrDefault<scalar>("latentHeat", 163000.0);
     }
 
+    // Default freezing bounds inherit from melting bounds unless overridden
+    Tlf_ = Tlm_;
+    Tuf_ = Tum_;
+    Lf_ = Lm_;
+
     if (pcDict.found("freezing"))
     {
         const dictionary& freezeDict = pcDict.subDict("freezing");
-        Tlf_ = freezeDict.lookupOrDefault<scalar>("T_lowerBound", 303.15);
-        Tuf_ = freezeDict.lookupOrDefault<scalar>("T_upperBound", 313.15);
-        Lf_ = freezeDict.lookupOrDefault<scalar>("latentHeat", 163000.0);
+        Tlf_ = freezeDict.lookupOrDefault<scalar>("T_lowerBound", Tlf_);
+        Tuf_ = freezeDict.lookupOrDefault<scalar>("T_upperBound", Tuf_);
+        Lf_ = freezeDict.lookupOrDefault<scalar>("latentHeat", Lf_);
+    }
+
+    // Input Parameter Validation
+    if (Tum_ <= Tlm_)
+    {
+        FatalIOErrorInFunction(phaseChangeDict)
+            << "Melting upper bound T_upperBound (" << Tum_
+            << " K) must be > T_lowerBound (" << Tlm_ << " K)"
+            << exit(FatalIOError);
+    }
+    if (Tuf_ <= Tlf_)
+    {
+        FatalIOErrorInFunction(phaseChangeDict)
+            << "Freezing upper bound T_upperBound (" << Tuf_
+            << " K) must be > T_lowerBound (" << Tlf_ << " K)"
+            << exit(FatalIOError);
+    }
+    if (Lm_ < 0.0 || Lf_ < 0.0)
+    {
+        FatalIOErrorInFunction(phaseChangeDict)
+            << "Latent heat (Lm=" << Lm_ << ", Lf=" << Lf_ << ") must be >= 0"
+            << exit(FatalIOError);
     }
 
     if (mag(Lm_ - Lf_) > 1e-6)
@@ -163,6 +197,31 @@ void Foam::pcmEhcModel::readDict()
         Cpl_ = thermoDict.lookupOrDefault<scalar>("CpLiquid", 2320.0);
         ks_ = thermoDict.lookupOrDefault<scalar>("kSolid", 0.50);
         kl_ = thermoDict.lookupOrDefault<scalar>("kLiquid", 0.47);
+    }
+
+    if (Cps_ <= 0.0 || Cpl_ <= 0.0)
+    {
+        FatalIOErrorInFunction(phaseChangeDict)
+            << "Heat capacity (CpSolid=" << Cps_ << ", CpLiquid=" << Cpl_ << ") must be > 0"
+            << exit(FatalIOError);
+    }
+    if (ks_ <= 0.0 || kl_ <= 0.0)
+    {
+        FatalIOErrorInFunction(phaseChangeDict)
+            << "Thermal conductivity (kSolid=" << ks_ << ", kLiquid=" << kl_ << ") must be > 0"
+            << exit(FatalIOError);
+    }
+    if (densityModel_ != "constant" && densityModel_ != "linear")
+    {
+        FatalIOErrorInFunction(phaseChangeDict)
+            << "Unsupported density model '" << densityModel_ << "'. Expected 'constant' or 'linear'."
+            << exit(FatalIOError);
+    }
+    if (thermoMode_ != "thermo" && thermoMode_ != "custom")
+    {
+        FatalIOErrorInFunction(phaseChangeDict)
+            << "Unsupported thermophysical mode '" << thermoMode_ << "'. Expected 'thermo' or 'custom'."
+            << exit(FatalIOError);
     }
 
     if (hysteresisActive_ && mag(Cps_ - Cpl_) > 1e-6)
@@ -337,21 +396,14 @@ void Foam::pcmEhcModel::correct()
         }
         else
         {
-            if (isHeating && Tcell > Tlm_ && Tcell < Tum_)
+            if (isHeating && Tcell > Tlm_ && Tcell < Tum_ && alphaL_prev <= alpha_m_curr + 1e-6)
             {
-                deltaCp = L / (Tum_ - Tlm_);
+                deltaCp = Lm_ / (Tum_ - Tlm_);
             }
-            else if (!isHeating && Tcell > Tlf_ && Tcell < Tuf_)
+            else if (!isHeating && Tcell > Tlf_ && Tcell < Tuf_ && alphaL_prev >= alpha_f_curr - 1e-6)
             {
-                deltaCp = L / (Tuf_ - Tlf_);
+                deltaCp = Lf_ / (Tuf_ - Tlf_);
             }
-        }
-
-        if (deltaCp < -1e-6)
-        {
-            WarningInFunction
-                << "Negative apparent heat capacity encountered (" << deltaCp
-                << " J/(kg.K)) at cell " << cellI << ". Clipping to zero." << endl;
         }
 
         CpEff_[cellI] = cpBase + max(0.0, deltaCp);
@@ -486,21 +538,14 @@ void Foam::pcmEhcModel::correct()
             }
             else
             {
-                if (isHeating && Tface > Tlm_ && Tface < Tum_)
+                if (isHeating && Tface > Tlm_ && Tface < Tum_ && alphaL_prev <= alpha_m_curr + 1e-6)
                 {
-                    deltaCp = L / (Tum_ - Tlm_);
+                    deltaCp = Lm_ / (Tum_ - Tlm_);
                 }
-                else if (!isHeating && Tface > Tlf_ && Tface < Tuf_)
+                else if (!isHeating && Tface > Tlf_ && Tface < Tuf_ && alphaL_prev >= alpha_f_curr - 1e-6)
                 {
-                    deltaCp = L / (Tuf_ - Tlf_);
+                    deltaCp = Lf_ / (Tuf_ - Tlf_);
                 }
-            }
-
-            if (deltaCp < -1e-6)
-            {
-                WarningInFunction
-                    << "Negative apparent heat capacity encountered (" << deltaCp
-                    << " J/(kg.K)) at patch face " << facei << ". Clipping to zero." << endl;
             }
 
             pCpEff[facei] = cpBase + max(0.0, deltaCp);

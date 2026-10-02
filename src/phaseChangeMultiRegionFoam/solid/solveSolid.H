@@ -51,10 +51,9 @@
         {
             if (pcmModel.active() && (nlCorr == 0))
             {
-                static bool warnedCoupled = false;
-                if (!warnedCoupled)
+                if (!warnedCoupled[i])
                 {
-                    warnedCoupled = true;
+                    warnedCoupled[i] = true;
                     WarningInFunction
                         << "Solid region " << solidRegions[i].name()
                         << " has active phase change in a coupled multi-region domain. "

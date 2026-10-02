@@ -6,6 +6,7 @@
     PtrList<volScalarField> betavSolid(solidRegions.size());
     PtrList<volSymmTensorField> aniAlphas(solidRegions.size());
     PtrList<pcmPhaseChangeModel> pcmModels(solidRegions.size());
+    List<bool> warnedCoupled(solidRegions.size(), false);
 
     // Populate solid field pointer lists
     forAll(solidRegions, i)

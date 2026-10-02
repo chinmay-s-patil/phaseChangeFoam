@@ -5,38 +5,15 @@
     \\  /    A nd           | www.openfoam.com
      \\/     M anipulation  |
 -------------------------------------------------------------------------------
-    Copyright (C) 2011-2016 OpenFOAM Foundation
-    Copyright (C) 2017-2019,2022 OpenCFD Ltd.
--------------------------------------------------------------------------------
 License
     This file is part of OpenFOAM.
 
-    OpenFOAM is free software: you can redistribute it and/or modify it
-    under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    OpenFOAM is distributed in the hope that it will be useful, but WITHOUT
-    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-    FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
-    for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
-
 Application
-    chtMultiRegionFoam
-
-Group
-    grpHeatTransferSolvers
+    phaseChangeMultiRegionFoam
 
 Description
-    Transient solver for buoyant, turbulent fluid flow and solid heat
-    conduction with conjugate heat transfer between solid and fluid regions.
-
-    It handles secondary fluid or solid circuits which can be coupled
-    thermally with the main fluid region. i.e radiators, etc.
-
+    Multi-region solver for conjugate heat transfer with stateful
+    phase-change material (PCM) hysteresis models.
 \*---------------------------------------------------------------------------*/
 
 #include "fvCFD.H"
@@ -48,13 +25,12 @@ Description
 #include "compressibleCourantNo.H"
 #include "solidRegionDiffNo.H"
 #include "solidThermo.H"
-#include "pcmPhaseChangeModel.H"
 #include "radiationModel.H"
 #include "fvOptions.H"
 #include "coordinateSystem.H"
 #include "loopControl.H"
 #include "pressureControl.H"
-
+#include "pcmPhaseChangeModel.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -62,9 +38,7 @@ int main(int argc, char *argv[])
 {
     argList::addNote
     (
-        "Transient solver for buoyant, turbulent fluid flow and solid heat"
-        " conduction with conjugate heat transfer"
-        " between solid and fluid regions."
+        "Multi-region solver with phase-change heat transfer."
     );
 
     #define NO_CONTROL
@@ -212,11 +186,13 @@ int main(int argc, char *argv[])
             }
         }
 
+        // Re-synchronize phase-change models with final converged T before committing history
         forAll(solidRegions, i)
         {
             pcmPhaseChangeModel& pcmModel = pcmModels[i];
             if (pcmModel.active())
             {
+                pcmModel.correct();
                 pcmModel.updateHistory();
             }
         }
@@ -230,6 +206,5 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
 
 // ************************************************************************* //
