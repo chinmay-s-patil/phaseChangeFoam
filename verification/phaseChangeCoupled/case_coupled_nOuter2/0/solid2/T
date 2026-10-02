@@ -3,6 +3,6 @@ FoamFile { version 2.0; format ascii; class volScalarField; location "0/solid2";
 dimensions [0 0 0 1 0 0 0]; internalField uniform 280.0;
 boundaryField {
     solid2_hot { type fixedValue; value uniform 350.0; }
-    solid2_to_pcm { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 280.0; Tnbr T; kappaMethod lookup; kappa kPCM; }
+    solid2_to_pcm { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 280.0; Tnbr T; kappaMethod lookup; kappa kEff; }
     emptyFaces { type empty; }
 }

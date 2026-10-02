@@ -73,10 +73,10 @@ def find_melt_front(T_list, alpha_list, dx=0.001):
 def setup_case():
     of_env = "source /usr/lib/openfoam/openfoam2412/etc/bashrc || source /usr/lib/openfoam/openfoam2406/etc/bashrc || true"
     run_cmd(f"bash -c '{of_env}; blockMesh'")
-    run_cmd("mkdir -p constant/phaseChange system/phaseChange")
-    run_cmd("cp -r constant/polyMesh constant/phaseChange/polyMesh 2>/dev/null || true")
-    run_cmd("cp system/fvSchemes system/phaseChange/fvSchemes 2>/dev/null || true")
-    run_cmd("cp system/fvSolution system/phaseChange/fvSolution 2>/dev/null || true")
+    run_cmd("mkdir -p constant/pcm system/pcm")
+    run_cmd("cp -r constant/polyMesh constant/pcm/polyMesh 2>/dev/null || true")
+    run_cmd("cp system/fvSchemes system/pcm/fvSchemes 2>/dev/null || true")
+    run_cmd("cp system/fvSolution system/pcm/fvSolution 2>/dev/null || true")
 
 def main():
     case_dir = os.path.dirname(os.path.abspath(__file__))
@@ -90,7 +90,7 @@ def main():
     results = {}
 
     for dt in timesteps:
-        run_cmd("rm -rf [1-9]* 0.* constant/phaseChange/polyMesh constant/polyMesh")
+        run_cmd("rm -rf [1-9]* 0.* constant/pcm/polyMesh constant/polyMesh")
         setup_case()
 
         # Update controlDict
@@ -110,8 +110,8 @@ def main():
         print(f"Running dt = {dt:3d} s ...", end="", flush=True)
         run_cmd(f"bash -c '{of_env}; {solver_bin}'")
 
-        T = parse_openfoam_field("2000/phaseChange/T")
-        alpha = parse_openfoam_field("2000/phaseChange/phaseFraction")
+        T = parse_openfoam_field("2000/pcm/T")
+        alpha = parse_openfoam_field("2000/pcm/phaseFraction")
         x_front = find_melt_front(T, alpha)
 
         if not T:

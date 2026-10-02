@@ -53,6 +53,9 @@ private:
     volScalarField rho_;
     volScalarField k_;
 
+    //- Phase fraction at start of step (explicit; avoids oldTime() capture ordering)
+    volScalarField phaseFraction_old_;
+
     void readDict();
 
 public:
@@ -78,12 +81,9 @@ public:
         return active_;
     }
 
-    virtual bool suppressConvection() const override
-    {
-        return false;
-    }
-
     virtual void correct() override;
+
+    virtual void updateHistory() override;
 
     virtual tmp<volScalarField> CpEff() const override
     {

@@ -54,8 +54,12 @@ Foam::phaseChangeModel::phaseChangeModel
         mesh,
         dimensionedScalar("phaseState", dimless, 0.0),
         "calculated"
-    )
+    ),
+    phaseFractionRestored_(false),
+    suppressConvection_(true)
 {
+    phaseFractionRestored_ = phaseFraction_.headerOk();
+
     // Backward compatibility for disk reads: if liquidFraction exists on disk but phaseFraction doesn't
     IOobject liquidFractionIO
     (
@@ -70,6 +74,27 @@ Foam::phaseChangeModel::phaseChangeModel
     {
         volScalarField lFrac(liquidFractionIO, mesh);
         phaseFraction_ == lFrac;
+        phaseFractionRestored_ = true;
+    }
+}
+
+
+void Foam::phaseChangeModel::readConvectionDict(const dictionary& pcDict)
+{
+    if (pcDict.found("convection"))
+    {
+        suppressConvection_ =
+            pcDict.subDict("convection").getOrDefault<bool>("suppress", true);
+    }
+
+    if (!suppressConvection_)
+    {
+        FatalIOErrorInFunction(pcDict)
+            << "phaseChange.convection.suppress = false requested for region "
+            << mesh_.name() << ", but phase change is solved in solid-type "
+            << "regions without a momentum equation; convection cannot be "
+            << "resolved. Use suppress true (conduction-only)."
+            << exit(FatalIOError);
     }
 }
 

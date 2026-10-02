@@ -183,8 +183,8 @@ boundaryField { ".*" { type calculated; value uniform 101325; } "(top|bottom|fro
     run_cmd(f"bash -c '{of_env}; {solver_bin}'")
 
     T_vals = parse_openfoam_field("2000/pcm/T")
-    alpha_vals = parse_openfoam_field("2000/pcm/liquidFraction")
-    k_vals = parse_openfoam_field("2000/pcm/kPCM")
+    alpha_vals = parse_openfoam_field("2000/pcm/phaseFraction")
+    k_vals = parse_openfoam_field("2000/pcm/kEff")
 
     mean_T = sum(T_vals) / len(T_vals)
     mean_a = sum(alpha_vals) / len(alpha_vals)

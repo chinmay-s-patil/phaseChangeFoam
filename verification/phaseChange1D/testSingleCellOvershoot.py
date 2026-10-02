@@ -201,7 +201,7 @@ boundaryField { walls { type calculated; value uniform 101325; } }
     out = run_cmd(f"bash -c '{of_env}; {solver_bin}'")
 
     T_sim = parse_openfoam_field("100/pcm/T")[0]
-    alpha_sim = parse_openfoam_field("100/pcm/liquidFraction")[0]
+    alpha_sim = parse_openfoam_field("100/pcm/phaseFraction")[0]
 
     T_analytical = 350.00
     alpha_analytical = 1.0000

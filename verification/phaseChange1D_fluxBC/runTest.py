@@ -193,7 +193,7 @@ boundaryField { ".*" { type calculated; value uniform 101325; } "(top|bottom|fro
 
     out_dir = f"{int(t_end)}/pcm"
     T_vals = parse_openfoam_field(f"{out_dir}/T")
-    alpha_vals = parse_openfoam_field(f"{out_dir}/liquidFraction")
+    alpha_vals = parse_openfoam_field(f"{out_dir}/phaseFraction")
     N = len(T_vals)
     dx = L / N
 

@@ -13,7 +13,7 @@ Application
 
 Description
     Multi-region solver for conjugate heat transfer with stateful
-    phase-change material (PCM) hysteresis models.
+    generic phase-change (EHC / enthalpy-porosity) models.
 \*---------------------------------------------------------------------------*/
 
 #include "fvCFD.H"
@@ -187,17 +187,17 @@ int main(int argc, char *argv[])
         }
 
         // Re-synchronize phase-change models with final converged T^n before committing history.
-        // At this point in the timestep, liquidFraction_old_ still holds alpha^{n-1} and T.oldTime()
-        // holds T^{n-1} (the step start state). Re-evaluating pcmModel.correct() with final T^n
+        // At this point in the timestep, phaseFraction_old_ still holds alpha^{n-1} and T.oldTime()
+        // holds T^{n-1} (the step start state). Re-evaluating phaseChangeModel.correct() with final T^n
         // evaluates exact alpha(T^n) and CpEff(T^n) without modifying history, making this call
         // safe and idempotent prior to committing updateHistory().
         forAll(solidRegions, i)
         {
-            phaseChangeModel& phaseChangeModel = phaseChangeModels[i];
-            if (phaseChangeModel.active())
+            phaseChangeModel& pcModel = phaseChangeModels[i];
+            if (pcModel.active())
             {
-                phaseChangeModel.correct();
-                phaseChangeModel.updateHistory();
+                pcModel.correct();
+                pcModel.updateHistory();
             }
         }
 

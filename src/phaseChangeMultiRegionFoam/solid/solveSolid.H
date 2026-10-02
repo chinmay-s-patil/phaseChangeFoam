@@ -10,15 +10,15 @@
     {
         actualIter = nlCorr + 1;
 
-        if (phaseChangeModel.active())
+        if (pcModel.active())
         {
-            phaseChangeModel.correct();
+            pcModel.correct();
         }
 
         tmp<volScalarField> tCpThermo = thermo.Cp();
-        tmp<volScalarField> tCpEff = phaseChangeModel.active() ? phaseChangeModel.CpEff() : tmp<volScalarField>(thermo.Cp());
-        tmp<volScalarField> trhoEff = phaseChangeModel.active() ? phaseChangeModel.rho() : tmp<volScalarField>(thermo.rho());
-        tmp<volScalarField> tkEff = phaseChangeModel.active() ? phaseChangeModel.k() : tmp<volScalarField>(thermo.kappa());
+        tmp<volScalarField> tCpEff = pcModel.active() ? pcModel.CpEff() : tmp<volScalarField>(thermo.Cp());
+        tmp<volScalarField> trhoEff = pcModel.active() ? pcModel.rho() : tmp<volScalarField>(thermo.rho());
+        tmp<volScalarField> tkEff = pcModel.active() ? pcModel.k() : tmp<volScalarField>(thermo.kappa());
 
         // Thermal diffusivity alpha = k / Cp_sensible in kg/(m s) for enthalpy-based equation
         volScalarField alpha("alpha", tkEff() / tCpThermo());
@@ -38,9 +38,9 @@
             fvOptions(trhoEff(), h)
         );
 
-        if (phaseChangeModel.active())
+        if (pcModel.active())
         {
-            hEqn += phaseChangeModel.latentHeatSource();
+            hEqn += pcModel.latentHeatSource();
         }
 
         hEqn.relax();

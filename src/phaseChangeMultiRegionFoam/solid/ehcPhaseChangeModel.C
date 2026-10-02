@@ -81,7 +81,7 @@ Foam::ehcPhaseChangeModel::ehcPhaseChangeModel
     readDict();
 
     // Fresh start initialization for phaseFraction_ if not read from disk
-    if (!phaseFraction_.headerOk())
+    if (!phaseFractionRestored_)
     {
         const volScalarField& Tinit = thermo_.T();
         forAll(phaseFraction_, cellI)
@@ -93,7 +93,7 @@ Foam::ehcPhaseChangeModel::ehcPhaseChangeModel
     }
 
     // Restart handling: if phaseFraction was read but heatingTrajectory was missing, infer trajectory
-    if (phaseFraction_.headerOk() && !heatingTrajectory_.headerOk())
+    if (phaseFractionRestored_ && !heatingTrajectory_.headerOk())
     {
         forAll(heatingTrajectory_, cellI)
         {
@@ -198,6 +198,8 @@ void Foam::ehcPhaseChangeModel::readDict()
         Tum_ = meltDict.lookupOrDefault<scalar>("T_upperBound", 313.15);
         Lm_ = meltDict.lookupOrDefault<scalar>("latentHeat", 163000.0);
     }
+
+    readConvectionDict(pcDict);
 
     // Default freezing bounds inherit from melting bounds unless overridden
     Tlf_ = Tlm_;

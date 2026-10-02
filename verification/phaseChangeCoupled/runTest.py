@@ -281,7 +281,7 @@ FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; ob
 dimensions [0 0 0 1 0 0 0]; internalField uniform 280.0;
 boundaryField {
     pcm_cold { type fixedValue; value uniform 280.0; }
-    pcm_to_solid2 { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 280.0; Tnbr T; kappaMethod lookup; kappa kPCM; }
+    pcm_to_solid2 { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 280.0; Tnbr T; kappaMethod lookup; kappa kEff; }
     emptyFaces { type empty; }
 }
 """)
@@ -310,7 +310,7 @@ FoamFile { version 2.0; format ascii; class volScalarField; location "0/solid2";
 dimensions [0 0 0 1 0 0 0]; internalField uniform 280.0;
 boundaryField {
     solid2_hot { type fixedValue; value uniform 350.0; }
-    solid2_to_pcm { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 280.0; Tnbr T; kappaMethod lookup; kappa kPCM; }
+    solid2_to_pcm { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 280.0; Tnbr T; kappaMethod lookup; kappa kEff; }
     emptyFaces { type empty; }
 }
 """)
@@ -346,7 +346,7 @@ def main():
     run_cmd(f"cd {single_dir} && bash -c '{of_env}; {solver_bin}'")
 
     T_single = parse_openfoam_field(os.path.join(single_dir, "2000/pcm/T"), num_cells=100)
-    a_single = parse_openfoam_field(os.path.join(single_dir, "2000/pcm/liquidFraction"), num_cells=100)
+    a_single = parse_openfoam_field(os.path.join(single_dir, "2000/pcm/phaseFraction"), num_cells=100)
 
     # Test 1: nOuterCorr = 2 (Valid coupled run)
     print("\n--- Test 1: Coupled Solve with nOuterCorr = 2 ---")
@@ -356,9 +356,9 @@ def main():
     res1 = run_cmd(f"cd {case1_dir} && bash -c '{of_env}; {solver_bin}'")
     
     T_pcm_left = parse_openfoam_field(os.path.join(case1_dir, "2000/pcm/T"), num_cells=50)
-    a_pcm_left = parse_openfoam_field(os.path.join(case1_dir, "2000/pcm/liquidFraction"), num_cells=50)
+    a_pcm_left = parse_openfoam_field(os.path.join(case1_dir, "2000/pcm/phaseFraction"), num_cells=50)
     T_pcm_right = parse_openfoam_field(os.path.join(case1_dir, "2000/solid2/T"), num_cells=50)
-    a_pcm_right = parse_openfoam_field(os.path.join(case1_dir, "2000/solid2/liquidFraction"), num_cells=50)
+    a_pcm_right = parse_openfoam_field(os.path.join(case1_dir, "2000/solid2/phaseFraction"), num_cells=50)
 
     # The coupled case has two regions of 50 cells each
     if T_pcm_left and T_pcm_right and T_single:

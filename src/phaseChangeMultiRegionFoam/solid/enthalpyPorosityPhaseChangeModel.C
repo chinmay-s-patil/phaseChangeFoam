@@ -49,11 +49,17 @@ Foam::enthalpyPorosityPhaseChangeModel::enthalpyPorosityPhaseChangeModel
     (
         IOobject("kEff", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
         thermo.kappa()
+    ),
+    phaseFraction_old_
+    (
+        IOobject("phaseFraction_old", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::NO_WRITE),
+        phaseFraction_
     )
 {
     active_ = true;
     readDict();
     correct();
+    phaseFraction_old_ = phaseFraction_;
 }
 
 void Foam::enthalpyPorosityPhaseChangeModel::readDict()
@@ -69,6 +75,8 @@ void Foam::enthalpyPorosityPhaseChangeModel::readDict()
 
     IOdictionary phaseChangeDict(dictIO);
     const dictionary& pcDict = phaseChangeDict.subDict("phaseChange");
+
+    readConvectionDict(pcDict);
 
     if (pcDict.found("melting"))
     {
@@ -177,8 +185,17 @@ void Foam::enthalpyPorosityPhaseChangeModel::correct()
     k_.correctBoundaryConditions();
 }
 
+void Foam::enthalpyPorosityPhaseChangeModel::updateHistory()
+{
+    phaseFraction_old_ = phaseFraction_;
+}
+
+
 Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::latentHeatSource() const
 {
+    // Term is added to the LHS of the energy equation (hEqn += source), i.e.
+    //   rho Cp dT/dt - div(k grad T) + rho L dalpha/dt = ...
+    // so melting (dalpha/dt > 0) absorbs heat.
     tmp<volScalarField> tSource
     (
         volScalarField::New
@@ -190,9 +207,13 @@ Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::latentHe
     );
 
     volScalarField& source = tSource.ref();
-    tmp<volScalarField> tdAlphaLdt = fvc::ddt(phaseFraction_);
+    const scalar rDeltaT = 1.0/mesh_.time().deltaTValue();
 
-    source = -rho_ * Lm_ * tdAlphaLdt();
+    source.primitiveFieldRef() =
+        rho_.primitiveField()*Lm_
+       *(phaseFraction_.primitiveField() - phaseFraction_old_.primitiveField())
+       *rDeltaT;
+
     return tSource;
 }
 

@@ -45,6 +45,17 @@ protected:
     volScalarField phaseFraction_; // Liquid/transformed phase fraction alpha in [0, 1]
     volScalarField phaseState_;    // 0 = solid, 1 = melting/transitioning, 2 = liquid, 3 = freezing
 
+    //- True if phaseFraction was found on disk (or restored from legacy liquidFraction)
+    bool phaseFractionRestored_;
+
+    //- Convection suppression flag (dict: phaseChange.convection.suppress, default true).
+    //  Regions solved by this application carry no momentum equation, so convection
+    //  is always suppressed; false is rejected at read time.
+    bool suppressConvection_;
+
+    //- Read optional 'convection { suppress <bool>; }' sub-dictionary
+    void readConvectionDict(const dictionary& pcDict);
+
 public:
 
     //- Runtime type information
@@ -98,7 +109,7 @@ public:
     //- Whether this model suppresses fluid convection (solid-only phase change)
     virtual bool suppressConvection() const
     {
-        return false;
+        return suppressConvection_;
     }
 
     //- Access phase fraction field

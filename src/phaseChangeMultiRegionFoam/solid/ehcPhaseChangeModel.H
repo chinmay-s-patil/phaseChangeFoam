@@ -103,11 +103,6 @@ public:
 
     virtual void updateHistory() override;
 
-    virtual bool suppressConvection() const override
-    {
-        return true;
-    }
-
     virtual tmp<volScalarField> CpEff() const override
     {
         return CpEff_;

@@ -186,7 +186,7 @@ boundaryField { ".*" { type calculated; value uniform 101325; } "(top|bottom|fro
     run_cmd(f"bash -c '{of_env}; {solver_bin}'")
 
     T_heat = parse_openfoam_field("2000/pcm/T")
-    alpha_heat = parse_openfoam_field("2000/pcm/liquidFraction")
+    alpha_heat = parse_openfoam_field("2000/pcm/phaseFraction")
     mean_T_heat = sum(T_heat) / len(T_heat)
     mean_a_heat = sum(alpha_heat) / len(alpha_heat)
     print(f"Heating t=2000s: Mean T = {mean_T_heat:.2f} K, Mean alphaL = {mean_a_heat:.4f}")
@@ -212,7 +212,7 @@ writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii;
     run_cmd(f"bash -c '{of_env}; {solver_bin}'")
 
     T_cool = parse_openfoam_field("4000/pcm/T")
-    alpha_cool = parse_openfoam_field("4000/pcm/liquidFraction")
+    alpha_cool = parse_openfoam_field("4000/pcm/phaseFraction")
     mean_T_cool = sum(T_cool) / len(T_cool)
     mean_a_cool = sum(alpha_cool) / len(alpha_cool)
     print(f"Cooling t=4000s: Mean T = {mean_T_cool:.2f} K, Mean alphaL = {mean_a_cool:.4f}")

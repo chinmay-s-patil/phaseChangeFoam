@@ -186,7 +186,7 @@ boundaryField { ".*" { type calculated; value uniform 101325; } "(top|bottom|fro
     run_cmd(f"bash -c '{of_env}; {solver_bin}'")
 
     T_heat = parse_openfoam_field("2000/pcm/T")
-    alpha_heat = parse_openfoam_field("2000/pcm/liquidFraction")
+    alpha_heat = parse_openfoam_field("2000/pcm/phaseFraction")
     mean_T_heat = sum(T_heat) / len(T_heat)
     mean_a_heat = sum(alpha_heat) / len(alpha_heat)
     print(f"Heating t=2000s: Mean T = {mean_T_heat:.2f} K, Mean alphaL = {mean_a_heat:.4f}")
@@ -239,8 +239,8 @@ boundaryField { ".*" { type calculated; value uniform 101325; } "(top|bottom|fro
     # 3. domain enthalpy positive and in a reasonable range
     # 4. actual energy conservation check via boundary flux integration
     
-    # Compute boundary-integrated energy using trapezoidal rule on kPCM*dT/dx at walls
-    k_vals = parse_openfoam_field(os.path.join(case_dir, "2000/pcm/kPCM"))
+    # Compute boundary-integrated energy using trapezoidal rule on kEff*dT/dx at walls
+    k_vals = parse_openfoam_field(os.path.join(case_dir, "2000/pcm/kEff"))
     
     if k_vals:
         k_hot = k_vals[0]  # conductivity at hot wall cell
