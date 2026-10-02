@@ -165,6 +165,12 @@ void Foam::pcmEhcModel::readDict()
         kl_ = thermoDict.lookupOrDefault<scalar>("kLiquid", 0.47);
     }
 
+    if (hysteresisActive_ && mag(Cps_ - Cpl_) > 1e-6)
+    {
+        Info<< "    EHC PCM Info: Unequal Cp (Cps=" << Cps_ << ", Cpl=" << Cpl_
+            << " J/(kg.K)) under stateful hysteresis produces path-dependent sensible enthalpy loops across closed thermal cycles." << endl;
+    }
+
     Info<< "    EHC PCM Parameters loaded for region " << mesh_.name() << ":" << nl
         << "      Melting Range: [" << Tlm_ << " - " << Tum_ << "] K, Latent Heat: " << Lm_ << " J/kg" << nl
         << "      Freezing Range: [" << Tlf_ << " - " << Tuf_ << "] K, Latent Heat: " << Lf_ << " J/kg" << nl
@@ -307,16 +313,17 @@ void Foam::pcmEhcModel::correct()
             klVal = KappaField[cellI];
         }
 
+        scalar alpha_old_eval = hysteresisActive_ ? alphaL_prev : 0.0;
         scalar avgAlpha = 0.5 * (alphaL_curr + alphaL_prev);
         if (mag(deltaTStep) > 1e-6)
         {
-            if (isHeating)
+            if (!hysteresisActive_ || isHeating)
             {
-                avgAlpha = (integralAlphaMelt(Tcell, alphaL_prev) - integralAlphaMelt(ToldCell, alphaL_prev)) / deltaTStep;
+                avgAlpha = (integralAlphaMelt(Tcell, alpha_old_eval) - integralAlphaMelt(ToldCell, alpha_old_eval)) / deltaTStep;
             }
             else
             {
-                avgAlpha = (integralAlphaFreeze(Tcell, alphaL_prev) - integralAlphaFreeze(ToldCell, alphaL_prev)) / deltaTStep;
+                avgAlpha = (integralAlphaFreeze(Tcell, alpha_old_eval) - integralAlphaFreeze(ToldCell, alpha_old_eval)) / deltaTStep;
             }
         }
         avgAlpha = max(0.0, min(1.0, avgAlpha));
@@ -455,16 +462,17 @@ void Foam::pcmEhcModel::correct()
                 klVal = pKappaThermo[facei];
             }
 
+            scalar alpha_old_eval = hysteresisActive_ ? alphaL_prev : 0.0;
             scalar avgAlpha = 0.5 * (alphaL_curr + alphaL_prev);
             if (mag(deltaTStep) > 1e-6)
             {
-                if (isHeating)
+                if (!hysteresisActive_ || isHeating)
                 {
-                    avgAlpha = (integralAlphaMelt(Tface, alphaL_prev) - integralAlphaMelt(ToldFace, alphaL_prev)) / deltaTStep;
+                    avgAlpha = (integralAlphaMelt(Tface, alpha_old_eval) - integralAlphaMelt(ToldFace, alpha_old_eval)) / deltaTStep;
                 }
                 else
                 {
-                    avgAlpha = (integralAlphaFreeze(Tface, alphaL_prev) - integralAlphaFreeze(ToldFace, alphaL_prev)) / deltaTStep;
+                    avgAlpha = (integralAlphaFreeze(Tface, alpha_old_eval) - integralAlphaFreeze(ToldFace, alpha_old_eval)) / deltaTStep;
                 }
             }
             avgAlpha = max(0.0, min(1.0, avgAlpha));

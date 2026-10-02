@@ -340,6 +340,40 @@ def main():
         print("STATUS: CASE 9 FAILED!")
         all_passed = False
 
+    # --- Case 10: Cooling Jump with Unequal Cp (Cps = 1980, Cpl = 2320 J/(kg.K), T0 = 350 K -> 290 K) ---
+    # Sensible enthalpy integral = -135.8 kJ/kg, Latent = -100.0 kJ/kg => Total delta_H = -235.8 kJ/kg.
+    # Q = -2.358 MW/m^3 for dt = 100 s => T_exact = 290.000000 K, alphaL_exact = 0.000000.
+    print("\n--- Case 10: Cooling Jump with Unequal Cp (Cps = 1980, Cpl = 2320 J/(kg.K), T0 = 350 K -> 290 K) ---")
+    case10_dir = os.path.join(base_dir, "case10_unequalCpCooling")
+    T10, a10, log10 = setup_single_cell_case(case10_dir, T0=350.0, Q_source=-2358000.0, L_heat=100000.0, Cps=1980.0, Cpl=2320.0, alpha0=1.0, traj0=0.0)
+    err10 = abs(T10 - 290.0)
+    print(f"Simulated T = {T10:.6f} K, alphaL = {a10:.6f}")
+    print(f"Exact T     = 290.000000 K, alphaL = 0.000000")
+    print(f"Temperature Error = {err10:.6f} K")
+    if err10 < 0.001 and abs(a10 - 0.0) < 0.001:
+        print("STATUS: CASE 10 PASSED!")
+    else:
+        print("STATUS: CASE 10 FAILED!")
+        all_passed = False
+
+    # --- Case 11: Cooling Reversal Plateau with Unequal Cp (Cps = 1980, Cpl = 2320 J/(kg.K), T0 = 308 K, alpha0 = 0.8 -> T = 306 K) ---
+    # alphaL = 0.80 constant. Cp_base = 0.2*1980 + 0.8*2320 = 2252 J/(kg K).
+    # delta_H = 2252 * (-2 K) = -4504 J/kg => Q = -45.04 kW/m^3.
+    # T_exact = 306.000000 K, alphaL_exact = 0.800000.
+    print("\n--- Case 11: Cooling Reversal Plateau with Unequal Cp (T0 = 308 K, alpha0 = 0.8 -> T = 306 K, alphaL = 0.80) ---")
+    case11_dir = os.path.join(base_dir, "case11_unequalCpReversal")
+    T11, a11, log11 = setup_single_cell_case(case11_dir, T0=308.0, Q_source=-45040.0, L_heat=100000.0, Cps=1980.0, Cpl=2320.0, alpha0=0.8, traj0=0.0)
+    err11 = abs(T11 - 306.0)
+    err_a11 = abs(a11 - 0.80)
+    print(f"Simulated T = {T11:.6f} K, alphaL = {a11:.6f}")
+    print(f"Exact T     = 306.000000 K, alphaL = 0.800000")
+    print(f"Temperature Error = {err11:.6f} K, Alpha Error = {err_a11:.6f}")
+    if err11 < 0.001 and err_a11 < 0.001:
+        print("STATUS: CASE 11 PASSED!")
+    else:
+        print("STATUS: CASE 11 FAILED!")
+        all_passed = False
+
     print("\n=======================================================")
     print("      SINGLE-CELL VERIFICATION SUITE SUMMARY           ")
     print("=======================================================")
@@ -352,6 +386,8 @@ def main():
     print(f"Case 7 (Heating Reversal)      : {'PASSED' if err7 < 0.001 else 'FAILED'} (err = {err7:.6f} K)")
     print(f"Case 8 (Exact Path Integrated) : {'PASSED' if err8 < 0.001 else 'FAILED'} (err = {err8:.6f} K)")
     print(f"Case 9 (Variable Density)      : {'PASSED' if err9 < 0.001 else 'FAILED'} (err = {err9:.6f} K)")
+    print(f"Case 10 (Unequal Cp Cooling)   : {'PASSED' if err10 < 0.001 else 'FAILED'} (err = {err10:.6f} K)")
+    print(f"Case 11 (Unequal Cp Reversal)  : {'PASSED' if err11 < 0.001 else 'FAILED'} (err = {err11:.6f} K)")
     print("-------------------------------------------------------")
 
     if all_passed:

@@ -51,11 +51,16 @@
         {
             if (pcmModel.active() && (nlCorr == 0))
             {
-                WarningInFunction
-                    << "Solid region " << solidRegions[i].name()
-                    << " has active phase change in a coupled multi-region domain. "
-                    << "Single-pass matrix assembly relies on outer PIMPLE iterations (nOuterCorrectors > 1) "
-                    << "to converge phase change non-linearity across regions." << endl;
+                static bool warnedCoupled = false;
+                if (!warnedCoupled)
+                {
+                    warnedCoupled = true;
+                    WarningInFunction
+                        << "Solid region " << solidRegions[i].name()
+                        << " has active phase change in a coupled multi-region domain. "
+                        << "Single-pass matrix assembly relies on outer PIMPLE iterations (nOuterCorrectors > 1) "
+                        << "to converge phase change non-linearity across regions." << endl;
+                }
             }
             fvMatrixAssemblyPtr->addFvMatrix(hEqn);
             break;
