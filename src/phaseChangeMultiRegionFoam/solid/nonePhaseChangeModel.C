@@ -6,26 +6,41 @@
      \\/     M anipulation  |
 \*---------------------------------------------------------------------------*/
 
-#include "pcmNoneModel.H"
+#include "nonePhaseChangeModel.H"
 #include "addToRunTimeSelectionTable.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 namespace Foam
 {
-    defineTypeNameAndDebug(pcmNoneModel, 0);
-    addToRunTimeSelectionTable(pcmPhaseChangeModel, pcmNoneModel, dictionary);
+    defineTypeNameAndDebug(nonePhaseChangeModel, 0);
+    addToRunTimeSelectionTable(phaseChangeModel, nonePhaseChangeModel, dictionary);
 }
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
-Foam::pcmNoneModel::pcmNoneModel
+Foam::nonePhaseChangeModel::nonePhaseChangeModel
 (
     const fvMesh& mesh,
     const solidThermo& thermo
 )
 :
-    pcmPhaseChangeModel(mesh, thermo)
+    phaseChangeModel(mesh, thermo),
+    kEff_
+    (
+        IOobject("kEff", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
+        thermo.kappa()
+    ),
+    rhoEff_
+    (
+        IOobject("rhoEff", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
+        thermo.rho()
+    ),
+    CpEff_
+    (
+        IOobject("CpEff", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
+        thermo.Cp()
+    )
 {
     active_ = false;
 }

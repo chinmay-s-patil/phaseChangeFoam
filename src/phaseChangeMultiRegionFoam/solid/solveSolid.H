@@ -10,21 +10,21 @@
     {
         actualIter = nlCorr + 1;
 
-        if (pcmModel.active())
+        if (phaseChangeModel.active())
         {
-            pcmModel.correct();
+            phaseChangeModel.correct();
         }
 
         tmp<volScalarField> tCpThermo = thermo.Cp();
-        tmp<volScalarField> tCpEff = pcmModel.active() ? pcmModel.CpEff() : tmp<volScalarField>(thermo.Cp());
-        tmp<volScalarField> trhoPCM = pcmModel.active() ? pcmModel.rho() : tmp<volScalarField>(thermo.rho());
-        tmp<volScalarField> tkPCM = pcmModel.active() ? pcmModel.k() : tmp<volScalarField>(thermo.kappa());
+        tmp<volScalarField> tCpEff = phaseChangeModel.active() ? phaseChangeModel.CpEff() : tmp<volScalarField>(thermo.Cp());
+        tmp<volScalarField> trhoEff = phaseChangeModel.active() ? phaseChangeModel.rho() : tmp<volScalarField>(thermo.rho());
+        tmp<volScalarField> tkEff = phaseChangeModel.active() ? phaseChangeModel.k() : tmp<volScalarField>(thermo.kappa());
 
         // Thermal diffusivity alpha = k / Cp_sensible in kg/(m s) for enthalpy-based equation
-        volScalarField alpha("alpha", tkPCM() / tCpThermo());
+        volScalarField alpha("alpha", tkEff() / tCpThermo());
 
         // Effective heat capacity scaling ratio for transient term: rho * (CpEff / Cp_sensible)
-        volScalarField rhoCpRatio("rhoCpRatio", trhoPCM() * (tCpEff() / tCpThermo()));
+        volScalarField rhoCpRatio("rhoCpRatio", trhoEff() * (tCpEff() / tCpThermo()));
 
         fvScalarMatrix hEqn
         (
@@ -35,21 +35,18 @@
                 : fvm::laplacian(betav*taniAlpha(), h, "laplacian(alpha,h)")
             )
             ==
-            fvOptions(trhoPCM(), h)
+            fvOptions(trhoEff(), h)
         );
 
-        if (pcmModel.active())
+        if (phaseChangeModel.active())
         {
-            hEqn += pcmModel.latentHeatSource();
+            hEqn += phaseChangeModel.latentHeatSource();
         }
 
         hEqn.relax();
 
         fvOptions.constrain(hEqn);
 
-        if (pcmModel.active() && (nlCorr == 0))
-        {
-        }
 
         if (coupled)
         {

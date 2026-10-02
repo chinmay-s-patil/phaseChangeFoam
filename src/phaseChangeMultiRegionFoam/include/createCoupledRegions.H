@@ -75,22 +75,23 @@ if (coupled && !fvMatrixAssemblyPtr)
     const dictionary& pimple = solutionDict.subDict("PIMPLE");
     const int nOuterCorr = pimple.getOrDefault<int>("nOuterCorrectors", 1);
     
-    bool anyPcmActive = false;
+    bool anyPhaseChangeActive = false;
     forAll(solidRegions, i)
     {
-        if (pcmModels[i].active())
+        if (phaseChangeModels[i].active())
         {
-            anyPcmActive = true;
-            if (coupled && !warnedCoupled[i])
+            anyPhaseChangeActive = true;
+            if (coupled)
             {
-                warnedCoupled[i] = true;
-                Info<< "Solid region " << solidRegions[i].name()
-                    << " active phase change multi-region coupled with nOuterCorrectors = " << nOuterCorr << endl;
+                Info<< "Phase change active in coupled solid region "
+                    << solidRegions[i].name()
+                    << " with nOuterCorrectors = " << nOuterCorr << endl;
             }
         }
     }
     
-    if (anyPcmActive && coupled && nOuterCorr < 2)
+    const bool isMultiRegion = (fluidRegions.size() + solidRegions.size()) > 1;
+    if (anyPhaseChangeActive && (coupled || isMultiRegion) && nOuterCorr < 2)
     {
         FatalErrorInFunction
             << "Phase change is active in a multi-region coupled domain, but nOuterCorrectors = "

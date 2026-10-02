@@ -6,26 +6,27 @@
      \\/     M anipulation  |
 \*---------------------------------------------------------------------------*/
 
-#include "pcmEhcModel.H"
+#include "ehcPhaseChangeModel.H"
 #include "addToRunTimeSelectionTable.H"
+#include "calculatedFvPatchFields.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 namespace Foam
 {
-    defineTypeNameAndDebug(pcmEhcModel, 0);
-    addToRunTimeSelectionTable(pcmPhaseChangeModel, pcmEhcModel, dictionary);
+    defineTypeNameAndDebug(ehcPhaseChangeModel, 0);
+    addToRunTimeSelectionTable(phaseChangeModel, ehcPhaseChangeModel, dictionary);
 }
 
 // * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
-Foam::pcmEhcModel::pcmEhcModel
+Foam::ehcPhaseChangeModel::ehcPhaseChangeModel
 (
     const fvMesh& mesh,
     const solidThermo& thermo
 )
 :
-    pcmPhaseChangeModel(mesh, thermo),
+    phaseChangeModel(mesh, thermo),
     Tlm_(303.15),
     Tum_(313.15),
     Lm_(163000.0),
@@ -50,12 +51,12 @@ Foam::pcmEhcModel::pcmEhcModel
     ),
     rho_
     (
-        IOobject("rhoPCM", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
+        IOobject("rhoEff", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
         thermo.rho()
     ),
     k_
     (
-        IOobject("kPCM", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
+        IOobject("kEff", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
         thermo.kappa()
     ),
     heatingTrajectory_
@@ -65,10 +66,10 @@ Foam::pcmEhcModel::pcmEhcModel
         dimensionedScalar("heatingTrajectory", dimless, 1.0),
         "calculated"
     ),
-    liquidFraction_old_
+    phaseFraction_old_
     (
-        IOobject("liquidFraction_old", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::NO_WRITE),
-        liquidFraction_
+        IOobject("phaseFraction_old", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::NO_WRITE),
+        phaseFraction_
     ),
     heatingTrajectory_old_
     (
@@ -79,29 +80,29 @@ Foam::pcmEhcModel::pcmEhcModel
     active_ = true;
     readDict();
 
-    // Fresh start initialization for liquidFraction_ if not read from disk
-    if (!liquidFraction_.headerOk())
+    // Fresh start initialization for phaseFraction_ if not read from disk
+    if (!phaseFraction_.headerOk())
     {
         const volScalarField& Tinit = thermo_.T();
-        forAll(liquidFraction_, cellI)
+        forAll(phaseFraction_, cellI)
         {
             scalar Tval = Tinit[cellI];
             scalar alpha0 = (Tval <= Tlm_) ? 0.0 : ((Tval >= Tum_) ? 1.0 : (Tval - Tlm_) / (Tum_ - Tlm_));
-            liquidFraction_[cellI] = alpha0;
+            phaseFraction_[cellI] = alpha0;
         }
     }
 
-    // Restart handling: if liquidFraction was read but heatingTrajectory was missing, infer trajectory
-    if (liquidFraction_.headerOk() && !heatingTrajectory_.headerOk())
+    // Restart handling: if phaseFraction was read but heatingTrajectory was missing, infer trajectory
+    if (phaseFraction_.headerOk() && !heatingTrajectory_.headerOk())
     {
         forAll(heatingTrajectory_, cellI)
         {
-            heatingTrajectory_[cellI] = (liquidFraction_[cellI] > 0.5) ? 1.0 : 0.0;
+            heatingTrajectory_[cellI] = (phaseFraction_[cellI] > 0.5) ? 1.0 : 0.0;
         }
         forAll(heatingTrajectory_.boundaryFieldRef(), patchi)
         {
             fvPatchScalarField& pHeat = heatingTrajectory_.boundaryFieldRef()[patchi];
-            const fvPatchScalarField& pAlpha = liquidFraction_.boundaryField()[patchi];
+            const fvPatchScalarField& pAlpha = phaseFraction_.boundaryField()[patchi];
             forAll(pHeat, facei)
             {
                 pHeat[facei] = (pAlpha[facei] > 0.5) ? 1.0 : 0.0;
@@ -109,14 +110,14 @@ Foam::pcmEhcModel::pcmEhcModel
         }
     }
 
-    // Clamp initial liquidFraction_ internal and boundary patch values to [0, 1]
-    forAll(liquidFraction_, cellI)
+    // Clamp initial phaseFraction_ internal and boundary patch values to [0, 1]
+    forAll(phaseFraction_, cellI)
     {
-        liquidFraction_[cellI] = max(0.0, min(1.0, liquidFraction_[cellI]));
+        phaseFraction_[cellI] = max(0.0, min(1.0, phaseFraction_[cellI]));
     }
-    forAll(liquidFraction_.boundaryFieldRef(), patchi)
+    forAll(phaseFraction_.boundaryFieldRef(), patchi)
     {
-        fvPatchScalarField& pAlpha = liquidFraction_.boundaryFieldRef()[patchi];
+        fvPatchScalarField& pAlpha = phaseFraction_.boundaryFieldRef()[patchi];
         forAll(pAlpha, facei)
         {
             pAlpha[facei] = max(0.0, min(1.0, pAlpha[facei]));
@@ -137,17 +138,46 @@ Foam::pcmEhcModel::pcmEhcModel
         }
     }
 
-    liquidFraction_old_ = liquidFraction_;
+    phaseFraction_old_ = phaseFraction_;
     heatingTrajectory_old_ = heatingTrajectory_;
 
     updateHistory();
     correct();
+
+    // Validate that all non-constraint patches are 'calculated' to prevent
+    // restart files with zeroGradient/fixedValue from silently overwriting
+    // values computed in the boundary face loop.
+    auto checkCalculatedPatches = [&](const volScalarField& f)
+    {
+        forAll(f.boundaryField(), pI)
+        {
+            const fvPatchScalarField& pf = f.boundaryField()[pI];
+            if
+            (
+                pf.type() != calculatedFvPatchScalarField::typeName
+             && !polyPatch::constraintType(pf.patch().patch().type())
+            )
+            {
+                FatalErrorInFunction
+                    << "Field '" << f.name() << "' patch '" << pf.patch().name()
+                    << "' has type '" << pf.type() << "' but must be 'calculated'.\n"
+                    << "Remove or correct the patch entry in the restart file."
+                    << exit(FatalError);
+            }
+        }
+    };
+    checkCalculatedPatches(phaseFraction_);
+    checkCalculatedPatches(heatingTrajectory_);
+    checkCalculatedPatches(phaseState_);
+    checkCalculatedPatches(CpEff_);
+    checkCalculatedPatches(rho_);
+    checkCalculatedPatches(k_);
 }
 
 
 // * * * * * * * * * * * * * * Private Functions * * * * * * * * * * * * * * //
 
-void Foam::pcmEhcModel::readDict()
+void Foam::ehcPhaseChangeModel::readDict()
 {
     IOobject dictIO
     (
@@ -268,18 +298,18 @@ void Foam::pcmEhcModel::readDict()
 
     if (hysteresisActive_ && mag(Cps_ - Cpl_) > 1e-6)
     {
-        Info<< "    EHC PCM Info: Unequal Cp (Cps=" << Cps_ << ", Cpl=" << Cpl_
+        Info<< "    EHC Info: Unequal Cp (Cps=" << Cps_ << ", Cpl=" << Cpl_
             << " J/(kg.K)) under stateful hysteresis produces path-dependent sensible enthalpy loops across closed thermal cycles." << endl;
     }
 
-    Info<< "    EHC PCM Parameters loaded for region " << mesh_.name() << ":" << nl
+    Info<< "    EHC Phase Change Parameters loaded for region " << mesh_.name() << ":" << nl
         << "      Melting Range: [" << Tlm_ << " - " << Tum_ << "] K, Latent Heat: " << Lm_ << " J/kg" << nl
         << "      Freezing Range: [" << Tlf_ << " - " << Tuf_ << "] K, Latent Heat: " << Lf_ << " J/kg" << nl
         << "      Hysteresis Active: " << (hysteresisActive_ ? "true" : "false") << nl
         << "      Density Model: " << densityModel_ << " (rhoS=" << rhoSolid_ << ", rhoL=" << rhoLiquid_ << ")" << endl;
 }
 
-Foam::scalar Foam::pcmEhcModel::integralAlphaMelt(scalar T, scalar alpha_old) const
+Foam::scalar Foam::ehcPhaseChangeModel::integralAlphaMelt(scalar T, scalar alpha_old) const
 {
     scalar Tstar = Tlm_ + alpha_old * (Tum_ - Tlm_);
     if (T <= Tstar)
@@ -300,7 +330,7 @@ Foam::scalar Foam::pcmEhcModel::integralAlphaMelt(scalar T, scalar alpha_old) co
     }
 }
 
-Foam::scalar Foam::pcmEhcModel::integralAlphaFreeze(scalar T, scalar alpha_old) const
+Foam::scalar Foam::ehcPhaseChangeModel::integralAlphaFreeze(scalar T, scalar alpha_old) const
 {
     scalar Tstar = Tlf_ + alpha_old * (Tuf_ - Tlf_);
     if (T <= Tlf_)
@@ -321,14 +351,14 @@ Foam::scalar Foam::pcmEhcModel::integralAlphaFreeze(scalar T, scalar alpha_old) 
 
 // * * * * * * * * * * * * * * Member Functions * * * * * * * * * * * * * * //
 
-void Foam::pcmEhcModel::updateHistory()
+void Foam::ehcPhaseChangeModel::updateHistory()
 {
-    liquidFraction_old_ = liquidFraction_;
+    phaseFraction_old_ = phaseFraction_;
     heatingTrajectory_old_ = heatingTrajectory_;
 }
 
 
-void Foam::pcmEhcModel::correct()
+void Foam::ehcPhaseChangeModel::correct()
 {
     const volScalarField& T = thermo_.T();
     const volScalarField& Told = thermo_.T().oldTime();
@@ -373,7 +403,7 @@ void Foam::pcmEhcModel::correct()
         scalar alpha_m_curr = (Tcell <= Tlm_) ? 0.0 : ((Tcell >= Tum_) ? 1.0 : (Tcell - Tlm_) / (Tum_ - Tlm_));
         scalar alpha_f_curr = (Tcell <= Tlf_) ? 0.0 : ((Tcell >= Tuf_) ? 1.0 : (Tcell - Tlf_) / (Tuf_ - Tlf_));
 
-        scalar alphaL_prev = liquidFraction_old_[cellI];
+        scalar alphaL_prev = phaseFraction_old_[cellI];
         if (!hysteresisActive_)
         {
             alphaL_prev = (ToldCell <= Tlm_) ? 0.0 : ((ToldCell >= Tum_) ? 1.0 : (ToldCell - Tlm_) / (Tum_ - Tlm_));
@@ -399,7 +429,7 @@ void Foam::pcmEhcModel::correct()
         else if (alphaL_curr >= 1.0) phaseState_[cellI] = 2.0;
         else phaseState_[cellI] = isHeating ? 1.0 : 3.0;
 
-        liquidFraction_[cellI] = alphaL_curr;
+        phaseFraction_[cellI] = alphaL_curr;
 
         scalar cpsVal = Cps_;
         scalar cplVal = Cpl_;
@@ -469,8 +499,8 @@ void Foam::pcmEhcModel::correct()
         const fvPatchScalarField& pTold = Told.boundaryField()[patchi];
         fvPatchScalarField& pHeatTraj = heatingTrajectory_.boundaryFieldRef()[patchi];
         const fvPatchScalarField& pHeatTrajOld = heatingTrajectory_old_.boundaryField()[patchi];
-        fvPatchScalarField& pLiquidFraction = liquidFraction_.boundaryFieldRef()[patchi];
-        const fvPatchScalarField& pLiquidFractionOld = liquidFraction_old_.boundaryField()[patchi];
+        fvPatchScalarField& pPhaseFraction = phaseFraction_.boundaryFieldRef()[patchi];
+        const fvPatchScalarField& pPhaseFractionOld = phaseFraction_old_.boundaryField()[patchi];
         fvPatchScalarField& pPhaseState = phaseState_.boundaryFieldRef()[patchi];
         fvPatchScalarField& pCpEff = CpEff_.boundaryFieldRef()[patchi];
         fvPatchScalarField& pRho = rho_.boundaryFieldRef()[patchi];
@@ -515,7 +545,7 @@ void Foam::pcmEhcModel::correct()
             scalar alpha_m_curr = (Tface <= Tlm_) ? 0.0 : ((Tface >= Tum_) ? 1.0 : (Tface - Tlm_) / (Tum_ - Tlm_));
             scalar alpha_f_curr = (Tface <= Tlf_) ? 0.0 : ((Tface >= Tuf_) ? 1.0 : (Tface - Tlf_) / (Tuf_ - Tlf_));
 
-            scalar alphaL_prev = pLiquidFractionOld[facei];
+            scalar alphaL_prev = pPhaseFractionOld[facei];
             if (!hysteresisActive_)
             {
                 alphaL_prev = (ToldFace <= Tlm_) ? 0.0 : ((ToldFace >= Tum_) ? 1.0 : (ToldFace - Tlm_) / (Tum_ - Tlm_));
@@ -541,7 +571,7 @@ void Foam::pcmEhcModel::correct()
             else if (alphaL_curr >= 1.0) pPhaseState[facei] = 2.0;
             else pPhaseState[facei] = isHeating ? 1.0 : 3.0;
 
-            pLiquidFraction[facei] = alphaL_curr;
+            pPhaseFraction[facei] = alphaL_curr;
 
             scalar cpsVal = Cps_;
             scalar cplVal = Cpl_;

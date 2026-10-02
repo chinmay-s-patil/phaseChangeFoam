@@ -1,10 +1,10 @@
 SOURCE = \
 fluid/compressibleCourantNo.C \
 solid/solidRegionDiffNo.C \
-solid/pcmPhaseChangeModel.C \
-solid/pcmNoneModel.C \
-solid/pcmEhcModel.C \
-solid/pcmEnthalpyPorosityModel.C \
+solid/phaseChangeModel.C \
+solid/nonePhaseChangeModel.C \
+solid/ehcPhaseChangeModel.C \
+solid/enthalpyPorosityPhaseChangeModel.C \
 phaseChangeMultiRegionFoam.C \
 
 # sources

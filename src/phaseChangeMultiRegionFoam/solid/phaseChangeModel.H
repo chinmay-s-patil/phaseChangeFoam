@@ -6,8 +6,8 @@
      \\/     M anipulation  |
 \*---------------------------------------------------------------------------*/
 
-#ifndef pcmPhaseChangeModel_H
-#define pcmPhaseChangeModel_H
+#ifndef phaseChangeModel_H
+#define phaseChangeModel_H
 
 #include "fvCFD.H"
 #include "solidThermo.H"
@@ -20,10 +20,18 @@ namespace Foam
 {
 
 /*---------------------------------------------------------------------------*\
-                    Class pcmPhaseChangeModel Declaration
+                    Class phaseChangeModel Declaration
+
+ Description
+    Base class for general multi-region phase-change thermal models
+    (e.g. solidification/melting, alloys, phase-change materials,
+    ice-water transition, and general thermal energy storage/transfer).
+
+    Provides standardized interfaces for effective thermophysical properties,
+    latent heat source terms, and phase state machine transitions.
 \*---------------------------------------------------------------------------*/
 
-class pcmPhaseChangeModel
+class phaseChangeModel
 {
 protected:
 
@@ -34,19 +42,19 @@ protected:
     bool active_;
 
     // Fields
-    volScalarField liquidFraction_; // Phase fraction alpha_L in [0, 1]
-    volScalarField phaseState_;     // 0 = solid, 1 = melting, 2 = liquid, 3 = freezing
+    volScalarField phaseFraction_; // Liquid/transformed phase fraction alpha in [0, 1]
+    volScalarField phaseState_;    // 0 = solid, 1 = melting/transitioning, 2 = liquid, 3 = freezing
 
 public:
 
     //- Runtime type information
-    TypeName("pcmPhaseChangeModel");
+    TypeName("phaseChangeModel");
 
     //- Declare runtime construction table
     declareRunTimeSelectionTable
     (
         autoPtr,
-        pcmPhaseChangeModel,
+        phaseChangeModel,
         dictionary,
         (
             const fvMesh& mesh,
@@ -56,21 +64,21 @@ public:
     );
 
     // Constructors
-    pcmPhaseChangeModel
+    phaseChangeModel
     (
         const fvMesh& mesh,
         const solidThermo& thermo
     );
 
     // Selector
-    static autoPtr<pcmPhaseChangeModel> New
+    static autoPtr<phaseChangeModel> New
     (
         const fvMesh& mesh,
         const solidThermo& thermo
     );
 
     // Destructor
-    virtual ~pcmPhaseChangeModel() = default;
+    virtual ~phaseChangeModel() = default;
 
 
     // Member Functions
@@ -87,10 +95,22 @@ public:
     //- Update trajectory history at completed timestep boundaries
     virtual void updateHistory() {}
 
-    //- Access liquid fraction field
+    //- Whether this model suppresses fluid convection (solid-only phase change)
+    virtual bool suppressConvection() const
+    {
+        return false;
+    }
+
+    //- Access phase fraction field
+    virtual const volScalarField& phaseFraction() const
+    {
+        return phaseFraction_;
+    }
+
+    //- Backward compatibility alias for liquid fraction
     virtual const volScalarField& liquidFraction() const
     {
-        return liquidFraction_;
+        return phaseFraction_;
     }
 
     //- Access phase state field
@@ -111,8 +131,16 @@ public:
     //- Access latent heat source term
     virtual tmp<volScalarField> latentHeatSource() const = 0;
 
-    //- Access momentum source term
-    virtual tmp<volVectorField> momentumSource() const = 0;
+    //- Access momentum source term (default: zero, override in models with Darcy damping)
+    virtual tmp<volVectorField> momentumSource() const
+    {
+        return tmp<volVectorField>::New
+        (
+            IOobject("momentumSource", mesh_.time().timeName(), mesh_),
+            mesh_,
+            dimensionedVector("zero", dimForce/dimVolume, Zero)
+        );
+    }
 };
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //

@@ -6,26 +6,26 @@
      \\/     M anipulation  |
 \*---------------------------------------------------------------------------*/
 
-#include "pcmEnthalpyPorosityModel.H"
+#include "enthalpyPorosityPhaseChangeModel.H"
 #include "addToRunTimeSelectionTable.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 namespace Foam
 {
-    defineTypeNameAndDebug(pcmEnthalpyPorosityModel, 0);
-    addToRunTimeSelectionTable(pcmPhaseChangeModel, pcmEnthalpyPorosityModel, dictionary);
+    defineTypeNameAndDebug(enthalpyPorosityPhaseChangeModel, 0);
+    addToRunTimeSelectionTable(phaseChangeModel, enthalpyPorosityPhaseChangeModel, dictionary);
 }
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
-Foam::pcmEnthalpyPorosityModel::pcmEnthalpyPorosityModel
+Foam::enthalpyPorosityPhaseChangeModel::enthalpyPorosityPhaseChangeModel
 (
     const fvMesh& mesh,
     const solidThermo& thermo
 )
 :
-    pcmPhaseChangeModel(mesh, thermo),
+    phaseChangeModel(mesh, thermo),
     Tlm_(303.15),
     Tum_(313.15),
     Lm_(163000.0),
@@ -37,17 +37,17 @@ Foam::pcmEnthalpyPorosityModel::pcmEnthalpyPorosityModel
     rhoLiquid_(1850.0),
     Cp_
     (
-        IOobject("CpEP", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
+        IOobject("CpEff", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
         thermo.Cp()
     ),
     rho_
     (
-        IOobject("rhoEP", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
+        IOobject("rhoEff", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
         thermo.rho()
     ),
     k_
     (
-        IOobject("kPCM", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
+        IOobject("kEff", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
         thermo.kappa()
     )
 {
@@ -56,7 +56,7 @@ Foam::pcmEnthalpyPorosityModel::pcmEnthalpyPorosityModel
     correct();
 }
 
-void Foam::pcmEnthalpyPorosityModel::readDict()
+void Foam::enthalpyPorosityPhaseChangeModel::readDict()
 {
     IOobject dictIO
     (
@@ -95,7 +95,7 @@ void Foam::pcmEnthalpyPorosityModel::readDict()
     }
 }
 
-void Foam::pcmEnthalpyPorosityModel::correct()
+void Foam::enthalpyPorosityPhaseChangeModel::correct()
 {
     const volScalarField& T = thermo_.T();
     tmp<volScalarField> tCp = thermo_.Cp();
@@ -125,7 +125,7 @@ void Foam::pcmEnthalpyPorosityModel::correct()
             phaseState_[cellI] = 1.0;
         }
 
-        liquidFraction_[cellI] = alphaL;
+        phaseFraction_[cellI] = alphaL;
         rho_[cellI] = (1.0 - alphaL) * rhoSolid_ + alphaL * rhoLiquid_;
         Cp_[cellI] = CpField[cellI];
         k_[cellI] = KappaField[cellI];
@@ -134,7 +134,7 @@ void Foam::pcmEnthalpyPorosityModel::correct()
     forAll(T.boundaryField(), patchi)
     {
         const fvPatchScalarField& pT = T.boundaryField()[patchi];
-        fvPatchScalarField& pLiquidFraction = liquidFraction_.boundaryFieldRef()[patchi];
+        fvPatchScalarField& pPhaseFraction = phaseFraction_.boundaryFieldRef()[patchi];
         fvPatchScalarField& pPhaseState = phaseState_.boundaryFieldRef()[patchi];
         fvPatchScalarField& pRho = rho_.boundaryFieldRef()[patchi];
         fvPatchScalarField& pCp = Cp_.boundaryFieldRef()[patchi];
@@ -165,21 +165,19 @@ void Foam::pcmEnthalpyPorosityModel::correct()
                 pPhaseState[facei] = 1.0;
             }
 
-            pLiquidFraction[facei] = alphaL;
+            pPhaseFraction[facei] = alphaL;
             pRho[facei] = (1.0 - alphaL) * rhoSolid_ + alphaL * rhoLiquid_;
             pCp[facei] = pCpThermo[facei];
             pK[facei] = pKappaThermo[facei];
         }
     }
 
-    liquidFraction_.correctBoundaryConditions();
-    phaseState_.correctBoundaryConditions();
     rho_.correctBoundaryConditions();
     Cp_.correctBoundaryConditions();
     k_.correctBoundaryConditions();
 }
 
-Foam::tmp<Foam::volScalarField> Foam::pcmEnthalpyPorosityModel::latentHeatSource() const
+Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::latentHeatSource() const
 {
     tmp<volScalarField> tSource
     (
@@ -192,13 +190,13 @@ Foam::tmp<Foam::volScalarField> Foam::pcmEnthalpyPorosityModel::latentHeatSource
     );
 
     volScalarField& source = tSource.ref();
-    tmp<volScalarField> tdAlphaLdt = fvc::ddt(liquidFraction_);
+    tmp<volScalarField> tdAlphaLdt = fvc::ddt(phaseFraction_);
 
     source = -rho_ * Lm_ * tdAlphaLdt();
     return tSource;
 }
 
-Foam::tmp<Foam::volVectorField> Foam::pcmEnthalpyPorosityModel::momentumSource() const
+Foam::tmp<Foam::volVectorField> Foam::enthalpyPorosityPhaseChangeModel::momentumSource() const
 {
     tmp<volVectorField> tSource
     (
@@ -215,9 +213,9 @@ Foam::tmp<Foam::volVectorField> Foam::pcmEnthalpyPorosityModel::momentumSource()
         const volVectorField& U = mesh_.lookupObject<volVectorField>("U");
         volVectorField& source = tSource.ref();
 
-        forAll(liquidFraction_, cellI)
+        forAll(phaseFraction_, cellI)
         {
-            scalar alphaL = max(q_, liquidFraction_[cellI]);
+            scalar alphaL = max(q_, phaseFraction_[cellI]);
             scalar damping = -Cu_ * sqr(1.0 - alphaL) / (pow3(alphaL) + q_);
             source[cellI] = damping * U[cellI];
         }

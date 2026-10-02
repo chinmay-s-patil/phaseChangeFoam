@@ -6,10 +6,10 @@
      \\/     M anipulation  |
 \*---------------------------------------------------------------------------*/
 
-#ifndef pcmEnthalpyPorosityModel_H
-#define pcmEnthalpyPorosityModel_H
+#ifndef enthalpyPorosityPhaseChangeModel_H
+#define enthalpyPorosityPhaseChangeModel_H
 
-#include "pcmPhaseChangeModel.H"
+#include "phaseChangeModel.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -17,18 +17,19 @@ namespace Foam
 {
 
 /*---------------------------------------------------------------------------*\
-                   Class pcmEnthalpyPorosityModel Declaration
+            Class enthalpyPorosityPhaseChangeModel Declaration
 
  Description
-    Enthalpy-Porosity PCM model for phase-change simulation.
+    Enthalpy-Porosity model for general phase-change simulations (solidification,
+    melting, alloy casting, and phase-change thermal storage).
     Note: Full classical enthalpy-porosity with momentum damping (Darcy source)
-    requires a fluid region where UEqn is solved. In solid PCM regions, only
+    requires a fluid region where UEqn is solved. In solid phase-change regions,
     sensible heat conduction and latent heat source terms are active.
 \*---------------------------------------------------------------------------*/
 
-class pcmEnthalpyPorosityModel
+class enthalpyPorosityPhaseChangeModel
 :
-    public pcmPhaseChangeModel
+    public phaseChangeModel
 {
 private:
 
@@ -60,14 +61,14 @@ public:
     TypeName("enthalpyPorosity");
 
     // Constructors
-    pcmEnthalpyPorosityModel
+    enthalpyPorosityPhaseChangeModel
     (
         const fvMesh& mesh,
         const solidThermo& thermo
     );
 
     // Destructor
-    virtual ~pcmEnthalpyPorosityModel() = default;
+    virtual ~enthalpyPorosityPhaseChangeModel() = default;
 
 
     // Member Functions
@@ -75,6 +76,11 @@ public:
     virtual bool active() const override
     {
         return active_;
+    }
+
+    virtual bool suppressConvection() const override
+    {
+        return false;
     }
 
     virtual void correct() override;

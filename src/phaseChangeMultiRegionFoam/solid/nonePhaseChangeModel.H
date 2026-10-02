@@ -6,10 +6,10 @@
      \\/     M anipulation  |
 \*---------------------------------------------------------------------------*/
 
-#ifndef pcmNoneModel_H
-#define pcmNoneModel_H
+#ifndef nonePhaseChangeModel_H
+#define nonePhaseChangeModel_H
 
-#include "pcmPhaseChangeModel.H"
+#include "phaseChangeModel.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -17,27 +17,39 @@ namespace Foam
 {
 
 /*---------------------------------------------------------------------------*\
-                        Class pcmNoneModel Declaration
+                    Class nonePhaseChangeModel Declaration
+
+ Description
+    Dummy phase-change model for solid regions with no phase change active.
+    Registers baseline thermophysical fields (kEff, rhoEff, CpEff) to maintain
+    compatibility with multi-region boundary condition lookups across regions.
 \*---------------------------------------------------------------------------*/
 
-class pcmNoneModel
+class nonePhaseChangeModel
 :
-    public pcmPhaseChangeModel
+    public phaseChangeModel
 {
 public:
 
     //- Runtime type information
     TypeName("none");
 
+private:
+    volScalarField kEff_;
+    volScalarField rhoEff_;
+    volScalarField CpEff_;
+
+public:
+
     // Constructors
-    pcmNoneModel
+    nonePhaseChangeModel
     (
         const fvMesh& mesh,
         const solidThermo& thermo
     );
 
     // Destructor
-    virtual ~pcmNoneModel() = default;
+    virtual ~nonePhaseChangeModel() = default;
 
 
     // Member Functions
@@ -52,17 +64,17 @@ public:
 
     virtual tmp<volScalarField> CpEff() const override
     {
-        return thermo_.Cp();
+        return CpEff_;
     }
 
     virtual tmp<volScalarField> rho() const override
     {
-        return thermo_.rho();
+        return rhoEff_;
     }
 
     virtual tmp<volScalarField> k() const override
     {
-        return thermo_.kappa();
+        return kEff_;
     }
 
     virtual tmp<volScalarField> latentHeatSource() const override
@@ -72,16 +84,6 @@ public:
             IOobject("latentHeatSource", mesh_.time().timeName(), mesh_),
             mesh_,
             dimensionedScalar("zero", dimEnergy/dimTime/dimVolume, 0.0)
-        );
-    }
-
-    virtual tmp<volVectorField> momentumSource() const override
-    {
-        return tmp<volVectorField>::New
-        (
-            IOobject("momentumSource", mesh_.time().timeName(), mesh_),
-            mesh_,
-            dimensionedVector("zero", dimForce/dimVolume, Zero)
         );
     }
 };

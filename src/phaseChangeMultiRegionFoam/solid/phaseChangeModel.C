@@ -6,19 +6,19 @@
      \\/     M anipulation  |
 \*---------------------------------------------------------------------------*/
 
-#include "pcmPhaseChangeModel.H"
+#include "phaseChangeModel.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 namespace Foam
 {
-    defineTypeNameAndDebug(pcmPhaseChangeModel, 0);
-    defineRunTimeSelectionTable(pcmPhaseChangeModel, dictionary);
+    defineTypeNameAndDebug(phaseChangeModel, 0);
+    defineRunTimeSelectionTable(phaseChangeModel, dictionary);
 }
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
-Foam::pcmPhaseChangeModel::pcmPhaseChangeModel
+Foam::phaseChangeModel::phaseChangeModel
 (
     const fvMesh& mesh,
     const solidThermo& thermo
@@ -27,18 +27,18 @@ Foam::pcmPhaseChangeModel::pcmPhaseChangeModel
     mesh_(mesh),
     thermo_(thermo),
     active_(false),
-    liquidFraction_
+    phaseFraction_
     (
         IOobject
         (
-            "liquidFraction",
+            "phaseFraction",
             mesh.time().timeName(),
             mesh,
             IOobject::READ_IF_PRESENT,
             IOobject::AUTO_WRITE
         ),
         mesh,
-        dimensionedScalar("liquidFraction", dimless, 0.0),
+        dimensionedScalar("phaseFraction", dimless, 0.0),
         "calculated"
     ),
     phaseState_
@@ -55,12 +55,28 @@ Foam::pcmPhaseChangeModel::pcmPhaseChangeModel
         dimensionedScalar("phaseState", dimless, 0.0),
         "calculated"
     )
-{}
+{
+    // Backward compatibility for disk reads: if liquidFraction exists on disk but phaseFraction doesn't
+    IOobject liquidFractionIO
+    (
+        "liquidFraction",
+        mesh.time().timeName(),
+        mesh,
+        IOobject::READ_IF_PRESENT,
+        IOobject::NO_WRITE
+    );
+
+    if (!phaseFraction_.headerOk() && liquidFractionIO.typeHeaderOk<volScalarField>(true))
+    {
+        volScalarField lFrac(liquidFractionIO, mesh);
+        phaseFraction_ == lFrac;
+    }
+}
 
 
 // * * * * * * * * * * * * * * * * Selector  * * * * * * * * * * * * * * * * //
 
-Foam::autoPtr<Foam::pcmPhaseChangeModel> Foam::pcmPhaseChangeModel::New
+Foam::autoPtr<Foam::phaseChangeModel> Foam::phaseChangeModel::New
 (
     const fvMesh& mesh,
     const solidThermo& thermo
@@ -105,7 +121,7 @@ Foam::autoPtr<Foam::pcmPhaseChangeModel> Foam::pcmPhaseChangeModel::New
                         << exit(FatalError);
                 }
 
-                return autoPtr<pcmPhaseChangeModel>(cstrIter()(mesh, thermo));
+                return autoPtr<phaseChangeModel>(cstrIter()(mesh, thermo));
             }
         }
     }
@@ -117,11 +133,11 @@ Foam::autoPtr<Foam::pcmPhaseChangeModel> Foam::pcmPhaseChangeModel::New
 
     if (cstrIter.good())
     {
-        return autoPtr<pcmPhaseChangeModel>(cstrIter()(mesh, thermo));
+        return autoPtr<phaseChangeModel>(cstrIter()(mesh, thermo));
     }
 
     // Default fallback: return nullptr if inactive
-    return autoPtr<pcmPhaseChangeModel>(nullptr);
+    return autoPtr<phaseChangeModel>(nullptr);
 }
 
 // ************************************************************************* //

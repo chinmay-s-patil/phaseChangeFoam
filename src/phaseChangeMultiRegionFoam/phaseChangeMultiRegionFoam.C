@@ -30,7 +30,7 @@ Description
 #include "coordinateSystem.H"
 #include "loopControl.H"
 #include "pressureControl.H"
-#include "pcmPhaseChangeModel.H"
+#include "phaseChangeModel.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -193,11 +193,11 @@ int main(int argc, char *argv[])
         // safe and idempotent prior to committing updateHistory().
         forAll(solidRegions, i)
         {
-            pcmPhaseChangeModel& pcmModel = pcmModels[i];
-            if (pcmModel.active())
+            phaseChangeModel& phaseChangeModel = phaseChangeModels[i];
+            if (phaseChangeModel.active())
             {
-                pcmModel.correct();
-                pcmModel.updateHistory();
+                phaseChangeModel.correct();
+                phaseChangeModel.updateHistory();
             }
         }
 

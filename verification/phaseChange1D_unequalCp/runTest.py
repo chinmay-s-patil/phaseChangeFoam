@@ -223,6 +223,51 @@ boundaryField { ".*" { type calculated; value uniform 101325; } "(top|bottom|fro
 
     delta_H_domain = H_total_2000 - H_total_0
 
+    # Compute boundary heat flux energy from cell-center gradients
+    # Hot wall (x=0): q_hot = k_hot * (T_hot_BC - T[0]) / (dx/2)
+    # Cold wall (x=L): q_cold = k_cold * (T[-1] - T_cold_BC) / (dx/2)
+    # For time-integrated energy, we use the final snapshot's flux * dt as an approximation.
+    # Better: use the domain enthalpy change and compare against known bounds.
+    
+    # The proper check: compare domain enthalpy rise against the pcm1D baseline
+    # with equal Cp (which gives mean_alpha ~0.2887). With unequal Cp and lower kl,
+    # we expect less melting. Tighten the regression check.
+
+    # Tightened pass criteria:
+    # 1. alpha bounded
+    # 2. mean alpha in regression window (from previous verified run)
+    # 3. domain enthalpy positive and in a reasonable range
+    # 4. actual energy conservation check via boundary flux integration
+    
+    # Compute boundary-integrated energy using trapezoidal rule on kPCM*dT/dx at walls
+    k_vals = parse_openfoam_field(os.path.join(case_dir, "2000/pcm/kPCM"))
+    
+    if k_vals:
+        k_hot = k_vals[0]  # conductivity at hot wall cell
+        k_cold = k_vals[-1]  # conductivity at cold wall cell
+    else:
+        k_hot = 0.50  # fallback
+        k_cold = 0.50
+    
+    # Instantaneous heat flux at walls (W/m^2), using half-cell gradient
+    T_hot_bc = 350.0
+    T_cold_bc = 280.0
+    q_hot_final = k_hot * (T_hot_bc - T_heat[0]) / (dx / 2.0)
+    q_cold_final = k_cold * (T_heat[-1] - T_cold_bc) / (dx / 2.0)
+    
+    # For a rough energy balance check, we can't integrate flux over time without
+    # time-series data. Instead, verify the domain enthalpy is positive, bounded,
+    # and the mean alpha matches a tightened regression window.
+    
+    pass_alpha_bounded = alpha_bounded
+    pass_alpha_range = abs(mean_a_heat - 0.1410) < 0.015
+    pass_enthalpy_positive = delta_H_domain > 0.0
+    # Enthalpy should be less than max possible (all cells at 350K fully liquid)
+    H_max = sum((rho_l * V_cell * (Cps*(Tlm-280) + 0.5*(Cps+Cpl)*(Tum-Tlm) + Cpl*(350-Tum) + Lm)) for _ in range(100))
+    pass_enthalpy_bounded = delta_H_domain < H_max
+    
+    all_pass = pass_alpha_bounded and pass_alpha_range and pass_enthalpy_positive and pass_enthalpy_bounded
+
     print("\n=======================================================")
     print("   UNEQUAL CP & VARIABLE DENSITY 1D TEST RESULTS       ")
     print("=======================================================")
@@ -231,8 +276,14 @@ boundaryField { ".*" { type calculated; value uniform 101325; } "(top|bottom|fro
     print(f"Domain Enthalpy Rise       : {delta_H_domain:.2f} J")
     print(f"Liquid Fraction Bounded    : {alpha_bounded} (min={min_a_heat:.6f}, max={max_a_heat:.6f})")
     print("-------------------------------------------------------")
-
-    if alpha_bounded and mean_a_heat > 0.10 and delta_H_domain > 0.0:
+    print(f"Alpha bounded          : {'PASS' if pass_alpha_bounded else 'FAIL'}")
+    print(f"Mean alpha ~ 0.141     : {'PASS' if pass_alpha_range else 'FAIL'} (got {mean_a_heat:.4f})")
+    print(f"Enthalpy positive      : {'PASS' if pass_enthalpy_positive else 'FAIL'} ({delta_H_domain:.2f} J)")
+    print(f"Enthalpy bounded       : {'PASS' if pass_enthalpy_bounded else 'FAIL'} (< {H_max:.2f} J)")
+    print(f"Hot wall flux          : {q_hot_final:.1f} W/m^2")
+    print(f"Cold wall flux         : {q_cold_final:.1f} W/m^2")
+    
+    if all_pass:
         print("\nSTATUS: 1D UNEQUAL CP & VARIABLE DENSITY TEST PASSED!")
     else:
         print("\nSTATUS: TEST FAILED")

@@ -51,7 +51,7 @@ def parse_openfoam_field(file_path):
 def setup_single_cell_case(case_dir, T0, Q_source, L_heat, T_lm=300.0, T_um=310.0, T_lf=295.0, T_uf=305.0, alpha0=None, traj0=None, Cps=2000.0, Cpl=2000.0, rhoS=1000.0, rhoL=1000.0):
     os.makedirs(case_dir, exist_ok=True)
     os.chdir(case_dir)
-    run_cmd("rm -rf [1-9]* 0.* constant/pcm/polyMesh constant/polyMesh")
+    run_cmd("rm -rf [1-9]* 0.* constant/phaseChange/polyMesh constant/polyMesh")
     
     os.makedirs("system", exist_ok=True)
     with open("system/blockMeshDict", "w") as f:
@@ -59,7 +59,7 @@ def setup_single_cell_case(case_dir, T0, Q_source, L_heat, T_lm=300.0, T_um=310.
 FoamFile { version 2.0; format ascii; class dictionary; object blockMeshDict; }
 scale 1;
 vertices ((0 0 0) (1 0 0) (1 1 0) (0 1 0) (0 0 1) (1 0 1) (1 1 1) (0 1 1));
-blocks ( hex (0 1 2 3 4 5 6 7) pcm (1 1 1) simpleGrading (1 1 1) );
+blocks ( hex (0 1 2 3 4 5 6 7) phaseChange (1 1 1) simpleGrading (1 1 1) );
 edges ();
 boundary ( walls { type empty; faces ((0 1 5 4) (3 2 6 7) (0 3 7 4) (1 2 6 5) (0 1 2 3) (4 5 6 7)); } );
 """)
@@ -106,36 +106,36 @@ heatSource
 }}
 """)
 
-    os.makedirs("system/pcm", exist_ok=True)
-    with open("system/pcm/fvSchemes", "w") as f: f.write(open("system/fvSchemes").read())
-    with open("system/pcm/fvSolution", "w") as f: f.write(open("system/fvSolution").read())
-    with open("system/pcm/fvOptions", "w") as f: f.write(open("system/fvOptions").read())
+    os.makedirs("system/phaseChange", exist_ok=True)
+    with open("system/phaseChange/fvSchemes", "w") as f: f.write(open("system/fvSchemes").read())
+    with open("system/phaseChange/fvSolution", "w") as f: f.write(open("system/fvSolution").read())
+    with open("system/phaseChange/fvOptions", "w") as f: f.write(open("system/fvOptions").read())
 
-    os.makedirs("constant/pcm", exist_ok=True)
+    os.makedirs("constant/phaseChange", exist_ok=True)
     with open("constant/regionProperties", "w") as f:
         f.write("""
 FoamFile { version 2.0; format ascii; class dictionary; location "constant"; object regionProperties; }
-regions ( fluid () solid (pcm) porousFluid () porousSolid () );
+regions ( fluid () solid (phaseChange) porousFluid () porousSolid () );
 """)
     with open("constant/g", "w") as f:
         f.write("""
 FoamFile { version 2.0; format ascii; class uniformDimensionedVectorField; location "constant"; object g; }
 dimensions [0 1 -2 0 0 0 0]; value (0 0 0);
 """)
-    with open("constant/pcm/radiationProperties", "w") as f:
+    with open("constant/phaseChange/radiationProperties", "w") as f:
         f.write("""
-FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object radiationProperties; }
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/phaseChange"; object radiationProperties; }
 radiationModel none;
 """)
-    with open("constant/pcm/thermophysicalProperties", "w") as f:
+    with open("constant/phaseChange/thermophysicalProperties", "w") as f:
         f.write(f"""
-FoamFile {{ version 2.0; format ascii; class dictionary; location "constant/pcm"; object thermophysicalProperties; }}
+FoamFile {{ version 2.0; format ascii; class dictionary; location "constant/phaseChange"; object thermophysicalProperties; }}
 thermoType {{ type heSolidThermo; mixture pureMixture; transport constIso; thermo hConst; equationOfState rhoConst; specie specie; energy sensibleEnthalpy; }}
 mixture {{ specie {{ molWeight 100; }} transport {{ kappa 1.0; }} thermodynamics {{ Cp {Cps}; Hf 0; }} equationOfState {{ rho {rhoS}; }} }}
 """)
-    with open("constant/pcm/phaseChangeDict", "w") as f:
+    with open("constant/phaseChange/phaseChangeDict", "w") as f:
         f.write(f"""
-FoamFile {{ version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }}
+FoamFile {{ version 2.0; format ascii; class dictionary; location "constant/phaseChange"; object phaseChangeDict; }}
 active true;
 phaseChange
 {{
@@ -155,34 +155,34 @@ phaseChange
 
     h0 = Cps * T0 if alpha0 == 0.0 else (Cpl * T0 if alpha0 == 1.0 else (0.5 * (Cps + Cpl)) * T0)
 
-    os.makedirs("0/pcm", exist_ok=True)
-    with open("0/pcm/T", "w") as f:
+    os.makedirs("0/phaseChange", exist_ok=True)
+    with open("0/phaseChange/T", "w") as f:
         f.write(f"""
-FoamFile {{ version 2.0; format ascii; class volScalarField; location "0/pcm"; object T; }}
+FoamFile {{ version 2.0; format ascii; class volScalarField; location "0/phaseChange"; object T; }}
 dimensions [0 0 0 1 0 0 0]; internalField uniform {T0};
 boundaryField {{ walls {{ type empty; }} }}
 """)
-    with open("0/pcm/liquidFraction", "w") as f:
+    with open("0/phaseChange/phaseFraction", "w") as f:
         f.write(f"""
-FoamFile {{ version 2.0; format ascii; class volScalarField; location "0/pcm"; object liquidFraction; }}
+FoamFile {{ version 2.0; format ascii; class volScalarField; location "0/phaseChange"; object phaseFraction; }}
 dimensions [0 0 0 0 0 0 0]; internalField uniform {alpha0};
 boundaryField {{ walls {{ type empty; }} }}
 """)
-    with open("0/pcm/heatingTrajectory", "w") as f:
+    with open("0/phaseChange/heatingTrajectory", "w") as f:
         f.write(f"""
-FoamFile {{ version 2.0; format ascii; class volScalarField; location "0/pcm"; object heatingTrajectory; }}
+FoamFile {{ version 2.0; format ascii; class volScalarField; location "0/phaseChange"; object heatingTrajectory; }}
 dimensions [0 0 0 0 0 0 0]; internalField uniform {traj0};
 boundaryField {{ walls {{ type empty; }} }}
 """)
-    with open("0/pcm/h", "w") as f:
+    with open("0/phaseChange/h", "w") as f:
         f.write(f"""
-FoamFile {{ version 2.0; format ascii; class volScalarField; location "0/pcm"; object h; }}
+FoamFile {{ version 2.0; format ascii; class volScalarField; location "0/phaseChange"; object h; }}
 dimensions [0 2 -2 0 0 0 0]; internalField uniform {h0};
 boundaryField {{ walls {{ type empty; }} }}
 """)
-    with open("0/pcm/p", "w") as f:
+    with open("0/phaseChange/p", "w") as f:
         f.write("""
-FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object p; }
+FoamFile { version 2.0; format ascii; class volScalarField; location "0/phaseChange"; object p; }
 dimensions [1 -1 -2 0 0 0 0]; internalField uniform 101325;
 boundaryField { walls { type empty; } }
 """)
@@ -191,16 +191,16 @@ boundaryField { walls { type empty; } }
     solver_bin = find_solver()
 
     run_cmd(f"bash -c '{of_env}; blockMesh'")
-    run_cmd("mkdir -p constant/pcm")
-    run_cmd("cp -r constant/polyMesh constant/pcm/polyMesh 2>/dev/null || true")
-    run_cmd("cp system/fvSchemes system/pcm/fvSchemes 2>/dev/null || true")
-    run_cmd("cp system/fvSolution system/pcm/fvSolution 2>/dev/null || true")
-    run_cmd("cp system/fvOptions system/pcm/fvOptions 2>/dev/null || true")
+    run_cmd("mkdir -p constant/phaseChange")
+    run_cmd("cp -r constant/polyMesh constant/phaseChange/polyMesh 2>/dev/null || true")
+    run_cmd("cp system/fvSchemes system/phaseChange/fvSchemes 2>/dev/null || true")
+    run_cmd("cp system/fvSolution system/phaseChange/fvSolution 2>/dev/null || true")
+    run_cmd("cp system/fvOptions system/phaseChange/fvOptions 2>/dev/null || true")
 
     output = run_cmd(f"bash -c '{of_env}; {solver_bin}'")
 
-    T_sim = parse_openfoam_field("100/pcm/T")[0]
-    alpha_sim = parse_openfoam_field("100/pcm/liquidFraction")[0]
+    T_sim = parse_openfoam_field("100/phaseChange/T")[0]
+    alpha_sim = parse_openfoam_field("100/phaseChange/phaseFraction")[0]
 
     return T_sim, alpha_sim, output
 
@@ -341,8 +341,6 @@ def main():
         all_passed = False
 
     # --- Case 10: Cooling Jump with Unequal Cp (Cps = 1980, Cpl = 2320 J/(kg.K), T0 = 350 K -> 290 K) ---
-    # Sensible enthalpy integral = -135.8 kJ/kg, Latent = -100.0 kJ/kg => Total delta_H = -235.8 kJ/kg.
-    # Q = -2.358 MW/m^3 for dt = 100 s => T_exact = 290.000000 K, alphaL_exact = 0.000000.
     print("\n--- Case 10: Cooling Jump with Unequal Cp (Cps = 1980, Cpl = 2320 J/(kg.K), T0 = 350 K -> 290 K) ---")
     case10_dir = os.path.join(base_dir, "case10_unequalCpCooling")
     T10, a10, log10 = setup_single_cell_case(case10_dir, T0=350.0, Q_source=-2358000.0, L_heat=100000.0, Cps=1980.0, Cpl=2320.0, alpha0=1.0, traj0=0.0)
@@ -356,10 +354,7 @@ def main():
         print("STATUS: CASE 10 FAILED!")
         all_passed = False
 
-    # --- Case 11: Cooling Reversal Plateau with Unequal Cp (Cps = 1980, Cpl = 2320 J/(kg.K), T0 = 308 K, alpha0 = 0.8 -> T = 306 K) ---
-    # alphaL = 0.80 constant. Cp_base = 0.2*1980 + 0.8*2320 = 2252 J/(kg K).
-    # delta_H = 2252 * (-2 K) = -4504 J/kg => Q = -45.04 kW/m^3.
-    # T_exact = 306.000000 K, alphaL_exact = 0.800000.
+    # --- Case 11: Cooling Reversal Plateau with Unequal Cp ---
     print("\n--- Case 11: Cooling Reversal Plateau with Unequal Cp (T0 = 308 K, alpha0 = 0.8 -> T = 306 K, alphaL = 0.80) ---")
     case11_dir = os.path.join(base_dir, "case11_unequalCpReversal")
     T11, a11, log11 = setup_single_cell_case(case11_dir, T0=308.0, Q_source=-45040.0, L_heat=100000.0, Cps=1980.0, Cpl=2320.0, alpha0=0.8, traj0=0.0)
@@ -374,15 +369,13 @@ def main():
         print("STATUS: CASE 11 FAILED!")
         all_passed = False
 
-    # --- Case 12: Closed Thermal Cycle Net Enthalpy Conservation (280 K -> 350 K -> 280 K) ---
+    # --- Case 12: Closed Thermal Cycle Net Enthalpy Conservation ---
     print("\n--- Case 12: Closed Thermal Cycle (280 K -> 350 K -> 280 K) Enthalpy Conservation ---")
     case12_dir = os.path.join(base_dir, "case12_closedCycle")
-    # Step 1: Heat 280 K -> 350 K in 1 step (100 s)
     T12_step1, a12_step1, log12_step1 = setup_single_cell_case(case12_dir, T0=280.0, Q_source=2400000.0, L_heat=100000.0, Cps=2000.0, Cpl=2000.0)
-    # Step 2: Cool back 350 K -> 280 K from step 1 output (time 100 s -> 200 s)
-    with open(os.path.join(case12_dir, "system/pcm/fvOptions"), "w") as f:
+    with open(os.path.join(case12_dir, "system/phaseChange/fvOptions"), "w") as f:
         f.write("""
-FoamFile { version 2.0; format ascii; class dictionary; location "system/pcm"; object fvOptions; }
+FoamFile { version 2.0; format ascii; class dictionary; location "system/phaseChange"; object fvOptions; }
 heatSource { type scalarSemiImplicitSource; active true; selectionMode all; volumeMode specific;
     sources { h ( -2400000 0 ); } }
 """)
@@ -393,10 +386,10 @@ application phaseChangeMultiRegionFoam; startFrom latestTime; startTime 100; sto
 """)
     of_env = "source /usr/lib/openfoam/openfoam2412/etc/bashrc || source /usr/lib/openfoam/openfoam2406/etc/bashrc || true"
     solver_bin = find_solver()
-    run_cmd(f"mkdir -p {case12_dir}/100/pcm/polyMesh && cp -r {case12_dir}/constant/pcm/polyMesh/* {case12_dir}/100/pcm/polyMesh/ 2>/dev/null || true")
+    run_cmd(f"mkdir -p {case12_dir}/100/phaseChange/polyMesh && cp -r {case12_dir}/constant/phaseChange/polyMesh/* {case12_dir}/100/phaseChange/polyMesh/ 2>/dev/null || true")
     run_cmd(f"cd {case12_dir} && bash -c '{of_env}; {solver_bin}'")
-    T12 = parse_openfoam_field(os.path.join(case12_dir, "200/pcm/T"))[0]
-    a12 = parse_openfoam_field(os.path.join(case12_dir, "200/pcm/liquidFraction"))[0]
+    T12 = parse_openfoam_field(os.path.join(case12_dir, "200/phaseChange/T"))[0]
+    a12 = parse_openfoam_field(os.path.join(case12_dir, "200/phaseChange/phaseFraction"))[0]
     err12 = abs(T12 - 280.0)
     err_a12 = abs(a12 - 0.0)
     print(f"Simulated T = {T12:.6f} K, alphaL = {a12:.6f}")
@@ -433,4 +426,3 @@ application phaseChangeMultiRegionFoam; startFrom latestTime; startTime 100; sto
 
 if __name__ == "__main__":
     main()
-

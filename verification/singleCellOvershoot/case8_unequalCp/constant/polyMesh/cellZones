@@ -15,13 +15,13 @@ FoamFile
     object      cellZones;
     meta
     {
-        names           1 ( pcm );
+        names           1 ( phaseChange );
     }
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 1
-(pcm
+(phaseChange
 {
     type            cellZone;
     cellLabels      List<label> 1(0);

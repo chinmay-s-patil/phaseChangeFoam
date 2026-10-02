@@ -33,4 +33,4 @@ const volScalarField& betav = betavSolid[i];
 
 fv::options& fvOptions = solidHeatSources[i];
 
-pcmPhaseChangeModel& pcmModel = pcmModels[i];
+phaseChangeModel& phaseChangeModel = phaseChangeModels[i];

@@ -6,10 +6,10 @@
      \\/     M anipulation  |
 \*---------------------------------------------------------------------------*/
 
-#ifndef pcmEhcModel_H
-#define pcmEhcModel_H
+#ifndef ehcPhaseChangeModel_H
+#define ehcPhaseChangeModel_H
 
-#include "pcmPhaseChangeModel.H"
+#include "phaseChangeModel.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -17,12 +17,16 @@ namespace Foam
 {
 
 /*---------------------------------------------------------------------------*\
-                         Class pcmEhcModel Declaration
+                     Class ehcPhaseChangeModel Declaration
+
+ Description
+    Effective Heat Capacity (EHC) model with stateful hysteresis for general
+    solid-liquid phase-change simulations (melting/freezing, alloys, thermal storage).
 \*---------------------------------------------------------------------------*/
 
-class pcmEhcModel
+class ehcPhaseChangeModel
 :
-    public pcmPhaseChangeModel
+    public phaseChangeModel
 {
 private:
 
@@ -61,8 +65,8 @@ private:
     // Trajectory tracking (1.0 = heating, 0.0 = cooling)
     volScalarField heatingTrajectory_;
 
-    // Start-of-step stored fields for committed alphaL_old formulation across Picard iterations
-    volScalarField liquidFraction_old_;
+    // Start-of-step stored fields for committed phaseFraction_old formulation across Picard iterations
+    volScalarField phaseFraction_old_;
     volScalarField heatingTrajectory_old_;
 
     // Helper functions
@@ -78,14 +82,14 @@ public:
     TypeName("EHC");
 
     // Constructors
-    pcmEhcModel
+    ehcPhaseChangeModel
     (
         const fvMesh& mesh,
         const solidThermo& thermo
     );
 
     // Destructor
-    virtual ~pcmEhcModel() = default;
+    virtual ~ehcPhaseChangeModel() = default;
 
 
     // Member Functions
@@ -98,6 +102,11 @@ public:
     virtual void correct() override;
 
     virtual void updateHistory() override;
+
+    virtual bool suppressConvection() const override
+    {
+        return true;
+    }
 
     virtual tmp<volScalarField> CpEff() const override
     {
@@ -121,16 +130,6 @@ public:
             IOobject("latentHeatSource", mesh_.time().timeName(), mesh_),
             mesh_,
             dimensionedScalar("zero", dimEnergy/dimTime/dimVolume, 0.0)
-        );
-    }
-
-    virtual tmp<volVectorField> momentumSource() const override
-    {
-        return tmp<volVectorField>::New
-        (
-            IOobject("momentumSource", mesh_.time().timeName(), mesh_),
-            mesh_,
-            dimensionedVector("zero", dimForce/dimVolume, Zero)
         );
     }
 };

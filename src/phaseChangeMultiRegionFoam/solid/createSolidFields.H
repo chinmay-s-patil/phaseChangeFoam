@@ -5,8 +5,8 @@
     PtrList<fv::options> solidHeatSources(solidRegions.size());
     PtrList<volScalarField> betavSolid(solidRegions.size());
     PtrList<volSymmTensorField> aniAlphas(solidRegions.size());
-    PtrList<pcmPhaseChangeModel> pcmModels(solidRegions.size());
-    List<bool> warnedCoupled(solidRegions.size(), false);
+    PtrList<phaseChangeModel> phaseChangeModels(solidRegions.size());
+
 
     // Populate solid field pointer lists
     forAll(solidRegions, i)
@@ -17,8 +17,16 @@
         Info<< "    Adding to thermos\n" << endl;
         thermos.set(i, solidThermo::New(solidRegions[i]));
 
-        Info<< "    Adding PCM phase change model\n" << endl;
-        pcmModels.set(i, pcmPhaseChangeModel::New(solidRegions[i], thermos[i]));
+        Info<< "    Adding phase change model\n" << endl;
+        phaseChangeModels.set(i, phaseChangeModel::New(solidRegions[i], thermos[i]));
+
+        if (phaseChangeModels[i].active() && !phaseChangeModels[i].suppressConvection())
+        {
+            WarningInFunction
+                << "Phase change model on solid region '" << solidRegions[i].name()
+                << "' does not suppress convection, but solid regions have no velocity solver. "
+                << "Convective transport and momentum source will be ignored." << endl;
+        }
 
         Info<< "    Adding to radiations\n" << endl;
         radiations.set(i, radiation::radiationModel::New(thermos[i].T()));
