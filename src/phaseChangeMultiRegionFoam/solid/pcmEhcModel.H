@@ -67,6 +67,10 @@ private:
     // Helper functions
     void readDict();
 
+    // Exact piecewise path integral helpers for sensible heat capacity integration
+    scalar integralAlphaMelt(scalar T, scalar alpha_old) const;
+    scalar integralAlphaFreeze(scalar T, scalar alpha_old) const;
+
 public:
 
     //- Runtime type information

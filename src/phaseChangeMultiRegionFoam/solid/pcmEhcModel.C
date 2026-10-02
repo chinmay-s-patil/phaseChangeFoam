@@ -129,6 +129,16 @@ void Foam::pcmEhcModel::readDict()
         Lf_ = freezeDict.lookupOrDefault<scalar>("latentHeat", 163000.0);
     }
 
+    if (mag(Lm_ - Lf_) > 1e-6)
+    {
+        WarningInFunction
+            << "Unequal melting latent heat (" << Lm_
+            << " J/kg) and freezing latent heat (" << Lf_
+            << " J/kg) specified for region " << mesh_.name()
+            << ". Closed heating-cooling cycles will produce net enthalpy hysteresis."
+            << endl;
+    }
+
     if (pcDict.found("hysteresis"))
     {
         const dictionary& hysDict = pcDict.subDict("hysteresis");
@@ -160,6 +170,45 @@ void Foam::pcmEhcModel::readDict()
         << "      Freezing Range: [" << Tlf_ << " - " << Tuf_ << "] K, Latent Heat: " << Lf_ << " J/kg" << nl
         << "      Hysteresis Active: " << (hysteresisActive_ ? "true" : "false") << nl
         << "      Density Model: " << densityModel_ << " (rhoS=" << rhoSolid_ << ", rhoL=" << rhoLiquid_ << ")" << endl;
+}
+
+Foam::scalar Foam::pcmEhcModel::integralAlphaMelt(scalar T, scalar alpha_old) const
+{
+    scalar Tstar = Tlm_ + alpha_old * (Tum_ - Tlm_);
+    if (T <= Tstar)
+    {
+        return alpha_old * T;
+    }
+    else if (T < Tum_)
+    {
+        scalar I_Tstar = alpha_old * Tstar;
+        scalar I_seg = ((T - Tlm_) * (T - Tlm_) - (Tstar - Tlm_) * (Tstar - Tlm_)) / (2.0 * (Tum_ - Tlm_));
+        return I_Tstar + I_seg;
+    }
+    else
+    {
+        scalar I_Tstar = alpha_old * Tstar;
+        scalar I_mush = ((Tum_ - Tlm_) * (Tum_ - Tlm_) - (Tstar - Tlm_) * (Tstar - Tlm_)) / (2.0 * (Tum_ - Tlm_));
+        return I_Tstar + I_mush + (T - Tum_);
+    }
+}
+
+Foam::scalar Foam::pcmEhcModel::integralAlphaFreeze(scalar T, scalar alpha_old) const
+{
+    scalar Tstar = Tlf_ + alpha_old * (Tuf_ - Tlf_);
+    if (T <= Tlf_)
+    {
+        return 0.0;
+    }
+    else if (T < Tstar)
+    {
+        return (T - Tlf_) * (T - Tlf_) / (2.0 * (Tuf_ - Tlf_));
+    }
+    else
+    {
+        scalar I_mush = (Tstar - Tlf_) * (Tstar - Tlf_) / (2.0 * (Tuf_ - Tlf_));
+        return I_mush + alpha_old * (T - Tstar);
+    }
 }
 
 
@@ -258,9 +307,21 @@ void Foam::pcmEhcModel::correct()
             klVal = KappaField[cellI];
         }
 
-        scalar cpBaseCurr = (1.0 - alphaL_curr) * cpsVal + alphaL_curr * cplVal;
-        scalar cpBasePrev = (1.0 - alphaL_prev) * cpsVal + alphaL_prev * cplVal;
-        scalar cpBase = 0.5 * (cpBaseCurr + cpBasePrev);
+        scalar avgAlpha = 0.5 * (alphaL_curr + alphaL_prev);
+        if (mag(deltaTStep) > 1e-6)
+        {
+            if (isHeating)
+            {
+                avgAlpha = (integralAlphaMelt(Tcell, alphaL_prev) - integralAlphaMelt(ToldCell, alphaL_prev)) / deltaTStep;
+            }
+            else
+            {
+                avgAlpha = (integralAlphaFreeze(Tcell, alphaL_prev) - integralAlphaFreeze(ToldCell, alphaL_prev)) / deltaTStep;
+            }
+        }
+        avgAlpha = max(0.0, min(1.0, avgAlpha));
+
+        scalar cpBase = (1.0 - avgAlpha) * cpsVal + avgAlpha * cplVal;
 
         scalar deltaCp = 0.0;
         if (mag(deltaTStep) > 1e-6)
@@ -300,7 +361,7 @@ void Foam::pcmEhcModel::correct()
         k_[cellI] = (1.0 - alphaL_curr) * ksVal + alphaL_curr * klVal;
     }
 
-    // Update boundary patch face values using pure min/max stateful hysteresis formulation
+    // Update boundary patch face values
     forAll(T.boundaryField(), patchi)
     {
         const fvPatchScalarField& pT = T.boundaryField()[patchi];
@@ -394,9 +455,21 @@ void Foam::pcmEhcModel::correct()
                 klVal = pKappaThermo[facei];
             }
 
-            scalar cpBaseCurr = (1.0 - alphaL_curr) * cpsVal + alphaL_curr * cplVal;
-            scalar cpBasePrev = (1.0 - alphaL_prev) * cpsVal + alphaL_prev * cplVal;
-            scalar cpBase = 0.5 * (cpBaseCurr + cpBasePrev);
+            scalar avgAlpha = 0.5 * (alphaL_curr + alphaL_prev);
+            if (mag(deltaTStep) > 1e-6)
+            {
+                if (isHeating)
+                {
+                    avgAlpha = (integralAlphaMelt(Tface, alphaL_prev) - integralAlphaMelt(ToldFace, alphaL_prev)) / deltaTStep;
+                }
+                else
+                {
+                    avgAlpha = (integralAlphaFreeze(Tface, alphaL_prev) - integralAlphaFreeze(ToldFace, alphaL_prev)) / deltaTStep;
+                }
+            }
+            avgAlpha = max(0.0, min(1.0, avgAlpha));
+
+            scalar cpBase = (1.0 - avgAlpha) * cpsVal + avgAlpha * cplVal;
 
             scalar deltaCp = 0.0;
             if (mag(deltaTStep) > 1e-6)

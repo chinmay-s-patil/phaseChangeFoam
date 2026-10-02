@@ -48,7 +48,7 @@ def parse_openfoam_field(file_path):
     block = content[start_paren+1:end_paren].strip()
     return [float(x) for x in block.split()]
 
-def setup_single_cell_case(case_dir, T0, Q_source, L_heat, T_lm=300.0, T_um=310.0, T_lf=295.0, T_uf=305.0, alpha0=None, traj0=None, Cps=2000.0, Cpl=2000.0):
+def setup_single_cell_case(case_dir, T0, Q_source, L_heat, T_lm=300.0, T_um=310.0, T_lf=295.0, T_uf=305.0, alpha0=None, traj0=None, Cps=2000.0, Cpl=2000.0, rhoS=1000.0, rhoL=1000.0):
     os.makedirs(case_dir, exist_ok=True)
     os.chdir(case_dir)
     run_cmd("rm -rf [1-9]* 0.* constant/pcm/polyMesh constant/polyMesh")
@@ -131,7 +131,7 @@ radiationModel none;
         f.write(f"""
 FoamFile {{ version 2.0; format ascii; class dictionary; location "constant/pcm"; object thermophysicalProperties; }}
 thermoType {{ type heSolidThermo; mixture pureMixture; transport constIso; thermo hConst; equationOfState rhoConst; specie specie; energy sensibleEnthalpy; }}
-mixture {{ specie {{ molWeight 100; }} transport {{ kappa 1.0; }} thermodynamics {{ Cp {Cps}; Hf 0; }} equationOfState {{ rho 1000; }} }}
+mixture {{ specie {{ molWeight 100; }} transport {{ kappa 1.0; }} thermodynamics {{ Cp {Cps}; Hf 0; }} equationOfState {{ rho {rhoS}; }} }}
 """)
     with open("constant/pcm/phaseChangeDict", "w") as f:
         f.write(f"""
@@ -143,7 +143,7 @@ phaseChange
     melting {{ T_lowerBound {T_lm}; T_upperBound {T_um}; latentHeat {L_heat}; }}
     freezing {{ T_lowerBound {T_lf}; T_upperBound {T_uf}; latentHeat {L_heat}; }}
     hysteresis {{ active true; }}
-    density {{ model linear; rhoRef 1000.0; rhoSolid 1000.0; rhoLiquid 1000.0; }}
+    density {{ model linear; rhoRef {rhoS}; rhoSolid {rhoS}; rhoLiquid {rhoL}; }}
     thermophysical {{ mode custom; CpSolid {Cps}; CpLiquid {Cpl}; kSolid 1.0; kLiquid 1.0; }}
 }}
 """)
@@ -267,8 +267,8 @@ def main():
         print("STATUS: CASE 4 FAILED!")
         all_passed = False
 
-    # --- Case 5: Mushy Start & Heating (T0 = 305 K, alpha0 = 0.5) ---
-    print("\n--- Case 5: Mushy Start State (T0 = 305 K, alpha0 = 0.5 -> T = 308 K, alphaL = 0.80) ---")
+    # --- Case 5: Mushy Start State & Partial Melt Heating (T0 = 305 K, alpha0 = 0.5 -> T = 308 K, alphaL = 0.80) ---
+    print("\n--- Case 5: Mushy Start State & Partial Melt Heating (T0 = 305 K, alpha0 = 0.5 -> T = 308 K, alphaL = 0.80) ---")
     case5_dir = os.path.join(base_dir, "case5_mushyStart")
     T5, a5, log5 = setup_single_cell_case(case5_dir, T0=305.0, Q_source=360000.0, L_heat=100000.0, alpha0=0.5, traj0=1.0)
     err5 = abs(T5 - 308.0)
@@ -283,9 +283,6 @@ def main():
         all_passed = False
 
     # --- Case 6: Cooling Reversal Plateau (T0 = 308 K, alpha0 = 0.8 -> T = 306 K, alphaL = 0.80) ---
-    # T0 = 308 K, alpha0 = 0.8 on cooling trajectory (traj0 = 0.0). Q = -40 kW/m^3 => delta_H = -4 kJ/kg.
-    # Freeze window [295, 305 K]. Since 308->306 K > 305 K, alpha_f = 1.0 => alphaL = min(0.8, 1.0) = 0.8.
-    # Sensible heat only: Delta T = -4000 / 2000 = -2 K => T_exact = 306.0 K, alphaL_exact = 0.80.
     print("\n--- Case 6: Cooling Reversal Plateau (T0 = 308 K, alpha0 = 0.8 -> T = 306 K, alphaL = 0.80) ---")
     case6_dir = os.path.join(base_dir, "case6_coolingReversal")
     T6, a6, log6 = setup_single_cell_case(case6_dir, T0=308.0, Q_source=-40000.0, L_heat=100000.0, alpha0=0.8, traj0=0.0)
@@ -301,9 +298,6 @@ def main():
         all_passed = False
 
     # --- Case 7: Heating Reversal Plateau (T0 = 297 K, alpha0 = 0.2 -> T = 298 K, alphaL = 0.20) ---
-    # T0 = 297 K, alpha0 = 0.2 on heating trajectory (traj0 = 1.0). Q = +20 kW/m^3 => delta_H = +2 kJ/kg.
-    # Melt window [300, 310 K]. Since 297->298 K < 300 K, alpha_m = 0.0 => alphaL = max(0.2, 0.0) = 0.2.
-    # Sensible heat only: Delta T = +2000 / 2000 = +1 K => T_exact = 298.0 K, alphaL_exact = 0.20.
     print("\n--- Case 7: Heating Reversal Plateau (T0 = 297 K, alpha0 = 0.2 -> T = 298 K, alphaL = 0.20) ---")
     case7_dir = os.path.join(base_dir, "case7_heatingReversal")
     T7, a7, log7 = setup_single_cell_case(case7_dir, T0=297.0, Q_source=20000.0, L_heat=100000.0, alpha0=0.2, traj0=1.0)
@@ -318,13 +312,10 @@ def main():
         print("STATUS: CASE 7 FAILED!")
         all_passed = False
 
-    # --- Case 8: Unequal Solid & Liquid Cp (Cps = 1980, Cpl = 2320 J/(kg.K)) ---
-    # T0 = 280 K -> 350 K jump. cpBase = 0.5*(1980 + 2320) = 2150 J/(kg.K).
-    # Q = +2.505 MW/m^3 => delta_H = +250.5 kJ/kg. Sensible = 2150 * 70 = 150.5 kJ/kg, Latent = 100 kJ/kg.
-    # T_exact = 350.0 K, alphaL_exact = 1.0.
-    print("\n--- Case 8: Unequal Cp (Cps = 1980, Cpl = 2320 J/(kg.K), T0 = 280 K -> 350 K) ---")
+    # --- Case 8: Exact Piecewise Path Integrated Base Cp (Cps = 1980, Cpl = 2320 J/(kg.K), T0 = 280 K -> 350 K) ---
+    print("\n--- Case 8: Exact Piecewise Path Integrated Base Cp (Cps = 1980, Cpl = 2320 J/(kg.K), T0 = 280 K -> 350 K) ---")
     case8_dir = os.path.join(base_dir, "case8_unequalCp")
-    T8, a8, log8 = setup_single_cell_case(case8_dir, T0=280.0, Q_source=2505000.0, L_heat=100000.0, Cps=1980.0, Cpl=2320.0)
+    T8, a8, log8 = setup_single_cell_case(case8_dir, T0=280.0, Q_source=2539000.0, L_heat=100000.0, Cps=1980.0, Cpl=2320.0)
     err8 = abs(T8 - 350.0)
     print(f"Simulated T = {T8:.6f} K, alphaL = {a8:.6f}")
     print(f"Exact T     = 350.000000 K, alphaL = 1.000000")
@@ -335,17 +326,32 @@ def main():
         print("STATUS: CASE 8 FAILED!")
         all_passed = False
 
+    # --- Case 9: Variable Density (rhoS = 1967, rhoL = 1850 kg/m^3, T0 = 280 K -> 350 K) ---
+    print("\n--- Case 9: Variable Density (rhoS = 1967, rhoL = 1850 kg/m^3, T0 = 280 K -> 350 K) ---")
+    case9_dir = os.path.join(base_dir, "case9_variableDensity")
+    T9, a9, log9 = setup_single_cell_case(case9_dir, T0=280.0, Q_source=4697150.0, L_heat=100000.0, Cps=1980.0, Cpl=2320.0, rhoS=1967.0, rhoL=1850.0)
+    err9 = abs(T9 - 350.0)
+    print(f"Simulated T = {T9:.6f} K, alphaL = {a9:.6f}")
+    print(f"Exact T     = 350.000000 K, alphaL = 1.000000")
+    print(f"Temperature Error = {err9:.6f} K")
+    if err9 < 0.001 and abs(a9 - 1.0) < 0.001:
+        print("STATUS: CASE 9 PASSED!")
+    else:
+        print("STATUS: CASE 9 FAILED!")
+        all_passed = False
+
     print("\n=======================================================")
     print("      SINGLE-CELL VERIFICATION SUITE SUMMARY           ")
     print("=======================================================")
-    print(f"Case 1 (Heating Jump)      : {'PASSED' if err1 < 0.001 else 'FAILED'} (err = {err1:.6f} K)")
-    print(f"Case 2 (Cooling Jump)      : {'PASSED' if err2 < 0.001 else 'FAILED'} (err = {err2:.6f} K)")
-    print(f"Case 3 (Partial Melt)      : {'PASSED' if err3 < 0.001 else 'FAILED'} (err = {err3:.6f} K)")
-    print(f"Case 4 (Realistic L)       : {'PASSED' if err4 < 0.001 else 'FAILED'} (err = {err4:.6f} K)")
-    print(f"Case 5 (Mushy Start)       : {'PASSED' if err5 < 0.001 else 'FAILED'} (err = {err5:.6f} K)")
-    print(f"Case 6 (Cooling Reversal)  : {'PASSED' if err6 < 0.001 else 'FAILED'} (err = {err6:.6f} K)")
-    print(f"Case 7 (Heating Reversal)  : {'PASSED' if err7 < 0.001 else 'FAILED'} (err = {err7:.6f} K)")
-    print(f"Case 8 (Unequal Cp)        : {'PASSED' if err8 < 0.001 else 'FAILED'} (err = {err8:.6f} K)")
+    print(f"Case 1 (Heating Jump)          : {'PASSED' if err1 < 0.001 else 'FAILED'} (err = {err1:.6f} K)")
+    print(f"Case 2 (Cooling Jump)          : {'PASSED' if err2 < 0.001 else 'FAILED'} (err = {err2:.6f} K)")
+    print(f"Case 3 (Partial Melt)          : {'PASSED' if err3 < 0.001 else 'FAILED'} (err = {err3:.6f} K)")
+    print(f"Case 4 (Realistic L)           : {'PASSED' if err4 < 0.001 else 'FAILED'} (err = {err4:.6f} K)")
+    print(f"Case 5 (Mushy Start & Melt)    : {'PASSED' if err5 < 0.001 else 'FAILED'} (err = {err5:.6f} K)")
+    print(f"Case 6 (Cooling Reversal)      : {'PASSED' if err6 < 0.001 else 'FAILED'} (err = {err6:.6f} K)")
+    print(f"Case 7 (Heating Reversal)      : {'PASSED' if err7 < 0.001 else 'FAILED'} (err = {err7:.6f} K)")
+    print(f"Case 8 (Exact Path Integrated) : {'PASSED' if err8 < 0.001 else 'FAILED'} (err = {err8:.6f} K)")
+    print(f"Case 9 (Variable Density)      : {'PASSED' if err9 < 0.001 else 'FAILED'} (err = {err9:.6f} K)")
     print("-------------------------------------------------------")
 
     if all_passed:
