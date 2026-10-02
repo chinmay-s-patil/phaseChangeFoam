@@ -38,6 +38,7 @@ private:
 
     // Parameters - Hysteresis
     bool hysteresisActive_;
+    scalar reversalTol_; // Temperature hysteresis reversal deadband [K]
 
     // Parameters - Density
     word densityModel_;

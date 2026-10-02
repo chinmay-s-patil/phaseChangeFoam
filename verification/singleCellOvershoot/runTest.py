@@ -374,6 +374,40 @@ def main():
         print("STATUS: CASE 11 FAILED!")
         all_passed = False
 
+    # --- Case 12: Closed Thermal Cycle Net Enthalpy Conservation (280 K -> 350 K -> 280 K) ---
+    print("\n--- Case 12: Closed Thermal Cycle (280 K -> 350 K -> 280 K) Enthalpy Conservation ---")
+    case12_dir = os.path.join(base_dir, "case12_closedCycle")
+    # Step 1: Heat 280 K -> 350 K in 1 step (100 s)
+    T12_step1, a12_step1, log12_step1 = setup_single_cell_case(case12_dir, T0=280.0, Q_source=2400000.0, L_heat=100000.0, Cps=2000.0, Cpl=2000.0)
+    # Step 2: Cool back 350 K -> 280 K from step 1 output (time 100 s -> 200 s)
+    with open(os.path.join(case12_dir, "system/pcm/fvOptions"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "system/pcm"; object fvOptions; }
+heatSource { type scalarSemiImplicitSource; active true; selectionMode all; volumeMode specific;
+    sources { h ( -2400000 0 ); } }
+""")
+    with open(os.path.join(case12_dir, "system/controlDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
+application phaseChangeMultiRegionFoam; startFrom latestTime; startTime 100; stopAt endTime; endTime 200; deltaT 100; writeControl timeStep; writeInterval 1;
+""")
+    of_env = "source /usr/lib/openfoam/openfoam2412/etc/bashrc || source /usr/lib/openfoam/openfoam2406/etc/bashrc || true"
+    solver_bin = find_solver()
+    run_cmd(f"mkdir -p {case12_dir}/100/pcm/polyMesh && cp -r {case12_dir}/constant/pcm/polyMesh/* {case12_dir}/100/pcm/polyMesh/ 2>/dev/null || true")
+    run_cmd(f"cd {case12_dir} && bash -c '{of_env}; {solver_bin}'")
+    T12 = parse_openfoam_field(os.path.join(case12_dir, "200/pcm/T"))[0]
+    a12 = parse_openfoam_field(os.path.join(case12_dir, "200/pcm/liquidFraction"))[0]
+    err12 = abs(T12 - 280.0)
+    err_a12 = abs(a12 - 0.0)
+    print(f"Simulated T = {T12:.6f} K, alphaL = {a12:.6f}")
+    print(f"Exact T     = 280.000000 K, alphaL = 0.000000")
+    print(f"Temperature Error = {err12:.6f} K, Alpha Error = {err_a12:.6f}")
+    if err12 < 0.001 and err_a12 < 0.001:
+        print("STATUS: CASE 12 PASSED!")
+    else:
+        print("STATUS: CASE 12 FAILED!")
+        all_passed = False
+
     print("\n=======================================================")
     print("      SINGLE-CELL VERIFICATION SUITE SUMMARY           ")
     print("=======================================================")
@@ -388,6 +422,7 @@ def main():
     print(f"Case 9 (Variable Density)      : {'PASSED' if err9 < 0.001 else 'FAILED'} (err = {err9:.6f} K)")
     print(f"Case 10 (Unequal Cp Cooling)   : {'PASSED' if err10 < 0.001 else 'FAILED'} (err = {err10:.6f} K)")
     print(f"Case 11 (Unequal Cp Reversal)  : {'PASSED' if err11 < 0.001 else 'FAILED'} (err = {err11:.6f} K)")
+    print(f"Case 12 (Closed Cycle Net H=0) : {'PASSED' if err12 < 0.001 else 'FAILED'} (err = {err12:.6f} K)")
     print("-------------------------------------------------------")
 
     if all_passed:
@@ -398,3 +433,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

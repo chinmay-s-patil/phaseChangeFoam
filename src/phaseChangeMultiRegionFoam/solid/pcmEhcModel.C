@@ -33,6 +33,7 @@ Foam::pcmEhcModel::pcmEhcModel
     Tuf_(313.15),
     Lf_(163000.0),
     hysteresisActive_(true),
+    reversalTol_(1e-6),
     densityModel_("linear"),
     rhoRef_(1967.0),
     rhoSolid_(1967.0),
@@ -89,13 +90,52 @@ Foam::pcmEhcModel::pcmEhcModel
         }
     }
 
-    // Clamp initial liquidFraction_ to valid range [0, 1]
+    // Restart handling: if liquidFraction was read but heatingTrajectory was missing, infer trajectory
+    if (liquidFraction_.headerOk() && !heatingTrajectory_.headerOk())
+    {
+        forAll(heatingTrajectory_, cellI)
+        {
+            heatingTrajectory_[cellI] = (liquidFraction_[cellI] > 0.5) ? 1.0 : 0.0;
+        }
+        forAll(heatingTrajectory_.boundaryFieldRef(), patchi)
+        {
+            fvPatchScalarField& pHeat = heatingTrajectory_.boundaryFieldRef()[patchi];
+            const fvPatchScalarField& pAlpha = liquidFraction_.boundaryField()[patchi];
+            forAll(pHeat, facei)
+            {
+                pHeat[facei] = (pAlpha[facei] > 0.5) ? 1.0 : 0.0;
+            }
+        }
+    }
+
+    // Clamp initial liquidFraction_ internal and boundary patch values to [0, 1]
     forAll(liquidFraction_, cellI)
     {
         liquidFraction_[cellI] = max(0.0, min(1.0, liquidFraction_[cellI]));
     }
+    forAll(liquidFraction_.boundaryFieldRef(), patchi)
+    {
+        fvPatchScalarField& pAlpha = liquidFraction_.boundaryFieldRef()[patchi];
+        forAll(pAlpha, facei)
+        {
+            pAlpha[facei] = max(0.0, min(1.0, pAlpha[facei]));
+        }
+    }
 
-    liquidFraction_.correctBoundaryConditions();
+    // Clamp heatingTrajectory_ internal and boundary patch values to 0.0 or 1.0
+    forAll(heatingTrajectory_, cellI)
+    {
+        heatingTrajectory_[cellI] = (heatingTrajectory_[cellI] > 0.5) ? 1.0 : 0.0;
+    }
+    forAll(heatingTrajectory_.boundaryFieldRef(), patchi)
+    {
+        fvPatchScalarField& pHeat = heatingTrajectory_.boundaryFieldRef()[patchi];
+        forAll(pHeat, facei)
+        {
+            pHeat[facei] = (pHeat[facei] > 0.5) ? 1.0 : 0.0;
+        }
+    }
+
     liquidFraction_old_ = liquidFraction_;
     heatingTrajectory_old_ = heatingTrajectory_;
 
@@ -177,6 +217,7 @@ void Foam::pcmEhcModel::readDict()
     {
         const dictionary& hysDict = pcDict.subDict("hysteresis");
         hysteresisActive_ = hysDict.lookupOrDefault<bool>("active", true);
+        reversalTol_ = hysDict.lookupOrDefault<scalar>("reversalTol", 1e-6);
     }
 
     if (pcDict.found("density"))
@@ -310,12 +351,12 @@ void Foam::pcmEhcModel::correct()
         }
         else
         {
-            if (deltaTStep > 1e-6)
+            if (deltaTStep > reversalTol_)
             {
                 isHeating = true;
                 heatingTrajectory_[cellI] = 1.0;
             }
-            else if (deltaTStep < -1e-6)
+            else if (deltaTStep < -reversalTol_)
             {
                 isHeating = false;
                 heatingTrajectory_[cellI] = 0.0;
@@ -374,7 +415,7 @@ void Foam::pcmEhcModel::correct()
 
         scalar alpha_old_eval = hysteresisActive_ ? alphaL_prev : 0.0;
         scalar avgAlpha = 0.5 * (alphaL_curr + alphaL_prev);
-        if (mag(deltaTStep) > 1e-6)
+        if (mag(deltaTStep) > reversalTol_)
         {
             if (!hysteresisActive_ || isHeating)
             {
@@ -390,17 +431,17 @@ void Foam::pcmEhcModel::correct()
         scalar cpBase = (1.0 - avgAlpha) * cpsVal + avgAlpha * cplVal;
 
         scalar deltaCp = 0.0;
-        if (mag(deltaTStep) > 1e-6)
+        if (mag(deltaTStep) > reversalTol_)
         {
             deltaCp = L * (alphaL_curr - alphaL_prev) / deltaTStep;
         }
         else
         {
-            if (isHeating && Tcell > Tlm_ && Tcell < Tum_ && alphaL_prev <= alpha_m_curr + 1e-6)
+            if (isHeating && Tcell > Tlm_ && Tcell < Tum_ && alphaL_prev <= alpha_m_curr + reversalTol_)
             {
                 deltaCp = Lm_ / (Tum_ - Tlm_);
             }
-            else if (!isHeating && Tcell > Tlf_ && Tcell < Tuf_ && alphaL_prev >= alpha_f_curr - 1e-6)
+            else if (!isHeating && Tcell > Tlf_ && Tcell < Tuf_ && alphaL_prev >= alpha_f_curr - reversalTol_)
             {
                 deltaCp = Lf_ / (Tuf_ - Tlf_);
             }
@@ -452,12 +493,12 @@ void Foam::pcmEhcModel::correct()
             }
             else
             {
-                if (deltaTStep > 1e-6)
+                if (deltaTStep > reversalTol_)
                 {
                     isHeating = true;
                     pHeatTraj[facei] = 1.0;
                 }
-                else if (deltaTStep < -1e-6)
+                else if (deltaTStep < -reversalTol_)
                 {
                     isHeating = false;
                     pHeatTraj[facei] = 0.0;
@@ -516,7 +557,7 @@ void Foam::pcmEhcModel::correct()
 
             scalar alpha_old_eval = hysteresisActive_ ? alphaL_prev : 0.0;
             scalar avgAlpha = 0.5 * (alphaL_curr + alphaL_prev);
-            if (mag(deltaTStep) > 1e-6)
+            if (mag(deltaTStep) > reversalTol_)
             {
                 if (!hysteresisActive_ || isHeating)
                 {
@@ -532,17 +573,17 @@ void Foam::pcmEhcModel::correct()
             scalar cpBase = (1.0 - avgAlpha) * cpsVal + avgAlpha * cplVal;
 
             scalar deltaCp = 0.0;
-            if (mag(deltaTStep) > 1e-6)
+            if (mag(deltaTStep) > reversalTol_)
             {
                 deltaCp = L * (alphaL_curr - alphaL_prev) / deltaTStep;
             }
             else
             {
-                if (isHeating && Tface > Tlm_ && Tface < Tum_ && alphaL_prev <= alpha_m_curr + 1e-6)
+                if (isHeating && Tface > Tlm_ && Tface < Tum_ && alphaL_prev <= alpha_m_curr + reversalTol_)
                 {
                     deltaCp = Lm_ / (Tum_ - Tlm_);
                 }
-                else if (!isHeating && Tface > Tlf_ && Tface < Tuf_ && alphaL_prev >= alpha_f_curr - 1e-6)
+                else if (!isHeating && Tface > Tlf_ && Tface < Tuf_ && alphaL_prev >= alpha_f_curr - reversalTol_)
                 {
                     deltaCp = Lf_ / (Tuf_ - Tlf_);
                 }

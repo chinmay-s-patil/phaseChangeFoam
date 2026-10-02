@@ -186,7 +186,11 @@ int main(int argc, char *argv[])
             }
         }
 
-        // Re-synchronize phase-change models with final converged T before committing history
+        // Re-synchronize phase-change models with final converged T^n before committing history.
+        // At this point in the timestep, liquidFraction_old_ still holds alpha^{n-1} and T.oldTime()
+        // holds T^{n-1} (the step start state). Re-evaluating pcmModel.correct() with final T^n
+        // evaluates exact alpha(T^n) and CpEff(T^n) without modifying history, making this call
+        // safe and idempotent prior to committing updateHistory().
         forAll(solidRegions, i)
         {
             pcmPhaseChangeModel& pcmModel = pcmModels[i];

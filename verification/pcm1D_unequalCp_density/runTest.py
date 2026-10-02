@@ -191,20 +191,48 @@ boundaryField { ".*" { type calculated; value uniform 101325; } "(top|bottom|fro
     mean_a_heat = sum(alpha_heat) / len(alpha_heat)
     print(f"Heating t=2000s: Mean T = {mean_T_heat:.2f} K, Mean alphaL = {mean_a_heat:.4f}")
 
-    # Check bounds
+    # Check bounds and compute exact domain enthalpy change
     min_a_heat = min(alpha_heat)
     max_a_heat = max(alpha_heat)
     alpha_bounded = (min_a_heat >= -1e-6) and (max_a_heat <= 1.000001)
+
+    # Compute domain enthalpy change from cell states at t=2000s vs t=0s
+    dx = 0.001 # 100 cells across 0.1 m
+    A = 0.01 * 0.01 # 0.01 m x 0.01 m cross section
+    V_cell = dx * A
+    rho_s, rho_l = 1967.0, 1850.0
+    Cps, Cpl = 1980.0, 2320.0
+    Lm = 100000.0
+    Tlm, Tum = 300.0, 310.0
+
+    H_total_2000 = 0.0
+    for Ti, aL in zip(T_heat, alpha_heat):
+        rho_i = (1.0 - aL) * rho_s + aL * rho_l
+        # Sensible enthalpy relative to 280 K
+        if Ti <= Tlm:
+            h_sens = Cps * (Ti - 280.0)
+        elif Ti >= Tum:
+            h_sens = Cps * (Tlm - 280.0) + 0.5 * (Cps + Cpl) * (Tum - Tlm) + Cpl * (Ti - Tum)
+        else:
+            h_sens = Cps * (Tlm - 280.0) + 0.5 * (Cps + Cpl) * (Ti - Tlm)
+        h_cell = h_sens + aL * Lm
+        H_total_2000 += rho_i * V_cell * h_cell
+
+    # Initial domain enthalpy at t=0 (all 280 K, solid)
+    H_total_0 = 0.0 # relative to 280 K base
+
+    delta_H_domain = H_total_2000 - H_total_0
 
     print("\n=======================================================")
     print("   UNEQUAL CP & VARIABLE DENSITY 1D TEST RESULTS       ")
     print("=======================================================")
     print(f"Heating t=2000s Mean T     : {mean_T_heat:.2f} K")
     print(f"Heating t=2000s Mean alphaL : {mean_a_heat:.4f}")
+    print(f"Domain Enthalpy Rise       : {delta_H_domain:.2f} J")
     print(f"Liquid Fraction Bounded    : {alpha_bounded} (min={min_a_heat:.6f}, max={max_a_heat:.6f})")
     print("-------------------------------------------------------")
 
-    if alpha_bounded and mean_a_heat > 0.10:
+    if alpha_bounded and mean_a_heat > 0.10 and delta_H_domain > 0.0:
         print("\nSTATUS: 1D UNEQUAL CP & VARIABLE DENSITY TEST PASSED!")
     else:
         print("\nSTATUS: TEST FAILED")
@@ -212,3 +240,4 @@ boundaryField { ".*" { type calculated; value uniform 101325; } "(top|bottom|fro
 
 if __name__ == "__main__":
     main()
+
