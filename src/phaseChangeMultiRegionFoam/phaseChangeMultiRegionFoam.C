@@ -81,6 +81,23 @@ int main(int argc, char *argv[])
             }
         }
 
+        PtrList<volScalarField> T_outer_prev(solidRegions.size());
+        if (coupled)
+        {
+            forAll(solidRegions, i)
+            {
+                T_outer_prev.set
+                (
+                    i,
+                    new volScalarField
+                    (
+                        IOobject("T_outer_prev", runTime.timeName(), solidRegions[i]),
+                        thermos[i].T()
+                    )
+                );
+            }
+        }
+
         // --- PIMPLE loop
         for (int oCorr=0; oCorr<nOuterCorr; ++oCorr)
         {
@@ -109,6 +126,25 @@ int main(int argc, char *argv[])
                 Info<< "\nSolving energy coupled regions " << endl;
                 fvMatrixAssemblyPtr->solve();
                 #include "correctThermos.H"
+
+                scalar maxDeltaT_outer = 0.0;
+                forAll(solidRegions, i)
+                {
+                    maxDeltaT_outer = max(maxDeltaT_outer, max(mag(thermos[i].T() - T_outer_prev[i])).value());
+                    T_outer_prev[i] = thermos[i].T();
+                }
+
+                if (finalIter && nOuterCorr > 1)
+                {
+                    Info<< "Coupled outer convergence max DeltaT = " << maxDeltaT_outer << " K" << endl;
+                    if (maxDeltaT_outer > 1e-4)
+                    {
+                        WarningInFunction
+                            << "Coupled outer iterations did not converge within " << nOuterCorr
+                            << " outer correctors (residual max DeltaT = " << maxDeltaT_outer
+                            << " K > tol = 1e-4 K)" << endl;
+                    }
+                }
 
                 forAll(fluidRegions, i)
                 {

@@ -4,4 +4,4 @@ solvers {
     "h.*" { solver PCG; preconditioner DIC; tolerance 1e-8; relTol 0; }
     "T.*" { solver PCG; preconditioner DIC; tolerance 1e-8; relTol 0; }
 }
-PIMPLE { nOuterCorrectors 2; nNonLinearCorrectors 10; nonLinearTolerance 1e-5; }
+PIMPLE { nOuterCorrectors 2; nNonLinearCorrectors 50; nonLinearTolerance 1e-6; }

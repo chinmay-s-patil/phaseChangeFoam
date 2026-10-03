@@ -21,10 +21,8 @@ namespace Foam
 
  Description
     Enthalpy-Porosity model for general phase-change simulations (solidification,
-    melting, alloy casting, and phase-change thermal storage).
-    Note: Full classical enthalpy-porosity with momentum damping (Darcy source)
-    requires a fluid region where UEqn is solved. In solid phase-change regions,
-    sensible heat conduction and latent heat source terms are active.
+    melting, alloy casting, and phase-change thermal storage) with exact Newton
+    linearization, stateful hysteresis, custom thermophysics, and fluid momentum damping.
 \*---------------------------------------------------------------------------*/
 
 class enthalpyPorosityPhaseChangeModel
@@ -33,29 +31,52 @@ class enthalpyPorosityPhaseChangeModel
 {
 private:
 
-    // Parameters - Melting & Freezing
-    scalar Tlm_;
-    scalar Tum_;
-    scalar Lm_;
+    // Parameters - Melting
+    scalar Tlm_; // Melting lower bound [K]
+    scalar Tum_; // Melting upper bound [K]
+    scalar Lm_;  // Melting latent heat [J/kg]
+
+    // Parameters - Freezing
+    scalar Tlf_; // Freezing lower bound [K]
+    scalar Tuf_; // Freezing upper bound [K]
+    scalar Lf_;  // Freezing latent heat [J/kg]
+
+    // Parameters - Hysteresis
+    bool hysteresisActive_;
+    scalar reversalTol_; // Temperature hysteresis reversal deadband [K]
 
     // Parameters - Darcy & Buoyancy
     scalar beta_; // Thermal expansion coefficient [1/K]
     scalar Cu_;   // Darcy penalty coefficient [kg/(m3 s)]
     scalar q_;    // Smoothing constant
 
-    // Parameters - Density & Thermo
+    // Parameters - Convection Control
+    bool suppressConvection_;
+
+    // Parameters - Density
     word densityModel_;
     scalar rhoRef_;
     scalar rhoSolid_;
     scalar rhoLiquid_;
+
+    // Parameters - Thermophysical Mode
+    word thermoMode_;
+    scalar Cps_;
+    scalar Cpl_;
+    scalar ks_;
+    scalar kl_;
 
     // Calculated Fields
     volScalarField Cp_;
     volScalarField rho_;
     volScalarField k_;
 
-    //- Phase fraction at start of step (explicit; avoids oldTime() capture ordering)
+    // Trajectory tracking (1.0 = heating, 0.0 = cooling)
+    volScalarField heatingTrajectory_;
+
+    // Start-of-step stored fields for committed phaseFraction_old formulation
     volScalarField phaseFraction_old_;
+    volScalarField heatingTrajectory_old_;
 
     void readDict();
 
@@ -80,6 +101,11 @@ public:
     virtual bool active() const override
     {
         return active_;
+    }
+
+    virtual bool suppressConvection() const override
+    {
+        return suppressConvection_;
     }
 
     virtual void correct() override;
