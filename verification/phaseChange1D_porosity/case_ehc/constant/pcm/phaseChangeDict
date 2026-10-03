@@ -2,5 +2,5 @@
 FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
 phaseChange {
     type ehc;
-    melting { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 163000.0; }
+    melting { T_lowerBound 303.15; T_upperBound 305.15; latentHeat 163000.0; }
 }

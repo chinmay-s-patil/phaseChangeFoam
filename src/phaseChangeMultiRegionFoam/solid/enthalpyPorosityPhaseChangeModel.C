@@ -259,7 +259,7 @@ void Foam::enthalpyPorosityPhaseChangeModel::updateHistory()
 
 Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::latentHeatSource() const
 {
-    tmp<volScalarField> tSource
+    tmp<volScalarField> tSu
     (
         volScalarField::New
         (
@@ -269,45 +269,91 @@ Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::latentHe
         )
     );
 
-    volScalarField& source = tSource.ref();
-    const scalar rDeltaT = 1.0/mesh_.time().deltaTValue();
-    const volScalarField& T = thermo_.T();
-    const volScalarField& h = thermo_.he();
-    const scalar dAlpha = 1.0/(Tum_ - Tlm_);
+    scalarField& Su = tSu.ref().primitiveFieldRef();
+    const scalarField& T = thermo_.T().primitiveField();
+    const scalarField& Told = thermo_.T().oldTime().primitiveField();
+    const scalarField& h = thermo_.he().primitiveField();
+    const scalar rDt = 1.0/mesh_.time().deltaTValue();
+    const scalar dT_mush = Tum_ - Tlm_;
 
-    forAll(T, cellI)
+    forAll(T, i)
     {
-        scalar Tcell = T[cellI];
-        scalar alphaOld = phaseFraction_old_[cellI];
-        scalar rhoL_dt = rho_[cellI] * Lm_ * rDeltaT;
+        const scalar rhoL = rho_[i]*Lm_*rDt;
+        const scalar aCurr = phaseFraction_[i];
+        const scalar aOld = phaseFraction_old_[i];
 
-        if (Tcell <= Tlm_)
+        if (T[i] <= Tlm_ && aOld <= 0.0)
         {
-            source[cellI] = rhoL_dt * alphaOld;
+            Su[i] = 0.0;
         }
-        else if (Tcell >= Tum_)
+        else if (T[i] >= Tum_ && aOld >= 1.0)
         {
-            source[cellI] = - rhoL_dt * (1.0 - alphaOld);
+            Su[i] = 0.0;
         }
         else
         {
-            scalar SpVal = rhoL_dt * dAlpha / max(Cp_[cellI], 1e-10);
-            scalar h_lm = h[cellI] - Cp_[cellI] * (Tcell - Tlm_);
-            source[cellI] = SpVal * h_lm - rhoL_dt * alphaOld;
+            scalar dAlpha = 1.0 / dT_mush;
+            if (T[i] <= Tlm_ || T[i] >= Tum_)
+            {
+                scalar deltaT = mag(T[i] - Told[i]);
+                if (deltaT > dT_mush && mag(aCurr - aOld) > 1e-6)
+                {
+                    dAlpha = mag(aCurr - aOld) / deltaT;
+                }
+            }
+            const scalar Sp = rhoL * dAlpha / max(Cp_[i], 1e-10);
+            Su[i] = rhoL * (aCurr - aOld) - Sp * h[i];
         }
     }
-
-    return tSource;
+    return tSu;
 }
 
 Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::latentHeatSp() const
 {
-    return tmp<volScalarField>::New
+    tmp<volScalarField> tSp
     (
-        IOobject("latentHeatSp", mesh_.time().timeName(), mesh_),
-        mesh_,
-        dimensionedScalar("zero", dimMass/dimVolume/dimTime, 0.0)
+        volScalarField::New
+        (
+            "latentHeatSp",
+            mesh_,
+            dimensionedScalar("zero", dimMass/dimVolume/dimTime, 0.0)
+        )
     );
+
+    scalarField& Sp = tSp.ref().primitiveFieldRef();
+    const scalarField& T = thermo_.T().primitiveField();
+    const scalarField& Told = thermo_.T().oldTime().primitiveField();
+    const scalar rDt = 1.0/mesh_.time().deltaTValue();
+    const scalar dT_mush = Tum_ - Tlm_;
+
+    forAll(T, i)
+    {
+        const scalar aCurr = phaseFraction_[i];
+        const scalar aOld = phaseFraction_old_[i];
+
+        if (T[i] <= Tlm_ && aOld <= 0.0)
+        {
+            Sp[i] = 0.0;
+        }
+        else if (T[i] >= Tum_ && aOld >= 1.0)
+        {
+            Sp[i] = 0.0;
+        }
+        else
+        {
+            scalar dAlpha = 1.0 / dT_mush;
+            if (T[i] <= Tlm_ || T[i] >= Tum_)
+            {
+                scalar deltaT = mag(T[i] - Told[i]);
+                if (deltaT > dT_mush && mag(aCurr - aOld) > 1e-6)
+                {
+                    dAlpha = mag(aCurr - aOld) / deltaT;
+                }
+            }
+            Sp[i] = rho_[i] * Lm_ * rDt * dAlpha / max(Cp_[i], 1e-10);
+        }
+    }
+    return tSp;
 }
 
 Foam::tmp<Foam::volVectorField> Foam::enthalpyPorosityPhaseChangeModel::momentumSource() const

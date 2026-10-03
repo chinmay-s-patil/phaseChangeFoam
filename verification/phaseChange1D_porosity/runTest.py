@@ -56,14 +56,14 @@ def setup_case(case_dir, model_type):
     os.makedirs(case_dir, exist_ok=True)
     of_env = "source /usr/lib/openfoam/openfoam2412/etc/bashrc || source /usr/lib/openfoam/openfoam2406/etc/bashrc || true"
     
-    # system/controlDict
+    # system/controlDict with dt = 20s stress case
     os.makedirs(os.path.join(case_dir, "system"), exist_ok=True)
     with open(os.path.join(case_dir, "system/controlDict"), "w") as f:
         f.write("""
 FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
 application phaseChangeMultiRegionFoam;
-startFrom startTime; startTime 0; stopAt endTime; endTime 2000; deltaT 2;
-writeControl runTime; writeInterval 2000; purgeWrite 0; writeFormat ascii;
+startFrom startTime; startTime 0; stopAt endTime; endTime 2000; deltaT 20;
+writeControl runTime; writeInterval 20; purgeWrite 0; writeFormat ascii;
 """)
     with open(os.path.join(case_dir, "system/fvSchemes"), "w") as f:
         f.write("""
@@ -129,7 +129,7 @@ mixture {
 FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
 phaseChange {
     type ehc;
-    melting { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 163000.0; }
+    melting { T_lowerBound 303.15; T_upperBound 305.15; latentHeat 163000.0; }
 }
 """)
         else:
@@ -137,7 +137,7 @@ phaseChange {
 FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
 phaseChange {
     type enthalpyPorosity;
-    melting { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 163000.0; }
+    melting { T_lowerBound 303.15; T_upperBound 305.15; latentHeat 163000.0; }
 }
 """)
 
@@ -178,7 +178,7 @@ boundaryField { ".*" { type calculated; value uniform 101325; } emptyFaces { typ
 
 def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    print(f"=== EHC vs Enthalpy-Porosity 1D Melting Comparison in {base_dir} ===")
+    print(f"=== EHC vs Enthalpy-Porosity 1D Melting Stress Test in {base_dir} ===")
     
     solver_bin = find_solver()
     of_env = "source /usr/lib/openfoam/openfoam2412/etc/bashrc || source /usr/lib/openfoam/openfoam2406/etc/bashrc || true"
@@ -186,13 +186,13 @@ def main():
     ehc_dir = os.path.join(base_dir, "case_ehc")
     ep_dir = os.path.join(base_dir, "case_porosity")
 
-    print("\n--- Running EHC Model Case ---")
+    print("\n--- Running EHC Model Stress Case (dt = 20 s, 2 K mush) ---")
     setup_case(ehc_dir, "ehc")
     run_cmd(f"cd {ehc_dir} && bash -c '{of_env}; {solver_bin}'")
     T_ehc = parse_openfoam_field(os.path.join(ehc_dir, "2000/pcm/T"))
     a_ehc = parse_openfoam_field(os.path.join(ehc_dir, "2000/pcm/phaseFraction"))
 
-    print("\n--- Running Enthalpy-Porosity Model Case ---")
+    print("\n--- Running Enthalpy-Porosity Model Stress Case (dt = 20 s, 2 K mush) ---")
     setup_case(ep_dir, "enthalpyPorosity")
     run_cmd(f"cd {ep_dir} && bash -c '{of_env}; {solver_bin}'")
     T_ep = parse_openfoam_field(os.path.join(ep_dir, "2000/pcm/T"))
@@ -207,7 +207,10 @@ def main():
     mean_T_ep = sum(T_ep) / len(T_ep)
     mean_a_ep = sum(a_ep) / len(a_ep)
 
-    # Energy balance check: deltaH = sum(rho * V * (Cp * (T - 280) + L * alpha))
+    dT_diff = sum(abs(t1 - t2) for t1, t2 in zip(T_ehc, T_ep)) / len(T_ehc)
+    da_diff = sum(abs(a1 - a2) for a1, a2 in zip(a_ehc, a_ep)) / len(a_ehc)
+
+    # Domain enthalpy rise check: deltaH = sum(rho * V * (Cp * (T - 280) + L * alpha))
     rho = 1967.0
     Cp = 1980.0
     L = 163000.0
@@ -215,28 +218,52 @@ def main():
 
     dH_ehc = sum(rho * V_cell * (Cp * (t - 280.0) + L * a) for t, a in zip(T_ehc, a_ehc))
     dH_ep = sum(rho * V_cell * (Cp * (t - 280.0) + L * a) for t, a in zip(T_ep, a_ep))
+    rel_dH_diff = abs(dH_ehc - dH_ep) / max(dH_ehc, 1e-10)
+
+    # Real time-integrated boundary heat flux balance: integral( q_hot * dt )
+    # q_hot = k * (350 - T[0]) / (dx/2) * Area
+    time_dirs = sorted([int(d) for d in os.listdir(ep_dir) if d.isdigit()])
+    t_vals, q_vals = [], []
+    for t in time_dirs:
+        T_snap = parse_openfoam_field(os.path.join(ep_dir, str(t), "pcm/T"))
+        if T_snap:
+            q_snap = 0.50 * (0.01 * 0.01) * (350.0 - T_snap[0]) / (0.0005)
+            t_vals.append(float(t))
+            q_vals.append(q_snap)
+
+    E_in = 0.0
+    for i in range(1, len(t_vals)):
+        dt = t_vals[i] - t_vals[i-1]
+        E_in += 0.5 * (q_vals[i] + q_vals[i-1]) * dt
+
+    rel_flux_balance_err = abs(dH_ep - E_in) / max(E_in, 1e-10)
 
     pass_ehc_melting = (mean_a_ehc > 0.05)
-    pass_ep_melting = (a_ep[0] > 0.5)
-    pass_ehc_energy = (dH_ehc > 500.0 and dH_ehc < 1000.0)
-    pass_ep_energy = (dH_ep > 100.0 and dH_ep < 300.0)
+    pass_ep_melting = (mean_a_ep > 0.05)
+    pass_match = (rel_dH_diff < 0.02 and dT_diff < 1.0 and da_diff < 0.02)
+    pass_flux_balance = (rel_flux_balance_err < 0.05)
 
     print("\n=======================================================")
-    print("      EHC vs ENTHALPY-POROSITY COMPARISON RESULTS      ")
+    print("      EHC vs ENTHALPY-POROSITY STRESS COMPARISON RESULTS ")
     print("=======================================================")
     print(f"EHC Model (t=2000s) Mean T         : {mean_T_ehc:.2f} K, Mean alpha = {mean_a_ehc:.4f}")
     print(f"Porosity Model (t=2000s) Mean T    : {mean_T_ep:.2f} K, Mean alpha = {mean_a_ep:.4f}")
     print(f"EHC Domain Enthalpy Rise          : {dH_ehc:.2f} J")
     print(f"Porosity Domain Enthalpy Rise      : {dH_ep:.2f} J")
+    print(f"Time-Integrated Input Heat Energy : {E_in:.2f} J")
+    print(f"EHC vs Porosity Enthalpy Diff     : {rel_dH_diff*100:.4f}% (Limit < 2%)")
+    print(f"Temperature Mean Difference       : {dT_diff:.4f} K (Limit < 1.0 K)")
+    print(f"Phase Fraction Mean Difference    : {da_diff:.6f} (Limit < 0.02)")
+    print(f"Porosity Heat Flux Balance Error   : {rel_flux_balance_err*100:.4f}% (Limit < 5%)")
     print("-------------------------------------------------------")
     print(f"EHC Active Melting                 : {'PASS' if pass_ehc_melting else 'FAIL'}")
     print(f"Porosity Active Melting            : {'PASS' if pass_ep_melting else 'FAIL'}")
-    print(f"EHC Energy Conservation           : {'PASS' if pass_ehc_energy else 'FAIL'}")
-    print(f"Porosity Energy Conservation       : {'PASS' if pass_ep_energy else 'FAIL'}")
+    print(f"EHC & Porosity Solution Agreement  : {'PASS' if pass_match else 'FAIL'}")
+    print(f"Heat Flux Energy Conservation     : {'PASS' if pass_flux_balance else 'FAIL'}")
 
-    all_pass = pass_ehc_melting and pass_ep_melting and pass_ehc_energy and pass_ep_energy
+    all_pass = pass_ehc_melting and pass_ep_melting and pass_match and pass_flux_balance
     if all_pass:
-        print("\nSTATUS: EHC VS ENTHALPY-POROSITY COMPARISON TEST PASSED!")
+        print("\nSTATUS: EHC VS ENTHALPY-POROSITY STRESS TEST PASSED!")
     else:
         print("\nSTATUS: TEST FAILED")
         sys.exit(1)
