@@ -32,10 +32,9 @@ Foam::enthalpyPorosityPhaseChangeModel::enthalpyPorosityPhaseChangeModel
     beta_(50e-6),
     Cu_(1e5),
     q_(1e-2),
-    relax_(0.2),
-    rhoRef_(1967.0),
-    rhoSolid_(1967.0),
-    rhoLiquid_(1850.0),
+    rhoRef_(0.0),
+    rhoSolid_(0.0),
+    rhoLiquid_(0.0),
     Cp_
     (
         IOobject("CpEff", mesh.time().timeName(), mesh, IOobject::NO_READ, IOobject::AUTO_WRITE),
@@ -118,7 +117,6 @@ void Foam::enthalpyPorosityPhaseChangeModel::readDict()
         beta_ = epDict.lookupOrDefault<scalar>("beta", 50e-6);
         Cu_ = epDict.lookupOrDefault<scalar>("Cu", 1e5);
         q_ = epDict.lookupOrDefault<scalar>("q", 1e-2);
-        relax_ = epDict.lookupOrDefault<scalar>("relax", 0.2);
     }
 
     tmp<volScalarField> tRhoThermoInit = thermo_.rho();
@@ -178,7 +176,7 @@ void Foam::enthalpyPorosityPhaseChangeModel::correct()
             phaseState_[cellI] = 1.0;
         }
 
-        phaseFraction_[cellI] = (1.0 - relax_)*phaseFraction_[cellI] + relax_*alphaL;
+        phaseFraction_[cellI] = alphaL;
         if (densityModel_ == "thermo")
         {
             rho_[cellI] = rhoField[cellI];
@@ -230,7 +228,7 @@ void Foam::enthalpyPorosityPhaseChangeModel::correct()
                 pPhaseState[facei] = 1.0;
             }
 
-            pPhaseFraction[facei] = (1.0 - relax_)*pPhaseFraction[facei] + relax_*alphaL;
+            pPhaseFraction[facei] = alphaL;
             if (densityModel_ == "thermo")
             {
                 pRho[facei] = pRhoThermo[facei];
@@ -261,9 +259,6 @@ void Foam::enthalpyPorosityPhaseChangeModel::updateHistory()
 
 Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::latentHeatSource() const
 {
-    // Term is added to the LHS of the energy equation (hEqn += source), i.e.
-    //   rho Cp dT/dt - div(k grad T) + rho L dalpha/dt = ...
-    // so melting (dalpha/dt > 0) absorbs heat.
     tmp<volScalarField> tSource
     (
         volScalarField::New
@@ -276,13 +271,43 @@ Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::latentHe
 
     volScalarField& source = tSource.ref();
     const scalar rDeltaT = 1.0/mesh_.time().deltaTValue();
+    const volScalarField& T = thermo_.T();
+    const volScalarField& h = thermo_.he();
+    const scalar dAlpha = 1.0/(Tum_ - Tlm_);
 
-    source.primitiveFieldRef() =
-        rho_.primitiveField()*Lm_
-       *(phaseFraction_.primitiveField() - phaseFraction_old_.primitiveField())
-       *rDeltaT;
+    forAll(T, cellI)
+    {
+        scalar Tcell = T[cellI];
+        scalar alphaOld = phaseFraction_old_[cellI];
+        scalar rhoL_dt = rho_[cellI] * Lm_ * rDeltaT;
+
+        if (Tcell <= Tlm_)
+        {
+            source[cellI] = rhoL_dt * alphaOld;
+        }
+        else if (Tcell >= Tum_)
+        {
+            source[cellI] = - rhoL_dt * (1.0 - alphaOld);
+        }
+        else
+        {
+            scalar SpVal = rhoL_dt * dAlpha / max(Cp_[cellI], 1e-10);
+            scalar h_lm = h[cellI] - Cp_[cellI] * (Tcell - Tlm_);
+            source[cellI] = SpVal * h_lm - rhoL_dt * alphaOld;
+        }
+    }
 
     return tSource;
+}
+
+Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::latentHeatSp() const
+{
+    return tmp<volScalarField>::New
+    (
+        IOobject("latentHeatSp", mesh_.time().timeName(), mesh_),
+        mesh_,
+        dimensionedScalar("zero", dimMass/dimVolume/dimTime, 0.0)
+    );
 }
 
 Foam::tmp<Foam::volVectorField> Foam::enthalpyPorosityPhaseChangeModel::momentumSource() const

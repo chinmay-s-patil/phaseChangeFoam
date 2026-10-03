@@ -40,7 +40,7 @@
 
         if (pcModel.active())
         {
-            hEqn += pcModel.latentHeatSource();
+            hEqn += pcModel.latentHeatSource() + fvm::Sp(pcModel.latentHeatSp(), h);
         }
 
         hEqn.relax();

@@ -139,8 +139,19 @@ public:
     //- Access thermal conductivity field
     virtual tmp<volScalarField> k() const = 0;
 
-    //- Access latent heat source term
+    //- Access explicit latent heat source term
     virtual tmp<volScalarField> latentHeatSource() const = 0;
+
+    //- Access implicit latent heat linearisation coefficient (default: zero)
+    virtual tmp<volScalarField> latentHeatSp() const
+    {
+        return tmp<volScalarField>::New
+        (
+            IOobject("latentHeatSp", mesh_.time().timeName(), mesh_),
+            mesh_,
+            dimensionedScalar("zero", dimMass/dimVolume/dimTime, 0.0)
+        );
+    }
 
     //- Access momentum source term (default: zero, override in models with Darcy damping)
     virtual tmp<volVectorField> momentumSource() const
