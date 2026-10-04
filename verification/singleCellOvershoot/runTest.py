@@ -48,7 +48,25 @@ def parse_openfoam_field(file_path):
     block = content[start_paren+1:end_paren].strip()
     return [float(x) for x in block.split()]
 
-def setup_single_cell_case(case_dir, T0, Q_source, L_heat, T_lm=300.0, T_um=310.0, T_lf=295.0, T_uf=305.0, alpha0=None, traj0=None, Cps=2000.0, Cpl=2000.0, rhoS=1000.0, rhoL=1000.0):
+def calc_h_sens(T, traj, Cps, Cpl, Tlm=300.0, Tum=310.0, Tlf=295.0, Tuf=305.0):
+    Tl = Tlm if traj > 0.5 else Tlf
+    Tu = Tum if traj > 0.5 else Tuf
+    if T <= Tl:
+        return Cps * T
+    elif T >= Tu:
+        h_l = Cps * Tl
+        h_mush = 0.5 * (Cps + Cpl) * (Tu - Tl)
+        return h_l + h_mush + Cpl * (T - Tu)
+    else:
+        h_l = Cps * Tl
+        dT = T - Tl
+        dTum = Tu - Tl
+        if dTum > 1e-8:
+            return h_l + Cps * dT + 0.5 * (Cpl - Cps) * (dT**2) / dTum
+        else:
+            return h_l
+
+def setup_single_cell_case(case_dir, T0, Q_source, L_heat, T_lm=300.0, T_um=310.0, T_lf=295.0, T_uf=305.0, alpha0=None, traj0=None, Cps=2000.0, Cpl=2000.0, rhoS=1000.0, rhoL=1000.0, direction="both"):
     os.makedirs(case_dir, exist_ok=True)
     os.chdir(case_dir)
     run_cmd("rm -rf [1-9]* 0.* constant/phaseChange/polyMesh constant/polyMesh")
@@ -139,9 +157,9 @@ FoamFile {{ version 2.0; format ascii; class dictionary; location "constant/phas
 active true;
 phaseChange
 {{
-    active true; phaseChangeMode EHC;
-    melting {{ T_lowerBound {T_lm}; T_upperBound {T_um}; latentHeat {L_heat}; }}
-    freezing {{ T_lowerBound {T_lf}; T_upperBound {T_uf}; latentHeat {L_heat}; }}
+    active true; phaseChangeMode EHC; direction {direction};
+    forward {{ T_lowerBound {T_lm}; T_upperBound {T_um}; latentHeat {L_heat}; }}
+    reverse {{ T_lowerBound {T_lf}; T_upperBound {T_uf}; latentHeat {L_heat}; }}
     hysteresis {{ active true; }}
     density {{ model linear; rhoRef {rhoS}; rhoSolid {rhoS}; rhoLiquid {rhoL}; allowNonConservativeDensity true; }}
     thermophysical {{ mode custom; CpSolid {Cps}; CpLiquid {Cpl}; kSolid 1.0; kLiquid 1.0; }}
@@ -153,15 +171,7 @@ phaseChange
     if traj0 is None:
         traj0 = 1.0 if Q_source >= 0 else 0.0
 
-    cp_mush = 0.5 * (Cps + Cpl)
-    h_lm = Cps * T_lm
-    h_um = h_lm + cp_mush * (T_um - T_lm)
-    if T0 <= T_lm:
-        h0 = Cps * T0
-    elif T0 >= T_um:
-        h0 = h_um + Cpl * (T0 - T_um)
-    else:
-        h0 = h_lm + cp_mush * (T0 - T_lm)
+    h0 = calc_h_sens(T0, traj0, Cps, Cpl, T_lm, T_um, T_lf, T_uf)
 
     os.makedirs("0/phaseChange", exist_ok=True)
     with open("0/phaseChange/T", "w") as f:
@@ -212,23 +222,6 @@ boundaryField { walls { type empty; } }
 
     return T_sim, alpha_sim, output
 
-def calc_h_sens(T, traj, Cps, Cpl, Tlm=300.0, Tum=310.0, Tlf=295.0, Tuf=305.0):
-    Tl = Tlm if traj > 0.5 else Tlf
-    Tu = Tum if traj > 0.5 else Tuf
-    if T <= Tl:
-        return Cps * T
-    elif T >= Tu:
-        h_l = Cps * Tl
-        h_mush = 0.5 * (Cps + Cpl) * (Tu - Tl)
-        return h_l + h_mush + Cpl * (T - Tu)
-    else:
-        h_l = Cps * Tl
-        dT = T - Tl
-        dTum = Tu - Tl
-        if dTum > 1e-8:
-            return h_l + Cps * dT + 0.5 * (Cpl - Cps) * (dT**2) / dTum
-        else:
-            return h_l
 
 def calc_delta_h_sens(T0, T1, alpha0, traj0, traj1, Cps, Cpl, Tlm=300.0, Tum=310.0, Tlf=295.0, Tuf=305.0):
     dT = T1 - T0
@@ -249,6 +242,14 @@ def calc_delta_h_sens(T0, T1, alpha0, traj0, traj1, Cps, Cpl, Tlm=300.0, Tum=310
                     dH1 = Cp_plateau * (Texit - T0)
                     dH2 = calc_h_sens(T1, 1.0, Cps, Cpl, Tlm, Tum, Tlf, Tuf) - calc_h_sens(Texit, 1.0, Cps, Cpl, Tlm, Tum, Tlf, Tuf)
                     return dH1 + dH2
+            else: # T0 >= Texit (Cooling step on heating branch, e.g. direction forward)
+                if T1 >= Texit:
+                    return calc_h_sens(T1, 1.0, Cps, Cpl, Tlm, Tum, Tlf, Tuf) - calc_h_sens(T0, 1.0, Cps, Cpl, Tlm, Tum, Tlf, Tuf)
+                else:
+                    Cp_plateau = (1.0 - alpha0) * Cps + alpha0 * Cpl
+                    dH1 = calc_h_sens(Texit, 1.0, Cps, Cpl, Tlm, Tum, Tlf, Tuf) - calc_h_sens(T0, 1.0, Cps, Cpl, Tlm, Tum, Tlf, Tuf)
+                    dH2 = Cp_plateau * (T1 - Texit)
+                    return dH1 + dH2
         else: # Cooling branch
             Texit = Tlf + alpha0 * (Tuf - Tlf)
             if Texit < Tlf: Texit = Tlf
@@ -261,6 +262,14 @@ def calc_delta_h_sens(T0, T1, alpha0, traj0, traj1, Cps, Cpl, Tlm=300.0, Tum=310
                     Cp_plateau = (1.0 - alpha0) * Cps + alpha0 * Cpl
                     dH1 = Cp_plateau * (Texit - T0)
                     dH2 = calc_h_sens(T1, 0.0, Cps, Cpl, Tlm, Tum, Tlf, Tuf) - calc_h_sens(Texit, 0.0, Cps, Cpl, Tlm, Tum, Tlf, Tuf)
+                    return dH1 + dH2
+            else: # T0 <= Texit (Heating step on cooling branch, e.g. direction reverse)
+                if T1 <= Texit:
+                    return calc_h_sens(T1, 0.0, Cps, Cpl, Tlm, Tum, Tlf, Tuf) - calc_h_sens(T0, 0.0, Cps, Cpl, Tlm, Tum, Tlf, Tuf)
+                else:
+                    Cp_plateau = (1.0 - alpha0) * Cps + alpha0 * Cpl
+                    dH1 = calc_h_sens(Texit, 0.0, Cps, Cpl, Tlm, Tum, Tlf, Tuf) - calc_h_sens(T0, 0.0, Cps, Cpl, Tlm, Tum, Tlf, Tuf)
+                    dH2 = Cp_plateau * (T1 - Texit)
                     return dH1 + dH2
 
     return calc_h_sens(T1, traj1, Cps, Cpl, Tlm, Tum, Tlf, Tuf) - calc_h_sens(T0, traj1, Cps, Cpl, Tlm, Tum, Tlf, Tuf)
@@ -590,6 +599,22 @@ heatSource {{ type scalarSemiImplicitSource; active true; selectionMode all; vol
         print("STATUS: CASE 15 FAILED!")
         all_passed = False
 
+    # --- Case 16: Direction Forward Locked Plateau Cooling (T0 = 306 K, alpha0 = 0.6 -> 295 K) ---
+    print("\n--- Case 16: Direction Forward Locked Plateau Cooling (T0 = 306 K, alpha0 = 0.6 -> 295 K) ---")
+    case16_dir = os.path.join(base_dir, "case16_forwardLockedCooling")
+    Q16 = calc_exact_q_source(T0=306.0, T1=295.0, alpha0=0.6, alpha1=0.6, traj0=1.0, traj1=1.0, Cps=1980.0, Cpl=2320.0, rhoS=1000.0, rhoL=1000.0, L=100000.0)
+    T16, a16, log16 = setup_single_cell_case(case16_dir, T0=306.0, Q_source=Q16, L_heat=100000.0, Cps=1980.0, Cpl=2320.0, alpha0=0.6, traj0=1.0, direction="forward")
+    err16 = abs(T16 - 295.0)
+    err_a16 = abs(a16 - 0.6)
+    print(f"Simulated T = {T16:.6f} K, alphaL = {a16:.6f}")
+    print(f"Exact T     = 295.000000 K, alphaL = 0.600000")
+    print(f"Temperature Error = {err16:.6f} K, Alpha Error = {err_a16:.6f}")
+    if err16 < 0.01 and err_a16 < 0.001:
+        print("STATUS: CASE 16 PASSED!")
+    else:
+        print("STATUS: CASE 16 FAILED!")
+        all_passed = False
+
     print("\n=======================================================")
     print("      SINGLE-CELL VERIFICATION SUITE SUMMARY           ")
     print("=======================================================")
@@ -608,6 +633,7 @@ heatSource {{ type scalarSemiImplicitSource; active true; selectionMode all; vol
     print(f"Case 13 (Multi-Step Reversal)  : {'PASSED' if err13 < 0.001 else 'FAILED'} (err = {err13:.6f} K)")
     print(f"Case 14 (Unequal Cp Closed)    : {'PASSED' if err14 < 0.01 else 'FAILED'} (err = {err14:.6f} K)")
     print(f"Case 15 (Liquid Reversal)      : {'PASSED' if err15 < 0.01 else 'FAILED'} (err = {err15:.6f} K)")
+    print(f"Case 16 (Forward Locked Cool)  : {'PASSED' if err16 < 0.01 else 'FAILED'} (err = {err16:.6f} K)")
     print("-------------------------------------------------------")
 
     if all_passed:

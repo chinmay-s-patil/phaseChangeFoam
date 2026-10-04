@@ -31,6 +31,18 @@ namespace Foam
 
 class phaseChangeModel
 {
+public:
+
+    //- Phase change direction mode restriction
+    enum class direction
+    {
+        both,
+        forward,
+        reverse
+    };
+
+    static const Enum<direction> directionNames;
+
 protected:
 
     // Protected data
@@ -39,15 +51,18 @@ protected:
 
     bool active_;
 
-    // Parameters - Melting
-    scalar Tlm_; // Melting lower bound [K]
-    scalar Tum_; // Melting upper bound [K]
-    scalar Lm_;  // Melting latent heat [J/kg]
+    // Direction mode restriction
+    direction dir_;
 
-    // Parameters - Freezing
-    scalar Tlf_; // Freezing lower bound [K]
-    scalar Tuf_; // Freezing upper bound [K]
-    scalar Lf_;  // Freezing latent heat [J/kg]
+    // Parameters - Melting / Forward
+    scalar Tlm_; // Melting/Forward lower bound [K]
+    scalar Tum_; // Melting/Forward upper bound [K]
+    scalar Lm_;  // Melting/Forward latent heat [J/kg]
+
+    // Parameters - Freezing / Reverse
+    scalar Tlf_; // Freezing/Reverse lower bound [K]
+    scalar Tuf_; // Freezing/Reverse upper bound [K]
+    scalar Lf_;  // Freezing/Reverse latent heat [J/kg]
 
     // Parameters - Hysteresis
     bool hysteresisActive_;
@@ -91,7 +106,26 @@ protected:
     //- Convection suppression flag
     bool suppressConvection_;
 
-    // Protected helper functions
+    // Protected helper structs and functions
+    struct StateResult
+    {
+        scalar traj;
+        scalar Trev;
+        scalar aVal;
+        scalar stateVal;
+        bool isPlateau;
+        scalar dAlpha_dT;
+    };
+
+    StateResult evalState
+    (
+        scalar T,
+        scalar Told,
+        scalar aOld,
+        scalar trajOld,
+        scalar TrevOld
+    ) const;
+
     void readDict();
     void readConvectionDict(const dictionary& pcDict);
 

@@ -16,6 +16,13 @@ namespace Foam
 {
     defineTypeNameAndDebug(phaseChangeModel, 0);
     defineRunTimeSelectionTable(phaseChangeModel, dictionary);
+
+    const Enum<phaseChangeModel::direction> phaseChangeModel::directionNames
+    ({
+        { direction::both, "both" },
+        { direction::forward, "forward" },
+        { direction::reverse, "reverse" }
+    });
 }
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
@@ -30,6 +37,7 @@ Foam::phaseChangeModel::phaseChangeModel
     mesh_(mesh),
     thermo_(thermo),
     active_(false),
+    dir_(direction::both),
     Tlm_(300.0),
     Tum_(310.0),
     Lm_(1.0e5),
@@ -37,7 +45,7 @@ Foam::phaseChangeModel::phaseChangeModel
     Tuf_(310.0),
     Lf_(1.0e5),
     hysteresisActive_(false),
-    reversalTol_(1e-4),
+    reversalTol_(1e-6),
     densityModel_("thermo"),
     rhoRef_(1000.0),
     rhoSolid_(1000.0),
@@ -278,7 +286,7 @@ void Foam::phaseChangeModel::readDict()
     }
 
     const dictionary& pcDict = phaseChangeDict.subDict("phaseChange");
-    checkAllowedKeys(pcDict, {"active", "phaseChangeMode", "type", "melting", "freezing", "hysteresis", "density", "thermophysical", "thermo", "convection", "porosity", "buoyancy"});
+    checkAllowedKeys(pcDict, {"active", "phaseChangeMode", "type", "direction", "melting", "freezing", "forward", "reverse", "hysteresis", "density", "thermophysical", "thermo", "convection", "porosity", "buoyancy"});
 
     active_ = pcDict.lookupOrDefault<bool>("active", true);
 
@@ -287,14 +295,22 @@ void Foam::phaseChangeModel::readDict()
         return;
     }
 
-    // Melting sub-dictionary is mandatory
-    if (!pcDict.found("melting"))
+    dir_ = directionNames.getOrDefault("direction", pcDict, direction::both);
+
+    // Forward / Melting sub-dictionary is mandatory
+    word forwardKey = pcDict.found("forward") ? "forward" : (pcDict.found("melting") ? "melting" : "");
+    if (forwardKey.empty())
     {
         FatalIOErrorInFunction(pcDict)
-            << "Mandatory 'melting' block missing in phaseChangeDict for region "
+            << "Mandatory 'forward' (or legacy 'melting') block missing in phaseChangeDict for region "
             << mesh_.name() << exit(FatalIOError);
     }
-    const dictionary& meltDict = pcDict.subDict("melting");
+    if (forwardKey == "melting" && !pcDict.found("forward"))
+    {
+        WarningInFunction
+            << "Key 'melting' in phaseChange dictionary is deprecated. Use 'forward' instead." << endl;
+    }
+    const dictionary& meltDict = pcDict.subDict(forwardKey);
     checkAllowedKeys(meltDict, {"T_lowerBound", "T_upperBound", "latentHeat"});
     Tlm_ = meltDict.get<scalar>("T_lowerBound");
     Tum_ = meltDict.get<scalar>("T_upperBound");
@@ -304,18 +320,24 @@ void Foam::phaseChangeModel::readDict()
     {
         FatalIOErrorInFunction(meltDict)
             << "T_upperBound (" << Tum_ << ") must be strictly greater than "
-            << "T_lowerBound (" << Tlm_ << ") in melting block for region "
+            << "T_lowerBound (" << Tlm_ << ") in forward/melting block for region "
             << mesh_.name() << exit(FatalIOError);
     }
 
-    // Freezing sub-dictionary (defaults to melting values if hysteresis inactive)
+    // Reverse / Freezing sub-dictionary (defaults to forward values if hysteresis inactive)
     Tlf_ = Tlm_;
     Tuf_ = Tum_;
     Lf_  = Lm_;
 
-    if (pcDict.found("freezing"))
+    word reverseKey = pcDict.found("reverse") ? "reverse" : (pcDict.found("freezing") ? "freezing" : "");
+    if (!reverseKey.empty())
     {
-        const dictionary& freezeDict = pcDict.subDict("freezing");
+        if (reverseKey == "freezing" && !pcDict.found("reverse"))
+        {
+            WarningInFunction
+                << "Key 'freezing' in phaseChange dictionary is deprecated. Use 'reverse' instead." << endl;
+        }
+        const dictionary& freezeDict = pcDict.subDict(reverseKey);
         checkAllowedKeys(freezeDict, {"T_lowerBound", "T_upperBound", "latentHeat"});
         Tlf_ = freezeDict.lookupOrDefault<scalar>("T_lowerBound", Tlm_);
         Tuf_ = freezeDict.lookupOrDefault<scalar>("T_upperBound", Tum_);
@@ -378,12 +400,12 @@ void Foam::phaseChangeModel::readDict()
             ks_  = thDict.getOrDefault<scalar>("kSolid", thDict.lookupOrDefault<scalar>("ks", 1.0));
             kl_  = thDict.getOrDefault<scalar>("kLiquid", thDict.lookupOrDefault<scalar>("kl", 1.0));
 
-            scalar thermoCpVal = thermo_.Cp()().primitiveField()[0];
-            if (mag(thermoCpVal - Cps_) > 1e-4)
+            scalar maxCpDiff = gMax(mag(thermo_.Cp()().primitiveField() - Cps_));
+            if (maxCpDiff > 1e-4)
             {
                 FatalIOErrorInFunction(pcDict)
-                    << "In custom thermo mode, thermophysicalProperties Cp (" << thermoCpVal
-                    << ") must match CpSolid (" << Cps_ << ") to ensure consistent boundary face enthalpy."
+                    << "In custom thermo mode, thermophysicalProperties Cp must match CpSolid (" << Cps_
+                    << ") across all cells (max diff = " << maxCpDiff << ")."
                     << exit(FatalIOError);
             }
         }
@@ -412,6 +434,139 @@ void Foam::phaseChangeModel::readConvectionDict(const dictionary& pcDict)
             << "regions. Set suppress true or use enthalpyPorosity mode."
             << exit(FatalIOError);
     }
+}
+
+
+Foam::phaseChangeModel::StateResult Foam::phaseChangeModel::evalState
+(
+    scalar Tc,
+    scalar Told,
+    scalar aOld,
+    scalar trajOld,
+    scalar TrevOld
+) const
+{
+    StateResult res;
+
+    // Trajectory tracking with last reversal temperature tracking
+    scalar traj = trajOld;
+    scalar Trev = TrevOld;
+
+    if (traj > 0.5) // Heating branch
+    {
+        if (Tc > Trev)
+        {
+            Trev = Tc;
+        }
+        else if (Trev - Tc > reversalTol_)
+        {
+            traj = 0.0; // Cooling reversal
+            Trev = Tc;
+        }
+    }
+    else // Cooling branch
+    {
+        if (Tc < Trev)
+        {
+            Trev = Tc;
+        }
+        else if (Tc - Trev > reversalTol_)
+        {
+            traj = 1.0; // Heating reversal
+            Trev = Tc;
+        }
+    }
+
+    // Direction flag enforcement (override trajectory if forward or reverse)
+    if (dir_ == direction::forward)
+    {
+        traj = 1.0;
+    }
+    else if (dir_ == direction::reverse)
+    {
+        traj = 0.0;
+    }
+
+    res.traj = traj;
+    res.Trev = Trev;
+
+    // Phase fraction & state machine calculation
+    scalar aVal = 0.0;
+    scalar stateVal = 0.0; // 0 = solid, 1 = melting, 2 = liquid, 3 = freezing
+    bool isPlateau = false;
+
+    scalar a_melt = (Tum_ > Tlm_) ? clamp((Tc - Tlm_) / (Tum_ - Tlm_), 0.0, 1.0) : (Tc >= Tum_ ? 1.0 : 0.0);
+    scalar a_freeze = (Tuf_ > Tlf_) ? clamp((Tc - Tlf_) / (Tuf_ - Tlf_), 0.0, 1.0) : (Tc >= Tuf_ ? 1.0 : 0.0);
+
+    if (traj > 0.5) // Heating branch
+    {
+        if (hysteresisActive_ && a_melt < aOld)
+        {
+            aVal = aOld;
+            isPlateau = true;
+        }
+        else
+        {
+            aVal = a_melt;
+        }
+
+        if (aVal <= 0.0) stateVal = 0.0;
+        else if (aVal >= 1.0) stateVal = 2.0;
+        else stateVal = 1.0;
+    }
+    else // Cooling branch
+    {
+        if (hysteresisActive_ && a_freeze > aOld)
+        {
+            aVal = aOld;
+            isPlateau = true;
+        }
+        else
+        {
+            aVal = a_freeze;
+        }
+
+        if (aVal <= 0.0) stateVal = 0.0;
+        else if (aVal >= 1.0) stateVal = 2.0;
+        else stateVal = 3.0;
+    }
+
+    // Direction restriction: forward (irreversible melting/evaporation) or reverse (irreversible freezing/condensation)
+    if (dir_ == direction::forward)
+    {
+        aVal = max(aVal, aOld);
+    }
+    else if (dir_ == direction::reverse)
+    {
+        aVal = min(aVal, aOld);
+    }
+
+    res.aVal = aVal;
+    res.stateVal = stateVal;
+    res.isPlateau = isPlateau;
+
+    // Determine dAlpha_dT for Newton tangent stabilization
+    scalar dAlpha_dT = 0.0;
+    if (!isPlateau)
+    {
+        if (traj > 0.5) // Heating branch
+        {
+            if ((Tc > Tlm_ && Tc < Tum_) || (Tc >= Tum_ && aOld < 1.0))
+            {
+                dAlpha_dT = (Tum_ > Tlm_) ? (1.0 / (Tum_ - Tlm_)) : 0.0;
+            }
+        }
+        else // Cooling branch
+        {
+            if ((Tc > Tlf_ && Tc < Tuf_) || (Tc <= Tlf_ && aOld > 0.0))
+            {
+                dAlpha_dT = (Tuf_ > Tlf_) ? (1.0 / (Tuf_ - Tlf_)) : 0.0;
+            }
+        }
+    }
+    res.dAlpha_dT = dAlpha_dT;
+
+    return res;
 }
 
 
@@ -485,6 +640,20 @@ Foam::scalar Foam::phaseChangeModel::deltaHSens
                     return dH1 + dH2;
                 }
             }
+            else // Told >= Texit (Cooling step on heating branch, e.g. direction::forward)
+            {
+                if (Tnew >= Texit)
+                {
+                    return hSens(Tnew, 1.0) - hSens(Told, 1.0);
+                }
+                else
+                {
+                    scalar Cp_plateau = (1.0 - aOld) * Cps_ + aOld * Cpl_;
+                    scalar dH1 = hSens(Texit, 1.0) - hSens(Told, 1.0);
+                    scalar dH2 = Cp_plateau * (Tnew - Texit);
+                    return dH1 + dH2;
+                }
+            }
         }
         else // Cooling branch
         {
@@ -504,6 +673,20 @@ Foam::scalar Foam::phaseChangeModel::deltaHSens
                     scalar Cp_plateau = (1.0 - aOld) * Cps_ + aOld * Cpl_;
                     scalar dH1 = Cp_plateau * (Texit - Told);
                     scalar dH2 = hSens(Tnew, 0.0) - hSens(Texit, 0.0);
+                    return dH1 + dH2;
+                }
+            }
+            else // Told <= Texit (Heating step on cooling branch, e.g. direction::reverse)
+            {
+                if (Tnew <= Texit)
+                {
+                    return hSens(Tnew, 0.0) - hSens(Told, 0.0);
+                }
+                else
+                {
+                    scalar Cp_plateau = (1.0 - aOld) * Cps_ + aOld * Cpl_;
+                    scalar dH1 = hSens(Texit, 0.0) - hSens(Told, 0.0);
+                    scalar dH2 = Cp_plateau * (Tnew - Texit);
                     return dH1 + dH2;
                 }
             }
@@ -554,101 +737,19 @@ void Foam::phaseChangeModel::correct()
         scalar Told = ToldCells[celli];
         scalar aOld = alphaOldCells[celli];
 
-        // Trajectory tracking with last reversal temperature tracking
-        scalar traj = trajOldCells[celli];
-        scalar Trev = TrevOldCells[celli];
+        StateResult st = evalState
+        (
+            Tc,
+            Told,
+            aOld,
+            trajOldCells[celli],
+            TrevOldCells[celli]
+        );
 
-        if (traj > 0.5) // Heating branch
-        {
-            if (Tc > Trev)
-            {
-                Trev = Tc;
-            }
-            else if (Trev - Tc > reversalTol_)
-            {
-                traj = 0.0; // Cooling reversal
-                Trev = Tc;
-            }
-        }
-        else // Cooling branch
-        {
-            if (Tc < Trev)
-            {
-                Trev = Tc;
-            }
-            else if (Tc - Trev > reversalTol_)
-            {
-                traj = 1.0; // Heating reversal
-                Trev = Tc;
-            }
-        }
-
-        trajCells[celli] = traj;
-        TrevCells[celli] = Trev;
-
-        // Phase fraction & state machine calculation
-        scalar aVal = 0.0;
-        scalar stateVal = 0.0; // 0 = solid, 1 = melting, 2 = liquid, 3 = freezing
-        bool isPlateau = false;
-
-        scalar a_melt = (Tum_ > Tlm_) ? clamp((Tc - Tlm_) / (Tum_ - Tlm_), 0.0, 1.0) : (Tc >= Tum_ ? 1.0 : 0.0);
-        scalar a_freeze = (Tuf_ > Tlf_) ? clamp((Tc - Tlf_) / (Tuf_ - Tlf_), 0.0, 1.0) : (Tc >= Tuf_ ? 1.0 : 0.0);
-
-        if (traj > 0.5) // Heating branch
-        {
-            if (hysteresisActive_ && a_melt < aOld)
-            {
-                aVal = aOld;
-                isPlateau = true;
-            }
-            else
-            {
-                aVal = a_melt;
-            }
-
-            if (aVal <= 0.0) stateVal = 0.0;
-            else if (aVal >= 1.0) stateVal = 2.0;
-            else stateVal = 1.0;
-        }
-        else // Cooling branch
-        {
-            if (hysteresisActive_ && a_freeze > aOld)
-            {
-                aVal = aOld;
-                isPlateau = true;
-            }
-            else
-            {
-                aVal = a_freeze;
-            }
-
-            if (aVal <= 0.0) stateVal = 0.0;
-            else if (aVal >= 1.0) stateVal = 2.0;
-            else stateVal = 3.0;
-        }
-
-        alphaCells[celli] = aVal;
-        stateCells[celli] = stateVal;
-
-        // Determine dAlpha_dT for Newton tangent stabilization
-        scalar dAlpha_dT = 0.0;
-        if (!isPlateau)
-        {
-            if (traj > 0.5) // Heating branch
-            {
-                if ((Tc > Tlm_ && Tc < Tum_) || (Tc >= Tum_ && aOld < 1.0))
-                {
-                    dAlpha_dT = (Tum_ > Tlm_) ? (1.0 / (Tum_ - Tlm_)) : 0.0;
-                }
-            }
-            else // Cooling branch
-            {
-                if ((Tc > Tlf_ && Tc < Tuf_) || (Tc <= Tlf_ && aOld > 0.0))
-                {
-                    dAlpha_dT = (Tuf_ > Tlf_) ? (1.0 / (Tuf_ - Tlf_)) : 0.0;
-                }
-            }
-        }
+        trajCells[celli] = st.traj;
+        TrevCells[celli] = st.Trev;
+        alphaCells[celli] = st.aVal;
+        stateCells[celli] = st.stateVal;
 
         // Sensible heat capacity Cp calculation (path-secant C_p,eff)
         scalar cpVal = CpThermoCells[celli];
@@ -657,13 +758,13 @@ void Foam::phaseChangeModel::correct()
             scalar dT_step = Tc - Told;
             if (mag(dT_step) > 1e-8)
             {
-                cpVal = deltaHSens(Tc, Told, aOld, traj, trajOldCells[celli]) / dT_step;
+                cpVal = deltaHSens(Tc, Told, aOld, st.traj, trajOldCells[celli]) / dT_step;
             }
             else
             {
-                cpVal = (1.0 - aVal) * Cps_ + aVal * Cpl_;
+                cpVal = (1.0 - st.aVal) * Cps_ + st.aVal * Cpl_;
             }
-            kCells[celli] = (1.0 - aVal) * ks_ + aVal * kl_;
+            kCells[celli] = (1.0 - st.aVal) * ks_ + st.aVal * kl_;
         }
         else
         {
@@ -676,28 +777,28 @@ void Foam::phaseChangeModel::correct()
         scalar rhoBar = rhoThermoCells[celli];
         if (densityModel_ == "linear")
         {
-            rhoVal = (1.0 - aVal) * rhoSolid_ + aVal * rhoLiquid_;
-            scalar a_bar = 0.5 * (aVal + aOld);
+            rhoVal = (1.0 - st.aVal) * rhoSolid_ + st.aVal * rhoLiquid_;
+            scalar a_bar = 0.5 * (st.aVal + aOld);
             rhoBar = (1.0 - a_bar) * rhoSolid_ + a_bar * rhoLiquid_;
         }
         rhoCells[celli] = rhoVal;
 
         // Newton tangent slope Sp = + (rho_bar * L * dAlpha_dT) / (dt * Cp_thermo)
-        // Physical latent heat source Su_phys = + (rho_bar * L * (aVal - aOld)) / dt
-        scalar L = (traj > 0.5) ? Lm_ : Lf_;
+        // Explicit latent heat source Su = + (rho_bar * L * (aVal - aOld)) / dt
+        // In energy equation hEqn: hEqn == ... + Su - fvm::Sp(Sp, h), so Su acts as a sink during melting (dAlpha > 0)
+        scalar L = (st.traj > 0.5) ? Lm_ : Lf_;
         scalar SpVal = 0.0;
         scalar cpThVal = CpThermoCells[celli];
-        if (dAlpha_dT > 0.0 && cpThVal > 0.0)
+        if (st.dAlpha_dT > 0.0 && cpThVal > 0.0)
         {
-            SpVal = (rhoBar * L * dAlpha_dT) / (dt * cpThVal);
+            SpVal = (rhoBar * L * st.dAlpha_dT) / (dt * cpThVal);
         }
 
-        scalar SuVal = (rhoBar * L * (aVal - aOld)) / dt;
+        scalar SuVal = (rhoBar * L * (st.aVal - aOld)) / dt;
 
         SpCells[celli] = SpVal;
         SuCells[celli] = SuVal;
     }
-
 
 
     // Per-face boundary evaluations for non-constraint patches
@@ -735,98 +836,19 @@ void Foam::phaseChangeModel::correct()
             scalar Toldf = ToldFace[faceI];
             scalar aOldf = alphaOldFace[faceI];
 
-            scalar trajf = trajOldFace[faceI];
-            scalar Trevf = TrevOldFace[faceI];
+            StateResult stf = evalState
+            (
+                Tf,
+                Toldf,
+                aOldf,
+                trajOldFace[faceI],
+                TrevOldFace[faceI]
+            );
 
-            if (trajf > 0.5) // Heating branch
-            {
-                if (Tf > Trevf)
-                {
-                    Trevf = Tf;
-                }
-                else if (Trevf - Tf > reversalTol_)
-                {
-                    trajf = 0.0; // Cooling reversal
-                    Trevf = Tf;
-                }
-            }
-            else // Cooling branch
-            {
-                if (Tf < Trevf)
-                {
-                    Trevf = Tf;
-                }
-                else if (Tf - Trevf > reversalTol_)
-                {
-                    trajf = 1.0; // Heating reversal
-                    Trevf = Tf;
-                }
-            }
-
-            trajFace[faceI] = trajf;
-            TrevFace[faceI] = Trevf;
-
-            scalar aValf = 0.0;
-            scalar stateValf = 0.0;
-            bool isPlateauf = false;
-
-            scalar a_meltf = (Tum_ > Tlm_) ? clamp((Tf - Tlm_) / (Tum_ - Tlm_), 0.0, 1.0) : (Tf >= Tum_ ? 1.0 : 0.0);
-            scalar a_freezef = (Tuf_ > Tlf_) ? clamp((Tf - Tlf_) / (Tuf_ - Tlf_), 0.0, 1.0) : (Tf >= Tuf_ ? 1.0 : 0.0);
-
-            if (trajf > 0.5) // Heating branch
-            {
-                if (hysteresisActive_ && a_meltf < aOldf)
-                {
-                    aValf = aOldf;
-                    isPlateauf = true;
-                }
-                else
-                {
-                    aValf = a_meltf;
-                }
-
-                if (aValf <= 0.0) stateValf = 0.0;
-                else if (aValf >= 1.0) stateValf = 2.0;
-                else stateValf = 1.0;
-            }
-            else // Cooling branch
-            {
-                if (hysteresisActive_ && a_freezef > aOldf)
-                {
-                    aValf = aOldf;
-                    isPlateauf = true;
-                }
-                else
-                {
-                    aValf = a_freezef;
-                }
-
-                if (aValf <= 0.0) stateValf = 0.0;
-                else if (aValf >= 1.0) stateValf = 2.0;
-                else stateValf = 3.0;
-            }
-
-            alphaFace[faceI] = aValf;
-            stateFace[faceI] = stateValf;
-
-            scalar dAlpha_dTf = 0.0;
-            if (!isPlateauf)
-            {
-                if (trajf > 0.5) // Heating branch
-                {
-                    if ((Tf > Tlm_ && Tf < Tum_) || (Tf >= Tum_ && aOldf < 1.0))
-                    {
-                        dAlpha_dTf = (Tum_ > Tlm_) ? (1.0 / (Tum_ - Tlm_)) : 0.0;
-                    }
-                }
-                else // Cooling branch
-                {
-                    if ((Tf > Tlf_ && Tf < Tuf_) || (Tf <= Tlf_ && aOldf > 0.0))
-                    {
-                        dAlpha_dTf = (Tuf_ > Tlf_) ? (1.0 / (Tuf_ - Tlf_)) : 0.0;
-                    }
-                }
-            }
+            trajFace[faceI] = stf.traj;
+            TrevFace[faceI] = stf.Trev;
+            alphaFace[faceI] = stf.aVal;
+            stateFace[faceI] = stf.stateVal;
 
             scalar cpValf = CpThermoFace[faceI];
             if (thermoMode_ == "custom")
@@ -834,13 +856,13 @@ void Foam::phaseChangeModel::correct()
                 scalar dT_stepf = Tf - Toldf;
                 if (mag(dT_stepf) > 1e-8)
                 {
-                    cpValf = deltaHSens(Tf, Toldf, aOldf, trajf, trajOldFace[faceI]) / dT_stepf;
+                    cpValf = deltaHSens(Tf, Toldf, aOldf, stf.traj, trajOldFace[faceI]) / dT_stepf;
                 }
                 else
                 {
-                    cpValf = (1.0 - aValf) * Cps_ + aValf * Cpl_;
+                    cpValf = (1.0 - stf.aVal) * Cps_ + stf.aVal * Cpl_;
                 }
-                kFace[faceI] = (1.0 - aValf) * ks_ + aValf * kl_;
+                kFace[faceI] = (1.0 - stf.aVal) * ks_ + stf.aVal * kl_;
             }
             else
             {
@@ -852,21 +874,21 @@ void Foam::phaseChangeModel::correct()
             scalar rhoBarf = rhoThermoFace[faceI];
             if (densityModel_ == "linear")
             {
-                rhoValf = (1.0 - aValf) * rhoSolid_ + aValf * rhoLiquid_;
-                scalar a_barf = 0.5 * (aValf + aOldf);
+                rhoValf = (1.0 - stf.aVal) * rhoSolid_ + stf.aVal * rhoLiquid_;
+                scalar a_barf = 0.5 * (stf.aVal + aOldf);
                 rhoBarf = (1.0 - a_barf) * rhoSolid_ + a_barf * rhoLiquid_;
             }
             rhoFace[faceI] = rhoValf;
 
-            scalar Lf_val = (trajf > 0.5) ? Lm_ : Lf_;
+            scalar Lf_val = (stf.traj > 0.5) ? Lm_ : Lf_;
             scalar SpValf = 0.0;
             scalar cpThValf = CpThermoFace[faceI];
-            if (dAlpha_dTf > 0.0 && cpThValf > 0.0)
+            if (stf.dAlpha_dT > 0.0 && cpThValf > 0.0)
             {
-                SpValf = (rhoBarf * Lf_val * dAlpha_dTf) / (dt * cpThValf);
+                SpValf = (rhoBarf * Lf_val * stf.dAlpha_dT) / (dt * cpThValf);
             }
 
-            scalar SuValf = (rhoBarf * Lf_val * (aValf - aOldf)) / dt;
+            scalar SuValf = (rhoBarf * Lf_val * (stf.aVal - aOldf)) / dt;
 
             SpFace[faceI] = SpValf;
             SuFace[faceI] = SuValf;
