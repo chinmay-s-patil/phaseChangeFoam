@@ -58,6 +58,7 @@ protected:
     scalar rhoRef_;
     scalar rhoSolid_;
     scalar rhoLiquid_;
+    bool allowNonConservativeDensity_;
 
     // Parameters - Thermophysical Mode
     word thermoMode_;

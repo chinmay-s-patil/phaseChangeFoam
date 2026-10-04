@@ -284,8 +284,20 @@ void Foam::phaseChangeModel::readDict()
         const dictionary& rhoDict = pcDict.subDict("density");
         densityModel_ = rhoDict.lookupOrDefault<word>("model", "thermo");
         rhoRef_   = rhoDict.lookupOrDefault<scalar>("rhoRef", 1000.0);
-        rhoSolid_ = rhoDict.lookupOrDefault<scalar>("solid", rhoRef_);
-        rhoLiquid_= rhoDict.lookupOrDefault<scalar>("liquid", rhoRef_);
+        rhoSolid_ = rhoDict.getOrDefault<scalar>("rhoSolid", rhoDict.lookupOrDefault<scalar>("solid", rhoRef_));
+        rhoLiquid_= rhoDict.getOrDefault<scalar>("rhoLiquid", rhoDict.lookupOrDefault<scalar>("liquid", rhoRef_));
+        allowNonConservativeDensity_ = rhoDict.lookupOrDefault<bool>("allowNonConservativeDensity", false);
+
+        if (densityModel_ == "linear" && mag(rhoSolid_ - rhoLiquid_) > 1e-4 && !allowNonConservativeDensity_)
+        {
+            FatalIOErrorInFunction(pcDict)
+                << "Density model 'linear' with rhoSolid (" << rhoSolid_
+                << ") != rhoLiquid (" << rhoLiquid_
+                << ") in a fixed-volume solid domain is non-conservative for energy storage.\n"
+                << "Set 'allowNonConservativeDensity true;' in phaseChange.density dictionary to proceed, "
+                << "or set density model to 'thermo' (constant density)."
+                << exit(FatalIOError);
+        }
     }
 
     // Thermophysical model (custom vs thermo)
@@ -384,53 +396,55 @@ Foam::scalar Foam::phaseChangeModel::deltaHSens
         return 0.0;
     }
 
-    bool isReversal = (trajNew != trajOld);
-
-    if (isReversal && hysteresisActive_)
+    if (hysteresisActive_ && aOld > 0.0 && aOld < 1.0)
     {
-        if (trajNew > 0.5) // Cooling -> Heating reversal
+        if (trajNew > 0.5) // Heating branch
         {
             scalar Texit = Tlm_ + aOld * (Tum_ - Tlm_);
-            if (Told < Tlm_) Texit = Tlm_;
-            if (Told > Tum_) Texit = Tum_;
+            if (Texit < Tlm_) Texit = Tlm_;
+            if (Texit > Tum_) Texit = Tum_;
 
-            if (Tnew <= Texit)
+            if (Told < Texit)
             {
-                scalar Cp_plateau = (1.0 - aOld) * Cps_ + aOld * Cpl_;
-                return Cp_plateau * dT;
-            }
-            else
-            {
-                scalar Cp_plateau = (1.0 - aOld) * Cps_ + aOld * Cpl_;
-                scalar dH1 = Cp_plateau * (Texit - Told);
-                scalar dH2 = hSens(Tnew, 1.0) - hSens(Texit, 1.0);
-                return dH1 + dH2;
+                if (Tnew <= Texit)
+                {
+                    scalar Cp_plateau = (1.0 - aOld) * Cps_ + aOld * Cpl_;
+                    return Cp_plateau * dT;
+                }
+                else
+                {
+                    scalar Cp_plateau = (1.0 - aOld) * Cps_ + aOld * Cpl_;
+                    scalar dH1 = Cp_plateau * (Texit - Told);
+                    scalar dH2 = hSens(Tnew, 1.0) - hSens(Texit, 1.0);
+                    return dH1 + dH2;
+                }
             }
         }
-        else // Heating -> Cooling reversal
+        else // Cooling branch
         {
             scalar Texit = Tlf_ + aOld * (Tuf_ - Tlf_);
-            if (Told < Tlf_) Texit = Tlf_;
-            if (Told > Tuf_) Texit = Tuf_;
+            if (Texit < Tlf_) Texit = Tlf_;
+            if (Texit > Tuf_) Texit = Tuf_;
 
-            if (Tnew >= Texit)
+            if (Told > Texit)
             {
-                scalar Cp_plateau = (1.0 - aOld) * Cps_ + aOld * Cpl_;
-                return Cp_plateau * dT;
-            }
-            else
-            {
-                scalar Cp_plateau = (1.0 - aOld) * Cps_ + aOld * Cpl_;
-                scalar dH1 = Cp_plateau * (Texit - Told);
-                scalar dH2 = hSens(Tnew, 0.0) - hSens(Texit, 0.0);
-                return dH1 + dH2;
+                if (Tnew >= Texit)
+                {
+                    scalar Cp_plateau = (1.0 - aOld) * Cps_ + aOld * Cpl_;
+                    return Cp_plateau * dT;
+                }
+                else
+                {
+                    scalar Cp_plateau = (1.0 - aOld) * Cps_ + aOld * Cpl_;
+                    scalar dH1 = Cp_plateau * (Texit - Told);
+                    scalar dH2 = hSens(Tnew, 0.0) - hSens(Texit, 0.0);
+                    return dH1 + dH2;
+                }
             }
         }
     }
-    else
-    {
-        return hSens(Tnew, trajNew) - hSens(Told, trajNew);
-    }
+
+    return hSens(Tnew, trajNew) - hSens(Told, trajNew);
 }
 
 
@@ -533,13 +547,16 @@ void Foam::phaseChangeModel::correct()
         scalar dAlpha_dT = 0.0;
         if (!isPlateau)
         {
-            if (aVal != aOld || (Tc >= min(Tlm_, Tlf_) && Tc <= max(Tum_, Tuf_)))
+            if (traj > 0.5) // Heating branch
             {
-                if (traj > 0.5)
+                if ((Tc > Tlm_ && Tc < Tum_) || (Tc >= Tum_ && aOld < 1.0))
                 {
                     dAlpha_dT = (Tum_ > Tlm_) ? (1.0 / (Tum_ - Tlm_)) : 0.0;
                 }
-                else
+            }
+            else // Cooling branch
+            {
+                if ((Tc > Tlf_ && Tc < Tuf_) || (Tc <= Tlf_ && aOld > 0.0))
                 {
                     dAlpha_dT = (Tuf_ > Tlf_) ? (1.0 / (Tuf_ - Tlf_)) : 0.0;
                 }
@@ -687,13 +704,16 @@ void Foam::phaseChangeModel::correct()
             scalar dAlpha_dTf = 0.0;
             if (!isPlateauf)
             {
-                if (aValf != aOldf || (Tf >= min(Tlm_, Tlf_) && Tf <= max(Tum_, Tuf_)))
+                if (trajf > 0.5) // Heating branch
                 {
-                    if (trajf > 0.5)
+                    if ((Tf > Tlm_ && Tf < Tum_) || (Tf >= Tum_ && aOldf < 1.0))
                     {
                         dAlpha_dTf = (Tum_ > Tlm_) ? (1.0 / (Tum_ - Tlm_)) : 0.0;
                     }
-                    else
+                }
+                else // Cooling branch
+                {
+                    if ((Tf > Tlf_ && Tf < Tuf_) || (Tf <= Tlf_ && aOldf > 0.0))
                     {
                         dAlpha_dTf = (Tuf_ > Tlf_) ? (1.0 / (Tuf_ - Tlf_)) : 0.0;
                     }
