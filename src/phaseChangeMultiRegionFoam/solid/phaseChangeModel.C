@@ -23,7 +23,8 @@ namespace Foam
 Foam::phaseChangeModel::phaseChangeModel
 (
     const fvMesh& mesh,
-    const solidThermo& thermo
+    const solidThermo& thermo,
+    bool suppressConvection
 )
 :
     mesh_(mesh),
@@ -178,7 +179,7 @@ Foam::phaseChangeModel::phaseChangeModel
         heatingTrajectory_
     ),
     phaseFractionRestored_(false),
-    suppressConvection_(true)
+    suppressConvection_(suppressConvection)
 {
     phaseFractionRestored_ = phaseFraction_.headerOk();
 
@@ -309,13 +310,14 @@ void Foam::phaseChangeModel::readDict()
 
 void Foam::phaseChangeModel::readConvectionDict(const dictionary& pcDict)
 {
+    bool defaultSuppress = suppressConvection_;
     if (pcDict.found("convection"))
     {
         suppressConvection_ =
             pcDict.subDict("convection").getOrDefault<bool>("suppress", suppressConvection_);
     }
 
-    if (!suppressConvection_)
+    if (defaultSuppress && !suppressConvection_)
     {
         FatalIOErrorInFunction(pcDict)
             << "phaseChange.convection.suppress = false requested for region "
@@ -326,29 +328,54 @@ void Foam::phaseChangeModel::readConvectionDict(const dictionary& pcDict)
 }
 
 
-Foam::scalar Foam::phaseChangeModel::integralAlphaMelt(scalar T, scalar alpha_old) const
+Foam::scalar Foam::phaseChangeModel::computePathCp
+(
+    scalar Tnew,
+    scalar Told,
+    scalar traj
+) const
 {
-    if (T <= Tlm_) return 0.0;
-    if (T >= Tum_) return 1.0;
-    scalar a_linear = (T - Tlm_) / (Tum_ - Tlm_);
-    if (hysteresisActive_)
+    if (thermoMode_ != "custom")
     {
-        return max(a_linear, alpha_old);
+        return thermo_.Cp()().primitiveField()[0];
     }
-    return a_linear;
-}
 
+    scalar Tlm = (traj > 0.5) ? Tlm_ : Tlf_;
+    scalar Tum = (traj > 0.5) ? Tum_ : Tuf_;
+    scalar cp_solid = Cps_;
+    scalar cp_liquid = Cpl_;
+    scalar cp_mush = 0.5 * (cp_solid + cp_liquid);
 
-Foam::scalar Foam::phaseChangeModel::integralAlphaFreeze(scalar T, scalar alpha_old) const
-{
-    if (T <= Tlf_) return 0.0;
-    if (T >= Tuf_) return 1.0;
-    scalar a_linear = (T - Tlf_) / (Tuf_ - Tlf_);
-    if (hysteresisActive_)
+    auto h_sens = [&](scalar T) -> scalar
     {
-        return min(a_linear, alpha_old);
+        if (T <= Tlm)
+        {
+            return cp_solid * T;
+        }
+        else if (T >= Tum)
+        {
+            scalar h_lm = cp_solid * Tlm;
+            scalar h_um = h_lm + cp_mush * (Tum - Tlm);
+            return h_um + cp_liquid * (T - Tum);
+        }
+        else
+        {
+            scalar h_lm = cp_solid * Tlm;
+            return h_lm + cp_mush * (T - Tlm);
+        }
+    };
+
+    scalar dT = Tnew - Told;
+    if (mag(dT) > 1e-8)
+    {
+        return (h_sens(Tnew) - h_sens(Told)) / dT;
     }
-    return a_linear;
+    else
+    {
+        if (Tnew <= Tlm) return cp_solid;
+        else if (Tnew >= Tum) return cp_liquid;
+        else return cp_mush;
+    }
 }
 
 
@@ -370,6 +397,8 @@ void Foam::phaseChangeModel::correct()
     const scalarField& CpThermoCells = tCpThermo().primitiveField();
     tmp<volScalarField> tRhoThermo = thermo_.rho();
     const scalarField& rhoThermoCells = tRhoThermo().primitiveField();
+    tmp<volScalarField> tKappaThermo = thermo_.kappa();
+    const scalarField& kappaThermoCells = tKappaThermo().primitiveField();
 
     scalarField& alphaCells = phaseFraction_.primitiveFieldRef();
     scalarField& stateCells = phaseState_.primitiveFieldRef();
@@ -469,10 +498,12 @@ void Foam::phaseChangeModel::correct()
         scalar cpVal = CpThermoCells[celli];
         if (thermoMode_ == "custom")
         {
-            // Compute mean path-integrated phase fraction alpha_bar over temperature step
-            scalar a_bar = 0.5 * (aVal + aOld);
-            cpVal = (1.0 - a_bar) * Cps_ + a_bar * Cpl_;
+            cpVal = computePathCp(Tc, Told, traj);
             kCells[celli] = (1.0 - aVal) * ks_ + aVal * kl_;
+        }
+        else
+        {
+            kCells[celli] = kappaThermoCells[celli];
         }
         CpCells[celli] = cpVal;
 
@@ -551,26 +582,153 @@ void Foam::phaseChangeModel::correct()
         Tfield.correctBoundaryConditions();
     }
 
-    // Update boundary fields from internal cell values for calculated patches
-    auto updateCalculatedBoundaries = [](volScalarField& f)
+    // Per-face boundary evaluations for non-constraint patches
+    forAll(mesh_.boundaryMesh(), patchI)
     {
-        forAll(f.boundaryField(), patchI)
+        const polyPatch& pp = mesh_.boundaryMesh()[patchI];
+        if (polyPatch::constraintType(pp.type()))
         {
-            if (isA<calculatedFvPatchScalarField>(f.boundaryField()[patchI]))
-            {
-                f.boundaryFieldRef()[patchI] == f.boundaryField()[patchI].patchInternalField();
-            }
+            continue;
         }
-        f.correctBoundaryConditions();
-    };
 
-    updateCalculatedBoundaries(phaseFraction_);
-    updateCalculatedBoundaries(phaseState_);
-    updateCalculatedBoundaries(rho_);
-    updateCalculatedBoundaries(Cp_);
-    updateCalculatedBoundaries(k_);
-    updateCalculatedBoundaries(Su_);
-    updateCalculatedBoundaries(Sp_);
+        const scalarField& Tface = T.boundaryField()[patchI];
+        const scalarField& ToldFace = T_old.boundaryField()[patchI];
+        const scalarField& alphaOldFace = phaseFraction_old_.boundaryField()[patchI];
+        const scalarField& trajOldFace = heatingTrajectory_old_.boundaryField()[patchI];
+
+        scalarField& alphaFace = phaseFraction_.boundaryFieldRef()[patchI];
+        scalarField& stateFace = phaseState_.boundaryFieldRef()[patchI];
+        scalarField& trajFace = heatingTrajectory_.boundaryFieldRef()[patchI];
+        scalarField& CpFace = Cp_.boundaryFieldRef()[patchI];
+        scalarField& rhoFace = rho_.boundaryFieldRef()[patchI];
+        scalarField& kFace = k_.boundaryFieldRef()[patchI];
+        scalarField& SuFace = Su_.boundaryFieldRef()[patchI];
+        scalarField& SpFace = Sp_.boundaryFieldRef()[patchI];
+
+        const scalarField& CpThermoFace = tCpThermo().boundaryField()[patchI];
+        const scalarField& rhoThermoFace = tRhoThermo().boundaryField()[patchI];
+        const scalarField& kappaThermoFace = tKappaThermo().boundaryField()[patchI];
+
+        forAll(Tface, faceI)
+        {
+            scalar Tf = Tface[faceI];
+            scalar Toldf = ToldFace[faceI];
+            scalar aOldf = alphaOldFace[faceI];
+
+            scalar dTf = Tf - Toldf;
+            scalar trajf = trajOldFace[faceI];
+            if (dTf > reversalTol_)
+            {
+                trajf = 1.0;
+            }
+            else if (dTf < -reversalTol_)
+            {
+                trajf = 0.0;
+            }
+            trajFace[faceI] = trajf;
+
+            scalar aValf = 0.0;
+            scalar stateValf = 0.0;
+            bool isPlateauf = false;
+
+            scalar a_meltf = (Tum_ > Tlm_) ? clamp((Tf - Tlm_) / (Tum_ - Tlm_), 0.0, 1.0) : (Tf >= Tum_ ? 1.0 : 0.0);
+            scalar a_freezef = (Tuf_ > Tlf_) ? clamp((Tf - Tlf_) / (Tuf_ - Tlf_), 0.0, 1.0) : (Tf >= Tuf_ ? 1.0 : 0.0);
+
+            if (trajf > 0.5) // Heating branch
+            {
+                if (hysteresisActive_ && a_meltf < aOldf)
+                {
+                    aValf = aOldf;
+                    isPlateauf = true;
+                }
+                else
+                {
+                    aValf = a_meltf;
+                }
+
+                if (aValf <= 0.0) stateValf = 0.0;
+                else if (aValf >= 1.0) stateValf = 2.0;
+                else stateValf = 1.0;
+            }
+            else // Cooling branch
+            {
+                if (hysteresisActive_ && a_freezef > aOldf)
+                {
+                    aValf = aOldf;
+                    isPlateauf = true;
+                }
+                else
+                {
+                    aValf = a_freezef;
+                }
+
+                if (aValf <= 0.0) stateValf = 0.0;
+                else if (aValf >= 1.0) stateValf = 2.0;
+                else stateValf = 3.0;
+            }
+
+            alphaFace[faceI] = aValf;
+            stateFace[faceI] = stateValf;
+
+            scalar dAlpha_dTf = 0.0;
+            if (!isPlateauf)
+            {
+                if (aValf != aOldf || (Tf >= min(Tlm_, Tlf_) && Tf <= max(Tum_, Tuf_)))
+                {
+                    if (trajf > 0.5)
+                    {
+                        dAlpha_dTf = (Tum_ > Tlm_) ? (1.0 / (Tum_ - Tlm_)) : 0.0;
+                    }
+                    else
+                    {
+                        dAlpha_dTf = (Tuf_ > Tlf_) ? (1.0 / (Tuf_ - Tlf_)) : 0.0;
+                    }
+                }
+            }
+
+            scalar cpValf = CpThermoFace[faceI];
+            if (thermoMode_ == "custom")
+            {
+                cpValf = computePathCp(Tf, Toldf, trajf);
+                kFace[faceI] = (1.0 - aValf) * ks_ + aValf * kl_;
+            }
+            else
+            {
+                kFace[faceI] = kappaThermoFace[faceI];
+            }
+            CpFace[faceI] = cpValf;
+
+            scalar rhoValf = rhoThermoFace[faceI];
+            scalar rhoBarf = rhoThermoFace[faceI];
+            if (densityModel_ == "linear")
+            {
+                rhoValf = (1.0 - aValf) * rhoSolid_ + aValf * rhoLiquid_;
+                scalar a_barf = 0.5 * (aValf + aOldf);
+                rhoBarf = (1.0 - a_barf) * rhoSolid_ + a_barf * rhoLiquid_;
+            }
+            rhoFace[faceI] = rhoValf;
+
+            scalar Lf_val = (trajf > 0.5) ? Lm_ : Lf_;
+            scalar SpValf = 0.0;
+            if (dAlpha_dTf > 0.0 && cpValf > 0.0)
+            {
+                SpValf = (rhoBarf * Lf_val * dAlpha_dTf) / (dt * cpValf);
+            }
+
+            scalar SuValf = (rhoBarf * Lf_val * (aValf - aOldf)) / dt;
+
+            SpFace[faceI] = SpValf;
+            SuFace[faceI] = SuValf;
+        }
+    }
+
+    phaseFraction_.correctBoundaryConditions();
+    phaseState_.correctBoundaryConditions();
+    rho_.correctBoundaryConditions();
+    Cp_.correctBoundaryConditions();
+    k_.correctBoundaryConditions();
+    Su_.correctBoundaryConditions();
+    Sp_.correctBoundaryConditions();
 }
 
 

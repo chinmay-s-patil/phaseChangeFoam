@@ -26,12 +26,11 @@ Foam::enthalpyPorosityPhaseChangeModel::enthalpyPorosityPhaseChangeModel
     const solidThermo& thermo
 )
 :
-    phaseChangeModel(mesh, thermo),
+    phaseChangeModel(mesh, thermo, false),
     beta_(0.0),
     Cu_(1.0e5),
     q_(0.001)
 {
-    suppressConvection_ = false;
 
     readPorosityDict();
 

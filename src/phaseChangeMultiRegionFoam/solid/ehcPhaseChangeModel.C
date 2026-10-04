@@ -26,9 +26,8 @@ Foam::ehcPhaseChangeModel::ehcPhaseChangeModel
     const solidThermo& thermo
 )
 :
-    phaseChangeModel(mesh, thermo)
+    phaseChangeModel(mesh, thermo, true)
 {
-    suppressConvection_ = true;
 
     // Validate that all non-constraint patches are 'calculated'
     auto checkCalculatedPatches = [&](const volScalarField& f)

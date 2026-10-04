@@ -92,9 +92,8 @@ protected:
     void readDict();
     void readConvectionDict(const dictionary& pcDict);
 
-    // Exact piecewise path integral helpers
-    scalar integralAlphaMelt(scalar T, scalar alpha_old) const;
-    scalar integralAlphaFreeze(scalar T, scalar alpha_old) const;
+    // Exact piecewise path integral Cp calculation
+    scalar computePathCp(scalar Tnew, scalar Told, scalar traj) const;
 
 public:
 
@@ -118,10 +117,9 @@ public:
     phaseChangeModel
     (
         const fvMesh& mesh,
-        const solidThermo& thermo
+        const solidThermo& thermo,
+        bool suppressConvection = true
     );
-
-    // Selector
     static autoPtr<phaseChangeModel> New
     (
         const fvMesh& mesh,
