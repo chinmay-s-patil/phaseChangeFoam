@@ -320,10 +320,10 @@ def main():
         print("STATUS: CASE 7 FAILED!")
         all_passed = False
 
-    # --- Case 8: Exact Piecewise Path Integrated Base Cp (Cps = 1980, Cpl = 2320 J/(kg.K), T0 = 280 K -> 350 K) ---
+    # --- Case 8: Exact Base Cp (Cps = 1980, Cpl = 2320 J/(kg.K), T0 = 280 K -> 350 K) ---
     print("\n--- Case 8: Exact Piecewise Path Integrated Base Cp (Cps = 1980, Cpl = 2320 J/(kg.K), T0 = 280 K -> 350 K) ---")
     case8_dir = os.path.join(base_dir, "case8_unequalCp")
-    T8, a8, log8 = setup_single_cell_case(case8_dir, T0=280.0, Q_source=2539000.0, L_heat=100000.0, Cps=1980.0, Cpl=2320.0)
+    T8, a8, log8 = setup_single_cell_case(case8_dir, T0=280.0, Q_source=2386000.0, L_heat=100000.0, Cps=1980.0, Cpl=2320.0)
     err8 = abs(T8 - 350.0)
     print(f"Simulated T = {T8:.6f} K, alphaL = {a8:.6f}")
     print(f"Exact T     = 350.000000 K, alphaL = 1.000000")

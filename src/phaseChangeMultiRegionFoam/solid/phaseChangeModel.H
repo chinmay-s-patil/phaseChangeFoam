@@ -92,9 +92,6 @@ protected:
     void readDict();
     void readConvectionDict(const dictionary& pcDict);
 
-    // Exact piecewise path integral Cp calculation
-    scalar computePathCp(scalar Tnew, scalar Told, scalar traj) const;
-
 public:
 
     //- Runtime type information
@@ -174,8 +171,14 @@ public:
         return Cp_;
     }
 
-    //- Access density field
+    //- Access density field for energy equation (returns background thermo.rho() for reference independence)
     virtual tmp<volScalarField> rho() const
+    {
+        return thermo_.rho();
+    }
+
+    //- Access physical phase density field rho(alpha)
+    virtual tmp<volScalarField> rhoEff() const
     {
         return rho_;
     }

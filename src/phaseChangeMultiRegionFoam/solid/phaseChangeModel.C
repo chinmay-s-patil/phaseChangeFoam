@@ -301,6 +301,15 @@ void Foam::phaseChangeModel::readDict()
             Cpl_ = thDict.getOrDefault<scalar>("CpLiquid", thDict.lookupOrDefault<scalar>("Cpl", 1000.0));
             ks_  = thDict.getOrDefault<scalar>("kSolid", thDict.lookupOrDefault<scalar>("ks", 1.0));
             kl_  = thDict.getOrDefault<scalar>("kLiquid", thDict.lookupOrDefault<scalar>("kl", 1.0));
+
+            scalar thermoCpVal = thermo_.Cp()().primitiveField()[0];
+            if (mag(thermoCpVal - Cps_) > 1e-4)
+            {
+                FatalIOErrorInFunction(pcDict)
+                    << "In custom thermo mode, thermophysicalProperties Cp (" << thermoCpVal
+                    << ") must match CpSolid (" << Cps_ << ") to ensure consistent boundary face enthalpy."
+                    << exit(FatalIOError);
+            }
         }
     }
 
@@ -328,65 +337,11 @@ void Foam::phaseChangeModel::readConvectionDict(const dictionary& pcDict)
 }
 
 
-Foam::scalar Foam::phaseChangeModel::computePathCp
-(
-    scalar Tnew,
-    scalar Told,
-    scalar traj
-) const
-{
-    if (thermoMode_ != "custom")
-    {
-        return thermo_.Cp()().primitiveField()[0];
-    }
-
-    scalar Tlm = (traj > 0.5) ? Tlm_ : Tlf_;
-    scalar Tum = (traj > 0.5) ? Tum_ : Tuf_;
-    scalar cp_solid = Cps_;
-    scalar cp_liquid = Cpl_;
-    scalar cp_mush = 0.5 * (cp_solid + cp_liquid);
-
-    auto h_sens = [&](scalar T) -> scalar
-    {
-        if (T <= Tlm)
-        {
-            return cp_solid * T;
-        }
-        else if (T >= Tum)
-        {
-            scalar h_lm = cp_solid * Tlm;
-            scalar h_um = h_lm + cp_mush * (Tum - Tlm);
-            return h_um + cp_liquid * (T - Tum);
-        }
-        else
-        {
-            scalar h_lm = cp_solid * Tlm;
-            return h_lm + cp_mush * (T - Tlm);
-        }
-    };
-
-    scalar dT = Tnew - Told;
-    if (mag(dT) > 1e-8)
-    {
-        return (h_sens(Tnew) - h_sens(Told)) / dT;
-    }
-    else
-    {
-        if (Tnew <= Tlm) return cp_solid;
-        else if (Tnew >= Tum) return cp_liquid;
-        else return cp_mush;
-    }
-}
-
-
 void Foam::phaseChangeModel::correct()
 {
     if (!active_) return;
 
-    if (thermoMode_ == "thermo")
-    {
-        const_cast<solidThermo&>(thermo_).correct();
-    }
+    const_cast<solidThermo&>(thermo_).correct();
 
     const volScalarField& T = thermo_.T();
     const volScalarField& T_old = thermo_.T().oldTime();
@@ -494,11 +449,11 @@ void Foam::phaseChangeModel::correct()
             }
         }
 
-        // Sensible heat capacity Cp calculation (exact path integral for unequal Cps != Cpl)
+        // Sensible heat capacity Cp calculation (state-fraction C_p(alpha))
         scalar cpVal = CpThermoCells[celli];
         if (thermoMode_ == "custom")
         {
-            cpVal = computePathCp(Tc, Told, traj);
+            cpVal = (1.0 - aVal) * Cps_ + aVal * Cpl_;
             kCells[celli] = (1.0 - aVal) * ks_ + aVal * kl_;
         }
         else
@@ -533,54 +488,7 @@ void Foam::phaseChangeModel::correct()
         SuCells[celli] = SuVal;
     }
 
-    // Exact piecewise T(h) inversion using thermophysical reference enthalpy
-    if (thermoMode_ == "custom")
-    {
-        volScalarField& Tfield = const_cast<volScalarField&>(thermo_.T());
-        scalarField& Tc = Tfield.primitiveFieldRef();
-        const scalarField& hc = thermo_.he().primitiveField();
-        const scalarField& trajc = heatingTrajectory_.primitiveField();
 
-        tmp<volScalarField> tZeroT = volScalarField::New
-        (
-            "zeroT",
-            mesh_,
-            dimensionedScalar("zeroT", dimTemperature, 0.0)
-        );
-        tmp<volScalarField> th0 = thermo_.he(thermo_.p(), tZeroT());
-        const scalarField& h0c = th0().primitiveField();
-
-        forAll(Tc, celli)
-        {
-            scalar traj = trajc[celli];
-            scalar Tlm = (traj > 0.5) ? Tlm_ : Tlf_;
-            scalar Tum = (traj > 0.5) ? Tum_ : Tuf_;
-
-            scalar cp_solid = Cps_;
-            scalar cp_liquid = Cpl_;
-
-            // Zero-K enthalpy reference offset from solidThermo
-            scalar h_sens = hc[celli] - h0c[celli];
-
-            scalar h_lm = cp_solid * Tlm;
-            scalar cp_mush = 0.5 * (cp_solid + cp_liquid);
-            scalar h_um = h_lm + cp_mush * (Tum - Tlm);
-
-            if (h_sens <= h_lm)
-            {
-                Tc[celli] = h_sens / cp_solid;
-            }
-            else if (h_sens >= h_um)
-            {
-                Tc[celli] = Tum + (h_sens - h_um) / cp_liquid;
-            }
-            else
-            {
-                Tc[celli] = Tlm + (h_sens - h_lm) / cp_mush;
-            }
-        }
-        Tfield.correctBoundaryConditions();
-    }
 
     // Per-face boundary evaluations for non-constraint patches
     forAll(mesh_.boundaryMesh(), patchI)
@@ -689,7 +597,7 @@ void Foam::phaseChangeModel::correct()
             scalar cpValf = CpThermoFace[faceI];
             if (thermoMode_ == "custom")
             {
-                cpValf = computePathCp(Tf, Toldf, trajf);
+                cpValf = (1.0 - aValf) * Cps_ + aValf * Cpl_;
                 kFace[faceI] = (1.0 - aValf) * ks_ + aValf * kl_;
             }
             else

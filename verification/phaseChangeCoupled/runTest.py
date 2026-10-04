@@ -377,10 +377,11 @@ def main():
         
         pass_t1 = (max_dT < 0.05 and max_da < 0.005 and interface_dT < 0.5 and mean_a > 0.05)
         
-        print(f"Max T diff compared to single-region: {max_dT:.4f} K")
-        print(f"Max alpha diff compared to single-region: {max_da:.6f}")
-        print(f"Interface T discontinuity: {interface_dT:.4f} K")
-        print(f"Mean alpha = {mean_a:.4f}")
+        print(f"Single-region vs 2-region concatenated T max difference : {max_dT:.4e} K")
+        print(f"Single-region vs 2-region concatenated alpha max difference: {max_da:.4e}")
+        print(f"Interface cell T (pcm cell 50): {T_interface_left:.6f} K, (solid2 cell 1): {T_interface_right:.6f} K")
+        print(f"Interface T discontinuity: {interface_dT:.4e} K")
+        print(f"Coupled domain mean alpha = {mean_a:.4f}")
     else:
         pass_t1 = False
         print("Failed to read fields.")
