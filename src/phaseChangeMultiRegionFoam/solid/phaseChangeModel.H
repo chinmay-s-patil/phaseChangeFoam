@@ -92,6 +92,9 @@ protected:
     void readDict();
     void readConvectionDict(const dictionary& pcDict);
 
+    // Exact sensible enthalpy integral for custom thermo mode
+    scalar hSens(scalar T, scalar traj) const;
+
 public:
 
     //- Runtime type information

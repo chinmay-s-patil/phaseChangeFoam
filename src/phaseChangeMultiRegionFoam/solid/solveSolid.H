@@ -15,16 +15,20 @@
             pcModel.correct();
         }
 
+        tmp<volScalarField> tCpThermo = thermo.Cp();
         tmp<volScalarField> tCpEff = pcModel.active() ? pcModel.CpEff() : tmp<volScalarField>(thermo.Cp());
-        tmp<volScalarField> trhoEff = pcModel.active() ? pcModel.rho() : tmp<volScalarField>(thermo.rho());
+        tmp<volScalarField> trhoEff = pcModel.active() ? pcModel.rhoEff() : tmp<volScalarField>(thermo.rho());
         tmp<volScalarField> tkEff = pcModel.active() ? pcModel.k() : tmp<volScalarField>(thermo.kappa());
 
-        // Thermal diffusivity alpha = k / Cp_eff in kg/(m s) for enthalpy-based equation
-        volScalarField alpha("alpha", tkEff() / tCpEff());
+        // Thermal diffusivity alpha = k / Cp_thermo so that alpha * grad(h) == k * grad(T) exactly
+        volScalarField alpha("alpha", tkEff() / tCpThermo());
+
+        // Effective thermal capacity storage ratio (rho_eff * Cp_eff) / Cp_thermo
+        volScalarField rhoCpRatio("rhoCpRatio", trhoEff() * tCpEff() / tCpThermo());
 
         fvScalarMatrix hEqn
         (
-            fvm::ddt(betav*trhoEff, h)
+            fvm::ddt(betav*rhoCpRatio, h)
             - (
                 thermo.isotropic()
                 ? fvm::laplacian(betav*alpha, h, "laplacian(alpha,h)")

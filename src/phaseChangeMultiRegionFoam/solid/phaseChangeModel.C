@@ -337,6 +337,38 @@ void Foam::phaseChangeModel::readConvectionDict(const dictionary& pcDict)
 }
 
 
+Foam::scalar Foam::phaseChangeModel::hSens(scalar T, scalar traj) const
+{
+    scalar Tl = (traj > 0.5) ? Tlm_ : Tlf_;
+    scalar Tu = (traj > 0.5) ? Tum_ : Tuf_;
+
+    if (T <= Tl)
+    {
+        return Cps_ * T;
+    }
+    else if (T >= Tu)
+    {
+        scalar h_l = Cps_ * Tl;
+        scalar h_mush = (0.5 * (Cps_ + Cpl_)) * (Tu - Tl);
+        return h_l + h_mush + Cpl_ * (T - Tu);
+    }
+    else
+    {
+        scalar h_l = Cps_ * Tl;
+        scalar dT = T - Tl;
+        scalar dTum = Tu - Tl;
+        if (dTum > 1e-8)
+        {
+            return h_l + Cps_ * dT + 0.5 * (Cpl_ - Cps_) * sqr(dT) / dTum;
+        }
+        else
+        {
+            return h_l;
+        }
+    }
+}
+
+
 void Foam::phaseChangeModel::correct()
 {
     if (!active_) return;
@@ -449,11 +481,19 @@ void Foam::phaseChangeModel::correct()
             }
         }
 
-        // Sensible heat capacity Cp calculation (state-fraction C_p(alpha))
+        // Sensible heat capacity Cp calculation (path-secant C_p,eff)
         scalar cpVal = CpThermoCells[celli];
         if (thermoMode_ == "custom")
         {
-            cpVal = (1.0 - aVal) * Cps_ + aVal * Cpl_;
+            scalar dT_step = Tc - Told;
+            if (mag(dT_step) > 1e-8)
+            {
+                cpVal = (hSens(Tc, traj) - hSens(Told, traj)) / dT_step;
+            }
+            else
+            {
+                cpVal = (1.0 - aVal) * Cps_ + aVal * Cpl_;
+            }
             kCells[celli] = (1.0 - aVal) * ks_ + aVal * kl_;
         }
         else
@@ -473,13 +513,14 @@ void Foam::phaseChangeModel::correct()
         }
         rhoCells[celli] = rhoVal;
 
-        // Newton tangent slope Sp = + (rho_bar * L * dAlpha_dT) / (dt * cp)
+        // Newton tangent slope Sp = + (rho_bar * L * dAlpha_dT) / (dt * Cp_thermo)
         // Physical latent heat source Su_phys = + (rho_bar * L * (aVal - aOld)) / dt
         scalar L = (traj > 0.5) ? Lm_ : Lf_;
         scalar SpVal = 0.0;
-        if (dAlpha_dT > 0.0 && cpVal > 0.0)
+        scalar cpThVal = CpThermoCells[celli];
+        if (dAlpha_dT > 0.0 && cpThVal > 0.0)
         {
-            SpVal = (rhoBar * L * dAlpha_dT) / (dt * cpVal);
+            SpVal = (rhoBar * L * dAlpha_dT) / (dt * cpThVal);
         }
 
         scalar SuVal = (rhoBar * L * (aVal - aOld)) / dt;
@@ -597,7 +638,15 @@ void Foam::phaseChangeModel::correct()
             scalar cpValf = CpThermoFace[faceI];
             if (thermoMode_ == "custom")
             {
-                cpValf = (1.0 - aValf) * Cps_ + aValf * Cpl_;
+                scalar dT_stepf = Tf - Toldf;
+                if (mag(dT_stepf) > 1e-8)
+                {
+                    cpValf = (hSens(Tf, trajf) - hSens(Toldf, trajf)) / dT_stepf;
+                }
+                else
+                {
+                    cpValf = (1.0 - aValf) * Cps_ + aValf * Cpl_;
+                }
                 kFace[faceI] = (1.0 - aValf) * ks_ + aValf * kl_;
             }
             else
@@ -618,9 +667,10 @@ void Foam::phaseChangeModel::correct()
 
             scalar Lf_val = (trajf > 0.5) ? Lm_ : Lf_;
             scalar SpValf = 0.0;
-            if (dAlpha_dTf > 0.0 && cpValf > 0.0)
+            scalar cpThValf = CpThermoFace[faceI];
+            if (dAlpha_dTf > 0.0 && cpThValf > 0.0)
             {
-                SpValf = (rhoBarf * Lf_val * dAlpha_dTf) / (dt * cpValf);
+                SpValf = (rhoBarf * Lf_val * dAlpha_dTf) / (dt * cpThValf);
             }
 
             scalar SuValf = (rhoBarf * Lf_val * (aValf - aOldf)) / dt;
