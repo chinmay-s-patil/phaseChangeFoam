@@ -91,6 +91,15 @@ void Foam::enthalpyPorosityPhaseChangeModel::readPorosityDict()
             if (pcDict.found("porosity"))
             {
                 const dictionary& porDict = pcDict.subDict("porosity");
+                for (const word& k : porDict.toc())
+                {
+                    if (k != "Cu" && k != "q")
+                    {
+                        FatalIOErrorInFunction(porDict)
+                            << "Unknown key '" << k << "' in porosity dict."
+                            << exit(FatalIOError);
+                    }
+                }
                 Cu_ = porDict.lookupOrDefault<scalar>("Cu", 1.0e5);
                 q_  = porDict.lookupOrDefault<scalar>("q", 0.001);
             }
@@ -98,6 +107,15 @@ void Foam::enthalpyPorosityPhaseChangeModel::readPorosityDict()
             if (pcDict.found("buoyancy"))
             {
                 const dictionary& buoyDict = pcDict.subDict("buoyancy");
+                for (const word& k : buoyDict.toc())
+                {
+                    if (k != "beta")
+                    {
+                        FatalIOErrorInFunction(buoyDict)
+                            << "Unknown key '" << k << "' in buoyancy dict."
+                            << exit(FatalIOError);
+                    }
+                }
                 beta_ = buoyDict.lookupOrDefault<scalar>("beta", 0.0);
             }
         }

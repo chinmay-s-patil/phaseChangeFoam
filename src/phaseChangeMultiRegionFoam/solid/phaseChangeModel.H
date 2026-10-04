@@ -78,10 +78,12 @@ protected:
 
     // Trajectory tracking (1.0 = heating, 0.0 = cooling)
     volScalarField heatingTrajectory_;
+    volScalarField T_reversal_;
 
     // Start-of-step stored fields for committed history
     volScalarField phaseFraction_old_;
     volScalarField heatingTrajectory_old_;
+    volScalarField T_reversal_old_;
 
     //- True if phaseFraction was found on disk (or restored from legacy liquidFraction)
     bool phaseFractionRestored_;

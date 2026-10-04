@@ -235,7 +235,7 @@ def calc_delta_h_sens(T0, T1, alpha0, traj0, traj1, Cps, Cpl, Tlm=300.0, Tum=310
     if abs(dT) < 1e-12:
         return 0.0
     
-    if alpha0 > 0.0 and alpha0 < 1.0:
+    if True:
         if traj1 > 0.5: # Heating branch
             Texit = Tlm + alpha0 * (Tum - Tlm)
             if Texit < Tlm: Texit = Tlm
@@ -469,60 +469,71 @@ application phaseChangeMultiRegionFoam; startFrom latestTime; startTime 100; sto
     print(f"Simulated T = {T12:.6f} K, alphaL = {a12:.6f}")
     print(f"Exact T     = 280.000000 K, alphaL = 0.000000")
     print(f"Temperature Error = {err12:.6f} K, Alpha Error = {err_a12:.6f}")
-    # --- Case 13: Multi-Step Cooling Reversal with Unequal Cp (308 -> 306 -> 304 -> 302 K) ---
-    print("\n--- Case 13: Multi-Step Cooling Reversal with Unequal Cp (308 -> 306 -> 304 -> 302 K) ---")
+    # --- Case 13: Continuous Multi-Step Cooling Reversal with Unequal Cp (308 -> 306 -> 304 -> 302 K) ---
+    print("\n--- Case 13: Continuous Multi-Step Cooling Reversal with Unequal Cp (308 -> 306 -> 304 -> 302 K) ---")
     case13_dir = os.path.join(base_dir, "case13_multiStepReversal")
     Q13a = calc_exact_q_source(308.0, 306.0, 0.8, 0.8, 0.0, 0.0, 1980.0, 2320.0, 1000.0, 1000.0, 100000.0)
-    T13a, a13a, _ = setup_single_cell_case(case13_dir, T0=308.0, Q_source=Q13a, L_heat=100000.0, Cps=1980.0, Cpl=2320.0, alpha0=0.8, traj0=1.0)
-    err13a = abs(T13a - 306.0)
-    
     Q13b = calc_exact_q_source(306.0, 304.0, 0.8, 0.8, 0.0, 0.0, 1980.0, 2320.0, 1000.0, 1000.0, 100000.0)
+    Q13c = calc_exact_q_source(304.0, 302.0, 0.8, 0.7, 0.0, 0.0, 1980.0, 2320.0, 1000.0, 1000.0, 100000.0)
+
+    setup_single_cell_case(case13_dir, T0=308.0, Q_source=Q13a, L_heat=100000.0, Cps=1980.0, Cpl=2320.0, alpha0=0.8, traj0=0.0)
+
     with open(f"{case13_dir}/system/controlDict", "w") as f:
         f.write(f"""
 FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object controlDict; }}
 application phaseChangeMultiRegionFoam;
-startFrom startTime; startTime 100; stopAt endTime; endTime 200; deltaT 100;
+startFrom startTime; startTime 0; stopAt endTime; endTime 300; deltaT 100;
 writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii;
 """)
-    fvOpt13b = f"""
+    fvOpt13 = f"""
 FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object fvOptions; }}
-heatSource {{ type scalarSemiImplicitSource; active true; selectionMode all; volumeMode absolute; injectionRateSuSp {{ h ({Q13b} 0); }} }}
+heatSource
+{{
+    type scalarSemiImplicitSource;
+    active true;
+    selectionMode all;
+    volumeMode absolute;
+    injectionRateSuSp
+    {{
+        h
+        {{
+            Su table
+            (
+                (0 {Q13a})
+                (100 {Q13a})
+                (100.001 {Q13b})
+                (200 {Q13b})
+                (200.001 {Q13c})
+                (300 {Q13c})
+            );
+            Sp 0;
+        }}
+    }}
+}}
 """
-    with open(f"{case13_dir}/system/fvOptions", "w") as f: f.write(fvOpt13b)
-    with open(f"{case13_dir}/system/phaseChange/fvOptions", "w") as f: f.write(fvOpt13b)
+    with open(f"{case13_dir}/system/fvOptions", "w") as f: f.write(fvOpt13)
+    with open(f"{case13_dir}/system/phaseChange/fvOptions", "w") as f: f.write(fvOpt13)
 
-    run_cmd(f"mkdir -p {case13_dir}/100/phaseChange/polyMesh && cp -r {case13_dir}/constant/phaseChange/polyMesh/* {case13_dir}/100/phaseChange/polyMesh/ 2>/dev/null || true")
     run_cmd(f"cd {case13_dir} && bash -c '{of_env}; {solver_bin}'")
+
+    T13a = parse_openfoam_field(os.path.join(case13_dir, "100/phaseChange/T"))[0]
+    a13a = parse_openfoam_field(os.path.join(case13_dir, "100/phaseChange/phaseFraction"))[0]
+    err13a = abs(T13a - 306.0)
+
     T13b = parse_openfoam_field(os.path.join(case13_dir, "200/phaseChange/T"))[0]
     a13b = parse_openfoam_field(os.path.join(case13_dir, "200/phaseChange/phaseFraction"))[0]
     err13b = abs(T13b - 304.0)
 
-    Q13c = calc_exact_q_source(304.0, 302.0, 0.8, 0.7, 0.0, 0.0, 1980.0, 2320.0, 1000.0, 1000.0, 100000.0)
-    with open(f"{case13_dir}/system/controlDict", "w") as f:
-        f.write(f"""
-FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object controlDict; }}
-application phaseChangeMultiRegionFoam;
-startFrom startTime; startTime 200; stopAt endTime; endTime 300; deltaT 100;
-writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii;
-""")
-    fvOpt13c = f"""
-FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object fvOptions; }}
-heatSource {{ type scalarSemiImplicitSource; active true; selectionMode all; volumeMode absolute; injectionRateSuSp {{ h ({Q13c} 0); }} }}
-"""
-    with open(f"{case13_dir}/system/fvOptions", "w") as f: f.write(fvOpt13c)
-    with open(f"{case13_dir}/system/phaseChange/fvOptions", "w") as f: f.write(fvOpt13c)
-
-    run_cmd(f"mkdir -p {case13_dir}/200/phaseChange/polyMesh && cp -r {case13_dir}/constant/phaseChange/polyMesh/* {case13_dir}/200/phaseChange/polyMesh/ 2>/dev/null || true")
-    run_cmd(f"cd {case13_dir} && bash -c '{of_env}; {solver_bin}'")
     T13c = parse_openfoam_field(os.path.join(case13_dir, "300/phaseChange/T"))[0]
     a13c = parse_openfoam_field(os.path.join(case13_dir, "300/phaseChange/phaseFraction"))[0]
     err13c = abs(T13c - 302.0)
+
     err13 = max(err13a, err13b, err13c)
 
     print(f"Step 1 (308->306 K): Simulated T = {T13a:.6f} K, alpha = {a13a:.6f}")
     print(f"Step 2 (306->304 K): Simulated T = {T13b:.6f} K, alpha = {a13b:.6f}")
     print(f"Step 3 (304->302 K): Simulated T = {T13c:.6f} K, alpha = {a13c:.6f}")
-    if err13 < 0.001 and abs(a13b - 0.8) < 0.001 and abs(a13c - 0.7) < 0.001:
+    if err13 < 0.001 and abs(a13a - 0.8) < 0.001 and abs(a13b - 0.8) < 0.001 and abs(a13c - 0.7) < 0.001:
         print("STATUS: CASE 13 PASSED!")
     else:
         print("STATUS: CASE 13 FAILED!")
@@ -563,6 +574,22 @@ heatSource {{ type scalarSemiImplicitSource; active true; selectionMode all; vol
         print("STATUS: CASE 14 FAILED!")
         all_passed = False
 
+    # --- Case 15: Liquid Reversal Heating Plateau (T0 = 309 K, alpha0 = 1.0 -> 312 K) ---
+    print("\n--- Case 15: Liquid Reversal Heating Plateau (T0 = 309 K, alpha0 = 1.0 -> 312 K) ---")
+    case15_dir = os.path.join(base_dir, "case15_liquidReversal")
+    Q15 = calc_exact_q_source(T0=309.0, T1=312.0, alpha0=1.0, alpha1=1.0, traj0=0.0, traj1=1.0, Cps=1980.0, Cpl=2320.0, rhoS=1000.0, rhoL=1000.0, L=100000.0)
+    T15, a15, log15 = setup_single_cell_case(case15_dir, T0=309.0, Q_source=Q15, L_heat=100000.0, Cps=1980.0, Cpl=2320.0, alpha0=1.0, traj0=0.0)
+    err15 = abs(T15 - 312.0)
+    err_a15 = abs(a15 - 1.0)
+    print(f"Simulated T = {T15:.6f} K, alphaL = {a15:.6f}")
+    print(f"Exact T     = 312.000000 K, alphaL = 1.000000")
+    print(f"Temperature Error = {err15:.6f} K, Alpha Error = {err_a15:.6f}")
+    if err15 < 0.01 and err_a15 < 0.001:
+        print("STATUS: CASE 15 PASSED!")
+    else:
+        print("STATUS: CASE 15 FAILED!")
+        all_passed = False
+
     print("\n=======================================================")
     print("      SINGLE-CELL VERIFICATION SUITE SUMMARY           ")
     print("=======================================================")
@@ -580,6 +607,7 @@ heatSource {{ type scalarSemiImplicitSource; active true; selectionMode all; vol
     print(f"Case 12 (Closed Cycle Net H=0) : {'PASSED' if err12 < 0.01 else 'FAILED'} (err = {err12:.6f} K)")
     print(f"Case 13 (Multi-Step Reversal)  : {'PASSED' if err13 < 0.001 else 'FAILED'} (err = {err13:.6f} K)")
     print(f"Case 14 (Unequal Cp Closed)    : {'PASSED' if err14 < 0.01 else 'FAILED'} (err = {err14:.6f} K)")
+    print(f"Case 15 (Liquid Reversal)      : {'PASSED' if err15 < 0.01 else 'FAILED'} (err = {err15:.6f} K)")
     print("-------------------------------------------------------")
 
     if all_passed:

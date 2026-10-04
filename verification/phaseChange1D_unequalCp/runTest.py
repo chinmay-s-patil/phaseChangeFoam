@@ -305,9 +305,57 @@ writeControl runTime; writeInterval 2; purgeWrite 0; writeFormat ascii;
     E2_in = compute_backward_euler_ein(case2_dir, delta_t=2.0)
     rel_flux_bal2 = abs(H2_total - E2_in) / max(E2_in, 1e-10)
     pass_flux_balance2 = rel_flux_bal2 < 0.05
+    # 3. Equal-density, unequal-Cp case (rho_s = rho_l = 1967.0 kg/m^3) to isolate unequal-Cp balance
+    print("\n--- Running Equal-Density, Unequal-Cp Test Case (rho_s = rho_l = 1967 kg/m^3, t = 0 -> 2000 s) ---")
+    case3_dir = os.path.join(case_dir, "case3_equalDensity")
+    os.makedirs(case3_dir, exist_ok=True)
+    os.chdir(case3_dir)
+    run_cmd("rm -rf [1-9]* 0.* constant/pcm/polyMesh constant/polyMesh")
+    run_cmd(f"cp -r {case_dir}/system {case3_dir}/")
+    run_cmd(f"cp -r {case_dir}/constant {case3_dir}/")
+    run_cmd(f"cp -r {case_dir}/0 {case3_dir}/")
+    with open("constant/pcm/phaseChangeDict", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange
+{
+    active true; phaseChangeMode EHC;
+    melting { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 100000.0; }
+    freezing { T_lowerBound 295.0; T_upperBound 305.0; latentHeat 100000.0; }
+    hysteresis { active true; }
+    density { model linear; rhoRef 1967.0; rhoSolid 1967.0; rhoLiquid 1967.0; allowNonConservativeDensity true; }
+    thermophysical { mode custom; CpSolid 1980.0; CpLiquid 2320.0; kSolid 0.50; kLiquid 0.47; }
+}
+""")
+    with open("system/controlDict", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
+application phaseChangeMultiRegionFoam;
+startFrom startTime; startTime 0; stopAt endTime; endTime 2000; deltaT 2;
+writeControl runTime; writeInterval 2; purgeWrite 0; writeFormat ascii;
+""")
+    run_cmd(f"bash -c '{of_env}; blockMesh'")
+    run_cmd("mkdir -p constant/pcm && cp -r constant/polyMesh constant/pcm/polyMesh 2>/dev/null || true")
+    run_cmd("cp system/fvSchemes system/pcm/fvSchemes 2>/dev/null || true")
+    run_cmd("cp system/fvSolution system/pcm/fvSolution 2>/dev/null || true")
+    run_cmd(f"bash -c '{of_env}; {solver_bin}'")
+
+    T3_heat = parse_openfoam_field("2000/pcm/T")
+    a3_heat = parse_openfoam_field("2000/pcm/phaseFraction")
+    H3_total = 0.0
+    for Ti, aL in zip(T3_heat, a3_heat):
+        rho_i = 1967.0
+        h_sens_i = calc_h_sens(Ti, 1.0, Cps, Cpl)
+        h_sens_0 = Cps * 280.0
+        delta_E_cell = rho_i * V_cell * (h_sens_i - h_sens_0) + rho_i * V_cell * Lm * aL
+        H3_total += delta_E_cell
+    E3_in = compute_backward_euler_ein(case3_dir, delta_t=2.0)
+    rel_flux_bal3 = abs(H3_total - E3_in) / max(E3_in, 1e-10)
+    pass_flux_balance3 = rel_flux_bal3 < 0.0001  # Assert < 0.01% (1e-4) balance for equal density
     os.chdir(case_dir)
 
-    all_pass = pass_alpha_bounded and pass_enthalpy_positive and pass_flux_balance and pass_flux_balance2
+    all_pass = pass_alpha_bounded and pass_enthalpy_positive and pass_flux_balance and pass_flux_balance2 and pass_flux_balance3
 
     print("\n=======================================================")
     print("   UNEQUAL CP & VARIABLE DENSITY 1D TEST RESULTS       ")
@@ -319,11 +367,13 @@ writeControl runTime; writeInterval 2; purgeWrite 0; writeFormat ascii;
     print(f"Phase 2 Boundary Flux Integral: {E2_in:.4f} J")
     print(f"Phase 2 Domain Enthalpy Rise  : {H2_total:.4f} J")
     print(f"Phase 2 Flux Balance Error    : {rel_flux_bal2*100:.6f}%")
+    print(f"Phase 3 Equal-Rho Flux Error  : {rel_flux_bal3*100:.6f}%")
     print(f"Liquid Fraction Bounded       : {alpha_bounded} (min={min_a_heat:.6f}, max={max_a_heat:.6f})")
     print("-------------------------------------------------------")
     print(f"Alpha bounded                 : {'PASS' if pass_alpha_bounded else 'FAIL'}")
     print(f"Phase 1 Flux Balance (<5.0%)  : {'PASS' if pass_flux_balance else 'FAIL'} ({rel_flux_bal*100:.6f}%)")
     print(f"Phase 2 Flux Balance (<5.0%)  : {'PASS' if pass_flux_balance2 else 'FAIL'} ({rel_flux_bal2*100:.6f}%)")
+    print(f"Phase 3 Equal-Rho (<0.01%)    : {'PASS' if pass_flux_balance3 else 'FAIL'} ({rel_flux_bal3*100:.6f}%)")
 
     if all_pass:
         print("\nSTATUS: 1D UNEQUAL CP & VARIABLE DENSITY TEST PASSED!")
