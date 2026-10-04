@@ -297,51 +297,124 @@ void Foam::phaseChangeModel::readDict()
 
     dir_ = directionNames.getOrDefault("direction", pcDict, direction::both);
 
-    // Forward / Melting sub-dictionary is mandatory
-    word forwardKey = pcDict.found("forward") ? "forward" : (pcDict.found("melting") ? "melting" : "");
-    if (forwardKey.empty())
+    if (pcDict.found("forward") && pcDict.found("melting"))
     {
         FatalIOErrorInFunction(pcDict)
-            << "Mandatory 'forward' (or legacy 'melting') block missing in phaseChangeDict for region "
+            << "Cannot specify both 'forward' and deprecated 'melting' sub-dictionaries in phaseChangeDict for region "
             << mesh_.name() << exit(FatalIOError);
     }
-    if (forwardKey == "melting" && !pcDict.found("forward"))
+    if (pcDict.found("reverse") && pcDict.found("freezing"))
+    {
+        FatalIOErrorInFunction(pcDict)
+            << "Cannot specify both 'reverse' and deprecated 'freezing' sub-dictionaries in phaseChangeDict for region "
+            << mesh_.name() << exit(FatalIOError);
+    }
+
+    word forwardKey = pcDict.found("forward") ? "forward" : (pcDict.found("melting") ? "melting" : "");
+    if (forwardKey == "melting")
     {
         WarningInFunction
             << "Key 'melting' in phaseChange dictionary is deprecated. Use 'forward' instead." << endl;
     }
-    const dictionary& meltDict = pcDict.subDict(forwardKey);
-    checkAllowedKeys(meltDict, {"T_lowerBound", "T_upperBound", "latentHeat"});
-    Tlm_ = meltDict.get<scalar>("T_lowerBound");
-    Tum_ = meltDict.get<scalar>("T_upperBound");
-    Lm_  = meltDict.get<scalar>("latentHeat");
-
-    if (Tum_ <= Tlm_)
-    {
-        FatalIOErrorInFunction(meltDict)
-            << "T_upperBound (" << Tum_ << ") must be strictly greater than "
-            << "T_lowerBound (" << Tlm_ << ") in forward/melting block for region "
-            << mesh_.name() << exit(FatalIOError);
-    }
-
-    // Reverse / Freezing sub-dictionary (defaults to forward values if hysteresis inactive)
-    Tlf_ = Tlm_;
-    Tuf_ = Tum_;
-    Lf_  = Lm_;
 
     word reverseKey = pcDict.found("reverse") ? "reverse" : (pcDict.found("freezing") ? "freezing" : "");
-    if (!reverseKey.empty())
+    if (reverseKey == "freezing")
     {
-        if (reverseKey == "freezing" && !pcDict.found("reverse"))
+        WarningInFunction
+            << "Key 'freezing' in phaseChange dictionary is deprecated. Use 'reverse' instead." << endl;
+    }
+
+    if (dir_ == direction::reverse)
+    {
+        // Reverse / Freezing sub-dictionary is mandatory in reverse direction mode
+        if (reverseKey.empty())
         {
-            WarningInFunction
-                << "Key 'freezing' in phaseChange dictionary is deprecated. Use 'reverse' instead." << endl;
+            FatalIOErrorInFunction(pcDict)
+                << "Mandatory 'reverse' (or legacy 'freezing') block missing in phaseChangeDict for region "
+                << mesh_.name() << " with direction reverse." << exit(FatalIOError);
         }
+
         const dictionary& freezeDict = pcDict.subDict(reverseKey);
         checkAllowedKeys(freezeDict, {"T_lowerBound", "T_upperBound", "latentHeat"});
-        Tlf_ = freezeDict.lookupOrDefault<scalar>("T_lowerBound", Tlm_);
-        Tuf_ = freezeDict.lookupOrDefault<scalar>("T_upperBound", Tum_);
-        Lf_  = freezeDict.lookupOrDefault<scalar>("latentHeat", Lm_);
+        Tlf_ = freezeDict.get<scalar>("T_lowerBound");
+        Tuf_ = freezeDict.get<scalar>("T_upperBound");
+        Lf_  = freezeDict.get<scalar>("latentHeat");
+
+        if (Tuf_ <= Tlf_)
+        {
+            FatalIOErrorInFunction(freezeDict)
+                << "T_upperBound (" << Tuf_ << ") must be strictly greater than "
+                << "T_lowerBound (" << Tlf_ << ") in reverse/freezing block for region "
+                << mesh_.name() << exit(FatalIOError);
+        }
+
+        // Forward defaults to reverse values
+        Tlm_ = Tlf_;
+        Tum_ = Tuf_;
+        Lm_  = Lf_;
+
+        if (!forwardKey.empty())
+        {
+            const dictionary& meltDict = pcDict.subDict(forwardKey);
+            checkAllowedKeys(meltDict, {"T_lowerBound", "T_upperBound", "latentHeat"});
+            Tlm_ = meltDict.lookupOrDefault<scalar>("T_lowerBound", Tlf_);
+            Tum_ = meltDict.lookupOrDefault<scalar>("T_upperBound", Tuf_);
+            Lm_  = meltDict.lookupOrDefault<scalar>("latentHeat", Lf_);
+
+            if (Tum_ <= Tlm_)
+            {
+                FatalIOErrorInFunction(meltDict)
+                    << "T_upperBound (" << Tum_ << ") must be strictly greater than "
+                    << "T_lowerBound (" << Tlm_ << ") in forward/melting block for region "
+                    << mesh_.name() << exit(FatalIOError);
+            }
+        }
+    }
+    else
+    {
+        // Forward / Melting sub-dictionary is mandatory in both or forward direction mode
+        if (forwardKey.empty())
+        {
+            FatalIOErrorInFunction(pcDict)
+                << "Mandatory 'forward' (or legacy 'melting') block missing in phaseChangeDict for region "
+                << mesh_.name() << exit(FatalIOError);
+        }
+
+        const dictionary& meltDict = pcDict.subDict(forwardKey);
+        checkAllowedKeys(meltDict, {"T_lowerBound", "T_upperBound", "latentHeat"});
+        Tlm_ = meltDict.get<scalar>("T_lowerBound");
+        Tum_ = meltDict.get<scalar>("T_upperBound");
+        Lm_  = meltDict.get<scalar>("latentHeat");
+
+        if (Tum_ <= Tlm_)
+        {
+            FatalIOErrorInFunction(meltDict)
+                << "T_upperBound (" << Tum_ << ") must be strictly greater than "
+                << "T_lowerBound (" << Tlm_ << ") in forward/melting block for region "
+                << mesh_.name() << exit(FatalIOError);
+        }
+
+        // Reverse defaults to forward values
+        Tlf_ = Tlm_;
+        Tuf_ = Tum_;
+        Lf_  = Lm_;
+
+        if (!reverseKey.empty())
+        {
+            const dictionary& freezeDict = pcDict.subDict(reverseKey);
+            checkAllowedKeys(freezeDict, {"T_lowerBound", "T_upperBound", "latentHeat"});
+            Tlf_ = freezeDict.lookupOrDefault<scalar>("T_lowerBound", Tlm_);
+            Tuf_ = freezeDict.lookupOrDefault<scalar>("T_upperBound", Tum_);
+            Lf_  = freezeDict.lookupOrDefault<scalar>("latentHeat", Lm_);
+
+            if (Tuf_ <= Tlf_)
+            {
+                FatalIOErrorInFunction(freezeDict)
+                    << "T_upperBound (" << Tuf_ << ") must be strictly greater than "
+                    << "T_lowerBound (" << Tlf_ << ") in reverse/freezing block for region "
+                    << mesh_.name() << exit(FatalIOError);
+            }
+        }
     }
 
     // Hysteresis sub-dictionary
@@ -492,7 +565,6 @@ Foam::phaseChangeModel::StateResult Foam::phaseChangeModel::evalState
 
     // Phase fraction & state machine calculation
     scalar aVal = 0.0;
-    scalar stateVal = 0.0; // 0 = solid, 1 = melting, 2 = liquid, 3 = freezing
     bool isPlateau = false;
 
     scalar a_melt = (Tum_ > Tlm_) ? clamp((Tc - Tlm_) / (Tum_ - Tlm_), 0.0, 1.0) : (Tc >= Tum_ ? 1.0 : 0.0);
@@ -509,10 +581,6 @@ Foam::phaseChangeModel::StateResult Foam::phaseChangeModel::evalState
         {
             aVal = a_melt;
         }
-
-        if (aVal <= 0.0) stateVal = 0.0;
-        else if (aVal >= 1.0) stateVal = 2.0;
-        else stateVal = 1.0;
     }
     else // Cooling branch
     {
@@ -525,21 +593,28 @@ Foam::phaseChangeModel::StateResult Foam::phaseChangeModel::evalState
         {
             aVal = a_freeze;
         }
-
-        if (aVal <= 0.0) stateVal = 0.0;
-        else if (aVal >= 1.0) stateVal = 2.0;
-        else stateVal = 3.0;
     }
 
-    // Direction restriction: forward (irreversible melting/evaporation) or reverse (irreversible freezing/condensation)
-    if (dir_ == direction::forward)
+    // Direction restriction clamp: forward (irreversible melting/evaporation) or reverse (irreversible freezing/condensation)
+    bool clamped = false;
+    if (dir_ == direction::forward && aVal < aOld)
     {
-        aVal = max(aVal, aOld);
+        aVal = aOld;
+        clamped = true;
     }
-    else if (dir_ == direction::reverse)
+    else if (dir_ == direction::reverse && aVal > aOld)
     {
-        aVal = min(aVal, aOld);
+        aVal = aOld;
+        clamped = true;
     }
+
+    isPlateau = isPlateau || clamped;
+
+    // Compute phaseState AFTER direction clamp and hysteresis plateau check
+    scalar stateVal = 0.0; // 0 = solid, 1 = melting, 2 = liquid, 3 = freezing
+    if (aVal <= 0.0) stateVal = 0.0;
+    else if (aVal >= 1.0) stateVal = 2.0;
+    else stateVal = (traj > 0.5) ? 1.0 : 3.0;
 
     res.aVal = aVal;
     res.stateVal = stateVal;
@@ -617,7 +692,7 @@ Foam::scalar Foam::phaseChangeModel::deltaHSens
         return 0.0;
     }
 
-    if (hysteresisActive_)
+    if (hysteresisActive_ || dir_ != direction::both)
     {
         if (trajNew > 0.5) // Heating branch
         {
@@ -785,7 +860,7 @@ void Foam::phaseChangeModel::correct()
 
         // Newton tangent slope Sp = + (rho_bar * L * dAlpha_dT) / (dt * Cp_thermo)
         // Explicit latent heat source Su = + (rho_bar * L * (aVal - aOld)) / dt
-        // In energy equation hEqn: hEqn == ... + Su - fvm::Sp(Sp, h), so Su acts as a sink during melting (dAlpha > 0)
+        // In energy equation hEqn: hEqn += Su + fvm::Sp(Sp, h) - Sp * h_k (on LHS), so Su > 0 acts as a sink during melting
         scalar L = (st.traj > 0.5) ? Lm_ : Lf_;
         scalar SpVal = 0.0;
         scalar cpThVal = CpThermoCells[celli];

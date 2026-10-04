@@ -66,7 +66,7 @@ def calc_h_sens(T, traj, Cps, Cpl, Tlm=300.0, Tum=310.0, Tlf=295.0, Tuf=305.0):
         else:
             return h_l
 
-def setup_single_cell_case(case_dir, T0, Q_source, L_heat, T_lm=300.0, T_um=310.0, T_lf=295.0, T_uf=305.0, alpha0=None, traj0=None, Cps=2000.0, Cpl=2000.0, rhoS=1000.0, rhoL=1000.0, direction="both"):
+def setup_single_cell_case(case_dir, T0, Q_source, L_heat, T_lm=300.0, T_um=310.0, T_lf=295.0, T_uf=305.0, alpha0=None, traj0=None, Cps=2000.0, Cpl=2000.0, rhoS=1000.0, rhoL=1000.0, direction="both", hysteresis=True):
     os.makedirs(case_dir, exist_ok=True)
     os.chdir(case_dir)
     run_cmd("rm -rf [1-9]* 0.* constant/phaseChange/polyMesh constant/polyMesh")
@@ -151,6 +151,7 @@ FoamFile {{ version 2.0; format ascii; class dictionary; location "constant/phas
 thermoType {{ type heSolidThermo; mixture pureMixture; transport constIso; thermo hConst; equationOfState rhoConst; specie specie; energy sensibleEnthalpy; }}
 mixture {{ specie {{ molWeight 100; }} transport {{ kappa 1.0; }} thermodynamics {{ Cp {Cps}; Hf 0; }} equationOfState {{ rho {rhoS}; }} }}
 """)
+    hys_str = "true" if hysteresis else "false"
     with open("constant/phaseChange/phaseChangeDict", "w") as f:
         f.write(f"""
 FoamFile {{ version 2.0; format ascii; class dictionary; location "constant/phaseChange"; object phaseChangeDict; }}
@@ -160,7 +161,7 @@ phaseChange
     active true; phaseChangeMode EHC; direction {direction};
     forward {{ T_lowerBound {T_lm}; T_upperBound {T_um}; latentHeat {L_heat}; }}
     reverse {{ T_lowerBound {T_lf}; T_upperBound {T_uf}; latentHeat {L_heat}; }}
-    hysteresis {{ active true; }}
+    hysteresis {{ active {hys_str}; }}
     density {{ model linear; rhoRef {rhoS}; rhoSolid {rhoS}; rhoLiquid {rhoL}; allowNonConservativeDensity true; }}
     thermophysical {{ mode custom; CpSolid {Cps}; CpLiquid {Cpl}; kSolid 1.0; kLiquid 1.0; }}
 }}
@@ -615,6 +616,103 @@ heatSource {{ type scalarSemiImplicitSource; active true; selectionMode all; vol
         print("STATUS: CASE 16 FAILED!")
         all_passed = False
 
+    # --- Case 17: Forward-Locked Fully Liquid Split Path Cooling (T0 = 315 K, alpha0 = 1.0 -> 295 K) ---
+    print("\n--- Case 17: Forward-Locked Fully Liquid Split Path Cooling (T0 = 315 K, alpha0 = 1.0 -> 295 K) ---")
+    case17_dir = os.path.join(base_dir, "case17_forwardLiquidSplitCooling")
+    Q17 = calc_exact_q_source(T0=315.0, T1=295.0, alpha0=1.0, alpha1=1.0, traj0=1.0, traj1=1.0, Cps=1980.0, Cpl=2320.0, rhoS=1000.0, rhoL=1000.0, L=100000.0)
+    T17, a17, log17 = setup_single_cell_case(case17_dir, T0=315.0, Q_source=Q17, L_heat=100000.0, Cps=1980.0, Cpl=2320.0, alpha0=1.0, traj0=1.0, direction="forward", hysteresis=True)
+    err17 = abs(T17 - 295.0)
+    err_a17 = abs(a17 - 1.0)
+    print(f"Simulated T = {T17:.6f} K, alphaL = {a17:.6f}")
+    print(f"Exact T     = 295.000000 K, alphaL = 1.000000")
+    print(f"Temperature Error = {err17:.6f} K, Alpha Error = {err_a17:.6f}")
+    if err17 < 0.01 and err_a17 < 0.001:
+        print("STATUS: CASE 17 PASSED!")
+    else:
+        print("STATUS: CASE 17 FAILED!")
+        all_passed = False
+
+    # --- Case 18: Reverse-Locked Fully Solid Split Path Heating (T0 = 290 K, alpha0 = 0.0 -> 310 K) ---
+    print("\n--- Case 18: Reverse-Locked Fully Solid Split Path Heating (T0 = 290 K, alpha0 = 0.0 -> 310 K) ---")
+    case18_dir = os.path.join(base_dir, "case18_reverseSolidSplitHeating")
+    Q18 = calc_exact_q_source(T0=290.0, T1=310.0, alpha0=0.0, alpha1=0.0, traj0=0.0, traj1=0.0, Cps=1980.0, Cpl=2320.0, rhoS=1000.0, rhoL=1000.0, L=100000.0)
+    T18, a18, log18 = setup_single_cell_case(case18_dir, T0=290.0, Q_source=Q18, L_heat=100000.0, Cps=1980.0, Cpl=2320.0, alpha0=0.0, traj0=0.0, direction="reverse", hysteresis=True)
+    err18 = abs(T18 - 310.0)
+    err_a18 = abs(a18 - 0.0)
+    print(f"Simulated T = {T18:.6f} K, alphaL = {a18:.6f}")
+    print(f"Exact T     = 310.000000 K, alphaL = 0.000000")
+    print(f"Temperature Error = {err18:.6f} K, Alpha Error = {err_a18:.6f}")
+    if err18 < 0.01 and err_a18 < 0.001:
+        print("STATUS: CASE 18 PASSED!")
+    else:
+        print("STATUS: CASE 18 FAILED!")
+        all_passed = False
+
+    # --- Case 19: Forward-Locked Non-Hysteresis Cooling (hysteresis active false) ---
+    print("\n--- Case 19: Forward-Locked Non-Hysteresis Cooling (T0 = 315 K, alpha0 = 1.0 -> 295 K) ---")
+    case19_dir = os.path.join(base_dir, "case19_forwardNonHysteresisCooling")
+    T19, a19, log19 = setup_single_cell_case(case19_dir, T0=315.0, Q_source=Q17, L_heat=100000.0, Cps=1980.0, Cpl=2320.0, alpha0=1.0, traj0=1.0, direction="forward", hysteresis=False)
+    err19 = abs(T19 - 295.0)
+    err_a19 = abs(a19 - 1.0)
+    print(f"Simulated T = {T19:.6f} K, alphaL = {a19:.6f}")
+    print(f"Exact T     = 295.000000 K, alphaL = 1.000000")
+    print(f"Temperature Error = {err19:.6f} K, Alpha Error = {err_a19:.6f}")
+    if err19 < 0.01 and err_a19 < 0.001:
+        print("STATUS: CASE 19 PASSED!")
+    else:
+        print("STATUS: CASE 19 FAILED!")
+        all_passed = False
+
+    # --- Case 20: Reverse-Locked Non-Hysteresis Heating (hysteresis active false) ---
+    print("\n--- Case 20: Reverse-Locked Non-Hysteresis Heating (T0 = 290 K, alpha0 = 0.0 -> 310 K) ---")
+    case20_dir = os.path.join(base_dir, "case20_reverseNonHysteresisHeating")
+    T20, a20, log20 = setup_single_cell_case(case20_dir, T0=290.0, Q_source=Q18, L_heat=100000.0, Cps=1980.0, Cpl=2320.0, alpha0=0.0, traj0=0.0, direction="reverse", hysteresis=False)
+    err20 = abs(T20 - 310.0)
+    err_a20 = abs(a20 - 0.0)
+    print(f"Simulated T = {T20:.6f} K, alphaL = {a20:.6f}")
+    print(f"Exact T     = 310.000000 K, alphaL = 0.000000")
+    print(f"Temperature Error = {err20:.6f} K, Alpha Error = {err_a20:.6f}")
+    if err20 < 0.01 and err_a20 < 0.001:
+        print("STATUS: CASE 20 PASSED!")
+    else:
+        print("STATUS: CASE 20 FAILED!")
+        all_passed = False
+
+    # --- Case 21: Direction Forward Restart Test (disk field state restoration) ---
+    print("\n--- Case 21: Direction Forward Restart Test (disk field state restoration) ---")
+    case21_dir = os.path.join(base_dir, "case21_forwardRestart")
+    Q21_heat = calc_exact_q_source(T0=295.0, T1=305.0, alpha0=0.0, alpha1=0.5, traj0=1.0, traj1=1.0, Cps=1980.0, Cpl=2320.0, rhoS=1000.0, rhoL=1000.0, L=100000.0)
+    T21_step1, a21_step1, _ = setup_single_cell_case(case21_dir, T0=295.0, Q_source=Q21_heat, L_heat=100000.0, Cps=1980.0, Cpl=2320.0, direction="forward", hysteresis=True)
+    
+    Q21_cool = calc_exact_q_source(T0=305.0, T1=295.0, alpha0=0.5, alpha1=0.5, traj0=1.0, traj1=1.0, Cps=1980.0, Cpl=2320.0, rhoS=1000.0, rhoL=1000.0, L=100000.0)
+    with open(f"{case21_dir}/system/controlDict", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
+application phaseChangeMultiRegionFoam; startFrom latestTime; startTime 100; stopAt endTime; endTime 200; deltaT 100; writeControl timeStep; writeInterval 1;
+""")
+    fvOpt21_cool = f"""
+FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object fvOptions; }}
+heatSource {{ type scalarSemiImplicitSource; active true; selectionMode all; volumeMode absolute; injectionRateSuSp {{ h ({Q21_cool} 0); }} }}
+"""
+    with open(f"{case21_dir}/system/fvOptions", "w") as f: f.write(fvOpt21_cool)
+    with open(f"{case21_dir}/system/phaseChange/fvOptions", "w") as f: f.write(fvOpt21_cool)
+    of_env = "source /usr/lib/openfoam/openfoam2412/etc/bashrc || source /usr/lib/openfoam/openfoam2406/etc/bashrc || true"
+    solver_bin = find_solver()
+    run_cmd(f"mkdir -p {case21_dir}/100/phaseChange/polyMesh && cp -r {case21_dir}/constant/phaseChange/polyMesh/* {case21_dir}/100/phaseChange/polyMesh/ 2>/dev/null || true")
+    run_cmd(f"cd {case21_dir} && bash -c '{of_env}; {solver_bin}'")
+    T21 = parse_openfoam_field(os.path.join(case21_dir, "200/phaseChange/T"))[0]
+    a21 = parse_openfoam_field(os.path.join(case21_dir, "200/phaseChange/phaseFraction"))[0]
+    err21 = abs(T21 - 295.0)
+    err_a21 = abs(a21 - 0.5)
+    print(f"Simulated T = {T21:.6f} K, alphaL = {a21:.6f}")
+    print(f"Exact T     = 295.000000 K, alphaL = 0.500000")
+    print(f"Temperature Error = {err21:.6f} K, Alpha Error = {err_a21:.6f}")
+    if err21 < 0.01 and err_a21 < 0.001:
+        print("STATUS: CASE 21 PASSED!")
+    else:
+        print("STATUS: CASE 21 FAILED!")
+        all_passed = False
+
     print("\n=======================================================")
     print("      SINGLE-CELL VERIFICATION SUITE SUMMARY           ")
     print("=======================================================")
@@ -634,6 +732,11 @@ heatSource {{ type scalarSemiImplicitSource; active true; selectionMode all; vol
     print(f"Case 14 (Unequal Cp Closed)    : {'PASSED' if err14 < 0.01 else 'FAILED'} (err = {err14:.6f} K)")
     print(f"Case 15 (Liquid Reversal)      : {'PASSED' if err15 < 0.01 else 'FAILED'} (err = {err15:.6f} K)")
     print(f"Case 16 (Forward Locked Cool)  : {'PASSED' if err16 < 0.01 else 'FAILED'} (err = {err16:.6f} K)")
+    print(f"Case 17 (Forward Liquid Split) : {'PASSED' if err17 < 0.01 else 'FAILED'} (err = {err17:.6f} K)")
+    print(f"Case 18 (Reverse Solid Split)  : {'PASSED' if err18 < 0.01 else 'FAILED'} (err = {err18:.6f} K)")
+    print(f"Case 19 (Forward Non-Hys Cool) : {'PASSED' if err19 < 0.01 else 'FAILED'} (err = {err19:.6f} K)")
+    print(f"Case 20 (Reverse Non-Hys Heat) : {'PASSED' if err20 < 0.01 else 'FAILED'} (err = {err20:.6f} K)")
+    print(f"Case 21 (Forward Restart Test) : {'PASSED' if err21 < 0.01 else 'FAILED'} (err = {err21:.6f} K)")
     print("-------------------------------------------------------")
 
     if all_passed:
