@@ -15,20 +15,16 @@
             pcModel.correct();
         }
 
-        tmp<volScalarField> tCpThermo = thermo.Cp();
         tmp<volScalarField> tCpEff = pcModel.active() ? pcModel.CpEff() : tmp<volScalarField>(thermo.Cp());
         tmp<volScalarField> trhoEff = pcModel.active() ? pcModel.rho() : tmp<volScalarField>(thermo.rho());
         tmp<volScalarField> tkEff = pcModel.active() ? pcModel.k() : tmp<volScalarField>(thermo.kappa());
 
-        // Thermal diffusivity alpha = k / Cp_sensible in kg/(m s) for enthalpy-based equation
-        volScalarField alpha("alpha", tkEff() / tCpThermo());
-
-        // Effective heat capacity scaling ratio for transient term: rho * (CpEff / Cp_sensible)
-        volScalarField rhoCpRatio("rhoCpRatio", trhoEff() * (tCpEff() / tCpThermo()));
+        // Thermal diffusivity alpha = k / Cp_eff in kg/(m s) for enthalpy-based equation
+        volScalarField alpha("alpha", tkEff() / tCpEff());
 
         fvScalarMatrix hEqn
         (
-            fvm::ddt(betav*rhoCpRatio, h)
+            fvm::ddt(betav*trhoEff, h)
             - (
                 thermo.isotropic()
                 ? fvm::laplacian(betav*alpha, h, "laplacian(alpha,h)")
@@ -40,13 +36,17 @@
 
         if (pcModel.active())
         {
-            hEqn += pcModel.latentHeatSource() + fvm::Sp(pcModel.latentHeatSp(), h);
+            // Linearized latent heat source: Su_phys + fvm::Sp(Sp, h) - Sp * h_k
+            // At convergence (h = h_k), fvm::Sp(Sp, h) and -Sp * h_k cancel out,
+            // leaving exact Su_phys = -rho * L * dAlpha/dt on RHS.
+            hEqn += pcModel.latentHeatSource()
+                  + fvm::Sp(pcModel.latentHeatSp(), h)
+                  - pcModel.latentHeatSp() * h;
         }
 
         hEqn.relax();
 
         fvOptions.constrain(hEqn);
-
 
         if (coupled)
         {
@@ -69,7 +69,14 @@
 
             fvOptions.correct(h);
 
-            thermo.correct();
+            if (pcModel.active())
+            {
+                pcModel.correct();
+            }
+            else
+            {
+                thermo.correct();
+            }
 
             maxDeltaT = max(mag(thermo.T() - Tprev)).value();
             Tprev = thermo.T();

@@ -23,12 +23,10 @@ namespace Foam
                     Class phaseChangeModel Declaration
 
  Description
-    Base class for general multi-region phase-change thermal models
-    (e.g. solidification/melting, alloys, phase-change materials,
-    ice-water transition, and general thermal energy storage/transfer).
-
-    Provides standardized interfaces for effective thermophysical properties,
-    latent heat source terms, and phase state machine transitions.
+    Unified base class for general multi-region phase-change thermal models
+    (solidification/melting, alloys, phase-change materials, ice-water
+    transition, and thermal storage) with exact Newton linearization,
+    stateful hysteresis, path-integral thermophysics, and fluid momentum source.
 \*---------------------------------------------------------------------------*/
 
 class phaseChangeModel
@@ -41,20 +39,62 @@ protected:
 
     bool active_;
 
+    // Parameters - Melting
+    scalar Tlm_; // Melting lower bound [K]
+    scalar Tum_; // Melting upper bound [K]
+    scalar Lm_;  // Melting latent heat [J/kg]
+
+    // Parameters - Freezing
+    scalar Tlf_; // Freezing lower bound [K]
+    scalar Tuf_; // Freezing upper bound [K]
+    scalar Lf_;  // Freezing latent heat [J/kg]
+
+    // Parameters - Hysteresis
+    bool hysteresisActive_;
+    scalar reversalTol_; // Temperature hysteresis reversal deadband [K]
+
+    // Parameters - Density
+    word densityModel_;
+    scalar rhoRef_;
+    scalar rhoSolid_;
+    scalar rhoLiquid_;
+
+    // Parameters - Thermophysical Mode
+    word thermoMode_;
+    scalar Cps_;
+    scalar Cpl_;
+    scalar ks_;
+    scalar kl_;
+
     // Fields
-    volScalarField phaseFraction_; // Liquid/transformed phase fraction alpha in [0, 1]
-    volScalarField phaseState_;    // 0 = solid, 1 = melting/transitioning, 2 = liquid, 3 = freezing
+    volScalarField phaseFraction_; // Transformed phase fraction alpha in [0, 1]
+    volScalarField phaseState_;    // 0 = solid, 1 = melting, 2 = liquid, 3 = freezing
+    volScalarField Cp_;            // Sensible / path-integrated heat capacity [J/(kg K)]
+    volScalarField rho_;           // Effective density [kg/m3]
+    volScalarField k_;             // Effective thermal conductivity [W/(m K)]
+    volScalarField Su_;            // Explicit latent heat source [W/m3]
+    volScalarField Sp_;            // Implicit latent heat linearisation coeff [kg/(m3 s)]
+
+    // Trajectory tracking (1.0 = heating, 0.0 = cooling)
+    volScalarField heatingTrajectory_;
+
+    // Start-of-step stored fields for committed history
+    volScalarField phaseFraction_old_;
+    volScalarField heatingTrajectory_old_;
 
     //- True if phaseFraction was found on disk (or restored from legacy liquidFraction)
     bool phaseFractionRestored_;
 
-    //- Convection suppression flag (dict: phaseChange.convection.suppress, default true).
-    //  Regions solved by this application carry no momentum equation, so convection
-    //  is always suppressed; false is rejected at read time.
+    //- Convection suppression flag
     bool suppressConvection_;
 
-    //- Read optional 'convection { suppress <bool>; }' sub-dictionary
+    // Protected helper functions
+    void readDict();
     void readConvectionDict(const dictionary& pcDict);
+
+    // Exact piecewise path integral helpers
+    scalar integralAlphaMelt(scalar T, scalar alpha_old) const;
+    scalar integralAlphaFreeze(scalar T, scalar alpha_old) const;
 
 public:
 
@@ -100,13 +140,13 @@ public:
         return active_;
     }
 
-    //- Correct phase fraction, state machine, and thermo fields
-    virtual void correct() = 0;
+    //- Correct phase fraction, state machine, thermophysical fields, and Su/Sp
+    virtual void correct();
 
     //- Update trajectory history at completed timestep boundaries
-    virtual void updateHistory() {}
+    virtual void updateHistory();
 
-    //- Whether this model suppresses fluid convection (solid-only phase change)
+    //- Whether this model suppresses fluid convection
     virtual bool suppressConvection() const
     {
         return suppressConvection_;
@@ -131,26 +171,33 @@ public:
     }
 
     //- Access effective heat capacity field
-    virtual tmp<volScalarField> CpEff() const = 0;
+    virtual tmp<volScalarField> CpEff() const
+    {
+        return Cp_;
+    }
 
     //- Access density field
-    virtual tmp<volScalarField> rho() const = 0;
+    virtual tmp<volScalarField> rho() const
+    {
+        return rho_;
+    }
 
     //- Access thermal conductivity field
-    virtual tmp<volScalarField> k() const = 0;
+    virtual tmp<volScalarField> k() const
+    {
+        return k_;
+    }
 
     //- Access explicit latent heat source term
-    virtual tmp<volScalarField> latentHeatSource() const = 0;
+    virtual tmp<volScalarField> latentHeatSource() const
+    {
+        return Su_;
+    }
 
-    //- Access implicit latent heat linearisation coefficient (default: zero)
+    //- Access implicit latent heat linearisation coefficient
     virtual tmp<volScalarField> latentHeatSp() const
     {
-        return tmp<volScalarField>::New
-        (
-            IOobject("latentHeatSp", mesh_.time().timeName(), mesh_),
-            mesh_,
-            dimensionedScalar("zero", dimMass/dimVolume/dimTime, 0.0)
-        );
+        return Sp_;
     }
 
     //- Access momentum source term (default: zero, override in models with Darcy damping)

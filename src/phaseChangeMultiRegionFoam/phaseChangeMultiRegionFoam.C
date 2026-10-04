@@ -81,18 +81,31 @@ int main(int argc, char *argv[])
             }
         }
 
-        PtrList<volScalarField> T_outer_prev(solidRegions.size());
+        PtrList<volScalarField> T_outer_prev_solid(solidRegions.size());
+        PtrList<volScalarField> T_outer_prev_fluid(fluidRegions.size());
         if (coupled)
         {
             forAll(solidRegions, i)
             {
-                T_outer_prev.set
+                T_outer_prev_solid.set
                 (
                     i,
                     new volScalarField
                     (
-                        IOobject("T_outer_prev", runTime.timeName(), solidRegions[i]),
+                        IOobject("T_outer_prev_solid", runTime.timeName(), solidRegions[i]),
                         thermos[i].T()
+                    )
+                );
+            }
+            forAll(fluidRegions, i)
+            {
+                T_outer_prev_fluid.set
+                (
+                    i,
+                    new volScalarField
+                    (
+                        IOobject("T_outer_prev_fluid", runTime.timeName(), fluidRegions[i]),
+                        thermoFluid[i].T()
                     )
                 );
             }
@@ -127,23 +140,50 @@ int main(int argc, char *argv[])
                 fvMatrixAssemblyPtr->solve();
                 #include "correctThermos.H"
 
+                scalar outerTol = pimple.getOrDefault<scalar>("outerTolerance", 1e-4);
+
                 scalar maxDeltaT_outer = 0.0;
                 forAll(solidRegions, i)
                 {
-                    maxDeltaT_outer = max(maxDeltaT_outer, max(mag(thermos[i].T() - T_outer_prev[i])).value());
-                    T_outer_prev[i] = thermos[i].T();
+                    maxDeltaT_outer = max(maxDeltaT_outer, max(mag(thermos[i].T() - T_outer_prev_solid[i])).value());
+                    T_outer_prev_solid[i] = thermos[i].T();
+                }
+                forAll(fluidRegions, i)
+                {
+                    maxDeltaT_outer = max(maxDeltaT_outer, max(mag(thermoFluid[i].T() - T_outer_prev_fluid[i])).value());
+                    T_outer_prev_fluid[i] = thermoFluid[i].T();
                 }
 
-                if (finalIter && nOuterCorr > 1)
+                Info<< "Coupled outer convergence max DeltaT = " << maxDeltaT_outer << " K (tol = " << outerTol << " K)" << endl;
+
+                if (oCorr > 0 && maxDeltaT_outer < outerTol)
                 {
-                    Info<< "Coupled outer convergence max DeltaT = " << maxDeltaT_outer << " K" << endl;
-                    if (maxDeltaT_outer > 1e-4)
+                    Info<< "Coupled outer iterations CONVERGED at outer corrector " << (oCorr + 1) << endl;
+                    forAll(fluidRegions, i)
                     {
-                        WarningInFunction
-                            << "Coupled outer iterations did not converge within " << nOuterCorr
-                            << " outer correctors (residual max DeltaT = " << maxDeltaT_outer
-                            << " K > tol = 1e-4 K)" << endl;
+                        fvMesh& mesh = fluidRegions[i];
+                        #include "readFluidMultiRegionPIMPLEControls.H"
+                        #include "setRegionFluidFields.H"
+                        if (!frozenFlow)
+                        {
+                            for (int corr=0; corr<nCorr; corr++)
+                            {
+                                #include "pEqn.H"
+                            }
+                            turbulence.correct();
+                        }
+                        rho = thermo.rho();
                     }
+                    fvMatrixAssemblyPtr->clear();
+                    break;
+                }
+
+                if (finalIter && nOuterCorr > 1 && maxDeltaT_outer >= outerTol)
+                {
+                    WarningInFunction
+                        << "Coupled outer iterations did not converge within " << nOuterCorr
+                        << " outer correctors (residual max DeltaT = " << maxDeltaT_outer
+                        << " K > tol = " << outerTol << " K)" << endl;
                 }
 
                 forAll(fluidRegions, i)
@@ -223,10 +263,6 @@ int main(int argc, char *argv[])
         }
 
         // Re-synchronize phase-change models with final converged T^n before committing history.
-        // At this point in the timestep, phaseFraction_old_ still holds alpha^{n-1} and T.oldTime()
-        // holds T^{n-1} (the step start state). Re-evaluating phaseChangeModel.correct() with final T^n
-        // evaluates exact alpha(T^n) and CpEff(T^n) without modifying history, making this call
-        // safe and idempotent prior to committing updateHistory().
         forAll(solidRegions, i)
         {
             phaseChangeModel& pcModel = phaseChangeModels[i];

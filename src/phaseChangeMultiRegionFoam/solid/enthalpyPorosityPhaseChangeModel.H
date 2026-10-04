@@ -20,9 +20,9 @@ namespace Foam
             Class enthalpyPorosityPhaseChangeModel Declaration
 
  Description
-    Enthalpy-Porosity model for general phase-change simulations (solidification,
-    melting, alloy casting, and phase-change thermal storage) with exact Newton
-    linearization, stateful hysteresis, custom thermophysics, and fluid momentum damping.
+    Enthalpy-Porosity model for general phase-change simulations with exact
+    Newton/secant linearization, stateful hysteresis, path-integral thermophysics,
+    and Darcy momentum damping force for fluid regions.
 \*---------------------------------------------------------------------------*/
 
 class enthalpyPorosityPhaseChangeModel
@@ -31,54 +31,12 @@ class enthalpyPorosityPhaseChangeModel
 {
 private:
 
-    // Parameters - Melting
-    scalar Tlm_; // Melting lower bound [K]
-    scalar Tum_; // Melting upper bound [K]
-    scalar Lm_;  // Melting latent heat [J/kg]
-
-    // Parameters - Freezing
-    scalar Tlf_; // Freezing lower bound [K]
-    scalar Tuf_; // Freezing upper bound [K]
-    scalar Lf_;  // Freezing latent heat [J/kg]
-
-    // Parameters - Hysteresis
-    bool hysteresisActive_;
-    scalar reversalTol_; // Temperature hysteresis reversal deadband [K]
-
     // Parameters - Darcy & Buoyancy
     scalar beta_; // Thermal expansion coefficient [1/K]
     scalar Cu_;   // Darcy penalty coefficient [kg/(m3 s)]
     scalar q_;    // Smoothing constant
 
-    // Parameters - Convection Control
-    bool suppressConvection_;
-
-    // Parameters - Density
-    word densityModel_;
-    scalar rhoRef_;
-    scalar rhoSolid_;
-    scalar rhoLiquid_;
-
-    // Parameters - Thermophysical Mode
-    word thermoMode_;
-    scalar Cps_;
-    scalar Cpl_;
-    scalar ks_;
-    scalar kl_;
-
-    // Calculated Fields
-    volScalarField Cp_;
-    volScalarField rho_;
-    volScalarField k_;
-
-    // Trajectory tracking (1.0 = heating, 0.0 = cooling)
-    volScalarField heatingTrajectory_;
-
-    // Start-of-step stored fields for committed phaseFraction_old formulation
-    volScalarField phaseFraction_old_;
-    volScalarField heatingTrajectory_old_;
-
-    void readDict();
+    void readPorosityDict();
 
 public:
 
@@ -97,39 +55,6 @@ public:
 
 
     // Member Functions
-
-    virtual bool active() const override
-    {
-        return active_;
-    }
-
-    virtual bool suppressConvection() const override
-    {
-        return suppressConvection_;
-    }
-
-    virtual void correct() override;
-
-    virtual void updateHistory() override;
-
-    virtual tmp<volScalarField> CpEff() const override
-    {
-        return Cp_;
-    }
-
-    virtual tmp<volScalarField> rho() const override
-    {
-        return rho_;
-    }
-
-    virtual tmp<volScalarField> k() const override
-    {
-        return k_;
-    }
-
-    virtual tmp<volScalarField> latentHeatSource() const override;
-
-    virtual tmp<volScalarField> latentHeatSp() const override;
 
     virtual tmp<volVectorField> momentumSource() const override;
 };

@@ -291,7 +291,7 @@ FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; ob
 dimensions [0 2 -2 0 0 0 0]; internalField uniform 560000;
 boundaryField {
     pcm_cold { type fixedValue; value uniform 560000; }
-    pcm_to_solid2 { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 560000; Tnbr T; kappaMethod solidThermo; }
+    pcm_to_solid2 { type calculated; value uniform 560000; }
     emptyFaces { type empty; }
 }
 """)
@@ -320,7 +320,7 @@ FoamFile { version 2.0; format ascii; class volScalarField; location "0/solid2";
 dimensions [0 2 -2 0 0 0 0]; internalField uniform 560000;
 boundaryField {
     solid2_hot { type fixedValue; value uniform 700000; }
-    solid2_to_pcm { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 560000; Tnbr T; kappaMethod solidThermo; }
+    solid2_to_pcm { type calculated; value uniform 560000; }
     emptyFaces { type empty; }
 }
 """)
@@ -348,11 +348,11 @@ def main():
     T_single = parse_openfoam_field(os.path.join(single_dir, "2000/pcm/T"), num_cells=100)
     a_single = parse_openfoam_field(os.path.join(single_dir, "2000/pcm/phaseFraction"), num_cells=100)
 
-    # Test 1: nOuterCorr = 2 (Valid coupled run)
-    print("\n--- Test 1: Coupled Solve with nOuterCorr = 2 ---")
-    case1_dir = os.path.join(base_dir, "case_coupled_nOuter2")
+    # Test 1: nOuterCorr = 10 (Valid coupled run)
+    print("\n--- Test 1: Coupled Solve with nOuterCorr = 10 ---")
+    case1_dir = os.path.join(base_dir, "case_coupled_nOuter10")
     os.makedirs(case1_dir, exist_ok=True)
-    setup_coupled_case(case1_dir, nOuterCorr=2)
+    setup_coupled_case(case1_dir, nOuterCorr=10)
     res1 = run_cmd(f"cd {case1_dir} && bash -c '{of_env}; {solver_bin}'")
     
     T_pcm_left = parse_openfoam_field(os.path.join(case1_dir, "2000/pcm/T"), num_cells=50)

@@ -1,4 +1,3 @@
-
 Yes — I think that can be a **very useful addition**, especially if by “hysteresis stencil” you mean retaining a window of previous \(T\), \(\alpha_L\), and/or phase-state values rather than only \(n-1\).
 
 But I would slightly change the terminology: **`hysteresisHistory`** or **`hysteresisWindow`** is clearer than “stencil.” In CFD, *stencil* usually implies spatial neighboring-cell values, whereas you're talking about **temporal history**.

@@ -170,8 +170,10 @@ def main():
     with open(os.path.join(c1_dir, "constant/pcm/phaseChangeDict"), "w") as f:
         f.write("""
 FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
 phaseChange {
-    type ehc;
+    active true;
+    phaseChangeMode EHC;
     convection { suppress false; }
     melting { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 163000.0; }
 }
@@ -188,8 +190,11 @@ phaseChange {
     with open(os.path.join(c2_dir, "constant/pcm/phaseChangeDict"), "w") as f:
         f.write("""
 FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
 phaseChange {
-    type ehc;
+    active true;
+    phaseChangeMode EHC;
+    hysteresis { active true; }
     melting { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 163000.0; }
 }
 """)
@@ -212,8 +217,10 @@ boundaryField { ".*" { type calculated; value uniform 0.5; } emptyFaces { type e
     with open(os.path.join(c3_dir, "constant/pcm/phaseChangeDict"), "w") as f:
         f.write("""
 FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
 phaseChange {
-    type ehc;
+    active true;
+    phaseChangeMode EHC;
     hysteresis { active false; }
     melting { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 163000.0; }
 }

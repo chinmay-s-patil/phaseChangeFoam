@@ -1,6 +1,8 @@
 
 FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
 phaseChange {
-    type enthalpyPorosity;
+    active true;
+    phaseChangeMode enthalpyPorosity;
     melting { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 163000.0; }
 }

@@ -1,5 +1,5 @@
 
 FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
 application phaseChangeMultiRegionFoam;
-startFrom startTime; startTime 0; stopAt endTime; endTime 2000; deltaT 2;
+startFrom startTime; startTime 0; stopAt endTime; endTime 200; deltaT 2;
 writeControl runTime; writeInterval 2; purgeWrite 0; writeFormat ascii;

@@ -184,7 +184,9 @@ boundaryField { ".*" { type calculated; value uniform 101325; } "(top|bottom|fro
 
     T_vals = parse_openfoam_field("2000/pcm/T")
     alpha_vals = parse_openfoam_field("2000/pcm/phaseFraction")
-    k_vals = parse_openfoam_field("2000/pcm/kEff")
+    k_vals = parse_openfoam_field("2000/pcm/kPCM")
+    if not k_vals:
+        k_vals = parse_openfoam_field("2000/pcm/kEff")
 
     mean_T = sum(T_vals) / len(T_vals)
     mean_a = sum(alpha_vals) / len(alpha_vals)
