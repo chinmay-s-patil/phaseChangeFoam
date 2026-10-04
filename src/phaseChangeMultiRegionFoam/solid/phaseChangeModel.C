@@ -156,7 +156,7 @@ Foam::phaseChangeModel::phaseChangeModel
             mesh.time().timeName(),
             mesh,
             IOobject::READ_IF_PRESENT,
-            IOobject::NO_WRITE
+            IOobject::AUTO_WRITE
         ),
         mesh,
         dimensionedScalar("heatingTrajectory", dimless, 1.0),
@@ -170,7 +170,7 @@ Foam::phaseChangeModel::phaseChangeModel
             mesh.time().timeName(),
             mesh,
             IOobject::READ_IF_PRESENT,
-            IOobject::NO_WRITE
+            IOobject::AUTO_WRITE
         ),
         thermo.T()
     ),
@@ -334,6 +334,12 @@ void Foam::phaseChangeModel::readDict()
                 << mesh_.name() << " with direction reverse." << exit(FatalIOError);
         }
 
+        if (!forwardKey.empty())
+        {
+            WarningInFunction
+                << "Key '" << forwardKey << "' in phaseChange dictionary is ignored when direction is 'reverse'." << endl;
+        }
+
         const dictionary& freezeDict = pcDict.subDict(reverseKey);
         checkAllowedKeys(freezeDict, {"T_lowerBound", "T_upperBound", "latentHeat"});
         Tlf_ = freezeDict.get<scalar>("T_lowerBound");
@@ -378,6 +384,12 @@ void Foam::phaseChangeModel::readDict()
             FatalIOErrorInFunction(pcDict)
                 << "Mandatory 'forward' (or legacy 'melting') block missing in phaseChangeDict for region "
                 << mesh_.name() << exit(FatalIOError);
+        }
+
+        if (dir_ == direction::forward && !reverseKey.empty())
+        {
+            WarningInFunction
+                << "Key '" << reverseKey << "' in phaseChange dictionary is ignored when direction is 'forward'." << endl;
         }
 
         const dictionary& meltDict = pcDict.subDict(forwardKey);

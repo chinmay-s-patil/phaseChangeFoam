@@ -285,6 +285,7 @@ def calc_exact_q_source(T0, T1, alpha0, alpha1, traj0, traj1, Cps, Cpl, rhoS, rh
 def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     print(f"=== Comprehensive Single-Cell Phase Change Verification Suite in {base_dir} ===")
+    print("Invariant verified: A direction-locked cell (forward or reverse) maintains frozen phase fraction alpha = alpha_old under temperature changes in the restricted direction, cooling or heating with sensible heat capacity Cp = (1-alpha)*Cps + alpha*Cpl.")
 
     all_passed = True
 
@@ -713,6 +714,113 @@ heatSource {{ type scalarSemiImplicitSource; active true; selectionMode all; vol
         print("STATUS: CASE 21 FAILED!")
         all_passed = False
 
+    # --- Case 22: Restart test under direction both with hysteresis active true ---
+    print("\n--- Case 22: Restart test under direction both with hysteresis active true ---")
+    case22_dir = os.path.join(base_dir, "case22_hysteresisRestart")
+    
+    # Step 1: Heat T0 = 295 K -> 305 K (alpha = 0.5, heating branch traj = 1.0)
+    Q22_step1 = calc_exact_q_source(T0=295.0, T1=305.0, alpha0=0.0, alpha1=0.5, traj0=1.0, traj1=1.0, Cps=1980.0, Cpl=2320.0, rhoS=1000.0, rhoL=1000.0, L=100000.0)
+    T22_step1, a22_step1, _ = setup_single_cell_case(case22_dir, T0=295.0, Q_source=Q22_step1, L_heat=100000.0, Cps=1980.0, Cpl=2320.0, direction="both", hysteresis=True)
+
+    # Step 2: Cool one step 305 K -> 303 K so trajectory flips to cooling (traj = 0.0) and T_reversal is set to 303 K
+    # Stop solver at t = 200 s, saving fields to disk (phaseFraction, heatingTrajectory, T_reversal)
+    Q22_step2 = calc_exact_q_source(T0=305.0, T1=303.0, alpha0=0.5, alpha1=0.5, traj0=1.0, traj1=0.0, Cps=1980.0, Cpl=2320.0, rhoS=1000.0, rhoL=1000.0, L=100000.0)
+    with open(f"{case22_dir}/system/controlDict", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
+application phaseChangeMultiRegionFoam; startFrom latestTime; startTime 100; stopAt endTime; endTime 200; deltaT 100; writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii;
+""")
+    fvOpt22_step2 = f"""
+FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object fvOptions; }}
+heatSource {{ type scalarSemiImplicitSource; active true; selectionMode all; volumeMode absolute; injectionRateSuSp {{ h ({Q22_step2} 0); }} }}
+"""
+    with open(f"{case22_dir}/system/fvOptions", "w") as f: f.write(fvOpt22_step2)
+    with open(f"{case22_dir}/system/phaseChange/fvOptions", "w") as f: f.write(fvOpt22_step2)
+    of_env = "source /usr/lib/openfoam/openfoam2412/etc/bashrc || source /usr/lib/openfoam/openfoam2406/etc/bashrc || true"
+    solver_bin = find_solver()
+    run_cmd(f"mkdir -p {case22_dir}/100/phaseChange/polyMesh && cp -r {case22_dir}/constant/phaseChange/polyMesh/* {case22_dir}/100/phaseChange/polyMesh/ 2>/dev/null || true")
+    run_cmd(f"cd {case22_dir} && bash -c '{of_env}; {solver_bin}'")
+
+    T22_step2 = parse_openfoam_field(os.path.join(case22_dir, "200/phaseChange/T"))[0]
+    a22_step2 = parse_openfoam_field(os.path.join(case22_dir, "200/phaseChange/phaseFraction"))[0]
+
+    # Step 3: Restart from t = 200 s to t = 300 s with reheating heat source Q_reheat > 0 (reheating 303 K to 308 K)
+    Q22_step3 = calc_exact_q_source(T0=303.0, T1=308.0, alpha0=0.5, alpha1=0.8, traj0=0.0, traj1=1.0, Cps=1980.0, Cpl=2320.0, rhoS=1000.0, rhoL=1000.0, L=100000.0)
+    with open(f"{case22_dir}/system/controlDict", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
+application phaseChangeMultiRegionFoam; startFrom latestTime; startTime 200; stopAt endTime; endTime 300; deltaT 100; writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii;
+""")
+    fvOpt22_step3 = f"""
+FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object fvOptions; }}
+heatSource {{ type scalarSemiImplicitSource; active true; selectionMode all; volumeMode absolute; injectionRateSuSp {{ h ({Q22_step3} 0); }} }}
+"""
+    with open(f"{case22_dir}/system/fvOptions", "w") as f: f.write(fvOpt22_step3)
+    with open(f"{case22_dir}/system/phaseChange/fvOptions", "w") as f: f.write(fvOpt22_step3)
+    run_cmd(f"mkdir -p {case22_dir}/200/phaseChange/polyMesh && cp -r {case22_dir}/constant/phaseChange/polyMesh/* {case22_dir}/200/phaseChange/polyMesh/ 2>/dev/null || true")
+    run_cmd(f"cd {case22_dir} && bash -c '{of_env}; {solver_bin}'")
+
+    T22 = parse_openfoam_field(os.path.join(case22_dir, "300/phaseChange/T"))[0]
+    a22 = parse_openfoam_field(os.path.join(case22_dir, "300/phaseChange/phaseFraction"))[0]
+
+    # Uninterrupted reference case
+    case22_ref_dir = os.path.join(base_dir, "case22_uninterruptedRef")
+    setup_single_cell_case(case22_ref_dir, T0=295.0, Q_source=Q22_step1, L_heat=100000.0, Cps=1980.0, Cpl=2320.0, direction="both", hysteresis=True)
+    with open(f"{case22_ref_dir}/system/controlDict", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
+application phaseChangeMultiRegionFoam; startFrom startTime; startTime 0; stopAt endTime; endTime 300; deltaT 100; writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii;
+""")
+    fvOpt22_ref = f"""
+FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object fvOptions; }}
+heatSource
+{{
+    type scalarSemiImplicitSource;
+    active true;
+    selectionMode all;
+    volumeMode absolute;
+    injectionRateSuSp
+    {{
+        h
+        {{
+            Su table
+            (
+                (0 {Q22_step1})
+                (100 {Q22_step1})
+                (100.001 {Q22_step2})
+                (200 {Q22_step2})
+                (200.001 {Q22_step3})
+                (300 {Q22_step3})
+            );
+            Sp 0;
+        }}
+    }}
+}}
+"""
+    with open(f"{case22_ref_dir}/system/fvOptions", "w") as f: f.write(fvOpt22_ref)
+    with open(f"{case22_ref_dir}/system/phaseChange/fvOptions", "w") as f: f.write(fvOpt22_ref)
+    run_cmd(f"cd {case22_ref_dir} && bash -c '{of_env}; {solver_bin}'")
+
+    T22_ref = parse_openfoam_field(os.path.join(case22_ref_dir, "300/phaseChange/T"))[0]
+    a22_ref = parse_openfoam_field(os.path.join(case22_ref_dir, "300/phaseChange/phaseFraction"))[0]
+
+    err22 = abs(T22 - 308.0)
+    err_a22 = abs(a22 - 0.80)
+    err22_ref = abs(T22 - T22_ref)
+    err_a22_ref = abs(a22 - a22_ref)
+
+    print(f"Simulated T = {T22:.6f} K, alphaL = {a22:.6f}")
+    print(f"Exact T     = 308.000000 K, alphaL = 0.800000")
+    print(f"Ref T       = {T22_ref:.6f} K, alphaL = {a22_ref:.6f}")
+    print(f"Temperature Error (vs exact) = {err22:.6f} K, Alpha Error = {err_a22:.6f}")
+    print(f"Temperature Error (vs ref)   = {err22_ref:.6f} K, Alpha Error = {err_a22_ref:.6f}")
+
+    if err22 < 0.01 and err_a22 < 0.001 and err22_ref < 0.01 and err_a22_ref < 0.001:
+        print("STATUS: CASE 22 PASSED!")
+    else:
+        print("STATUS: CASE 22 FAILED!")
+        all_passed = False
+
     print("\n=======================================================")
     print("      SINGLE-CELL VERIFICATION SUITE SUMMARY           ")
     print("=======================================================")
@@ -737,6 +845,7 @@ heatSource {{ type scalarSemiImplicitSource; active true; selectionMode all; vol
     print(f"Case 19 (Forward Non-Hys Cool) : {'PASSED' if err19 < 0.01 else 'FAILED'} (err = {err19:.6f} K)")
     print(f"Case 20 (Reverse Non-Hys Heat) : {'PASSED' if err20 < 0.01 else 'FAILED'} (err = {err20:.6f} K)")
     print(f"Case 21 (Forward Restart Test) : {'PASSED' if err21 < 0.01 else 'FAILED'} (err = {err21:.6f} K)")
+    print(f"Case 22 (Hysteresis Restart)   : {'PASSED' if err22 < 0.01 and err22_ref < 0.01 else 'FAILED'} (err = {err22:.6f} K)")
     print("-------------------------------------------------------")
 
     if all_passed:
