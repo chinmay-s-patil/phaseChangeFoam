@@ -369,6 +369,71 @@ Foam::scalar Foam::phaseChangeModel::hSens(scalar T, scalar traj) const
 }
 
 
+Foam::scalar Foam::phaseChangeModel::deltaHSens
+(
+    scalar Tnew,
+    scalar Told,
+    scalar aOld,
+    scalar trajNew,
+    scalar trajOld
+) const
+{
+    scalar dT = Tnew - Told;
+    if (mag(dT) < 1e-12)
+    {
+        return 0.0;
+    }
+
+    bool isReversal = (trajNew != trajOld);
+
+    if (isReversal && hysteresisActive_)
+    {
+        if (trajNew > 0.5) // Cooling -> Heating reversal
+        {
+            scalar Texit = Tlm_ + aOld * (Tum_ - Tlm_);
+            if (Told < Tlm_) Texit = Tlm_;
+            if (Told > Tum_) Texit = Tum_;
+
+            if (Tnew <= Texit)
+            {
+                scalar Cp_plateau = (1.0 - aOld) * Cps_ + aOld * Cpl_;
+                return Cp_plateau * dT;
+            }
+            else
+            {
+                scalar Cp_plateau = (1.0 - aOld) * Cps_ + aOld * Cpl_;
+                scalar dH1 = Cp_plateau * (Texit - Told);
+                scalar dH2 = hSens(Tnew, 1.0) - hSens(Texit, 1.0);
+                return dH1 + dH2;
+            }
+        }
+        else // Heating -> Cooling reversal
+        {
+            scalar Texit = Tlf_ + aOld * (Tuf_ - Tlf_);
+            if (Told < Tlf_) Texit = Tlf_;
+            if (Told > Tuf_) Texit = Tuf_;
+
+            if (Tnew >= Texit)
+            {
+                scalar Cp_plateau = (1.0 - aOld) * Cps_ + aOld * Cpl_;
+                return Cp_plateau * dT;
+            }
+            else
+            {
+                scalar Cp_plateau = (1.0 - aOld) * Cps_ + aOld * Cpl_;
+                scalar dH1 = Cp_plateau * (Texit - Told);
+                scalar dH2 = hSens(Tnew, 0.0) - hSens(Texit, 0.0);
+                return dH1 + dH2;
+            }
+        }
+    }
+    else
+    {
+        return hSens(Tnew, trajNew) - hSens(Told, trajNew);
+    }
+}
+
+
 void Foam::phaseChangeModel::correct()
 {
     if (!active_) return;
@@ -488,7 +553,7 @@ void Foam::phaseChangeModel::correct()
             scalar dT_step = Tc - Told;
             if (mag(dT_step) > 1e-8)
             {
-                cpVal = (hSens(Tc, traj) - hSens(Told, traj)) / dT_step;
+                cpVal = deltaHSens(Tc, Told, aOld, traj, trajOldCells[celli]) / dT_step;
             }
             else
             {
@@ -641,7 +706,7 @@ void Foam::phaseChangeModel::correct()
                 scalar dT_stepf = Tf - Toldf;
                 if (mag(dT_stepf) > 1e-8)
                 {
-                    cpValf = (hSens(Tf, trajf) - hSens(Toldf, trajf)) / dT_stepf;
+                    cpValf = deltaHSens(Tf, Toldf, aOldf, trajf, trajOldFace[faceI]) / dT_stepf;
                 }
                 else
                 {

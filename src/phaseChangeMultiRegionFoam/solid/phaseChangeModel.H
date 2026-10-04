@@ -95,6 +95,9 @@ protected:
     // Exact sensible enthalpy integral for custom thermo mode
     scalar hSens(scalar T, scalar traj) const;
 
+    // Exact step sensible enthalpy change considering hysteresis plateaus
+    scalar deltaHSens(scalar Tnew, scalar Told, scalar aOld, scalar trajNew, scalar trajOld) const;
+
 public:
 
     //- Runtime type information

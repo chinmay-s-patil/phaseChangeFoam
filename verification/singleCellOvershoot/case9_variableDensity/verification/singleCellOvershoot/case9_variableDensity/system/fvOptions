@@ -8,6 +8,6 @@ heatSource
     volumeMode absolute;
     injectionRateSuSp
     {
-        h (-45040.0 0);
+        h (5000000.0 0);
     }
 }

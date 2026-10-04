@@ -28,7 +28,7 @@
 
         fvScalarMatrix hEqn
         (
-            fvm::ddt(betav*rhoCpRatio, h)
+            betav*rhoCpRatio*fvm::ddt(h)
             - (
                 thermo.isotropic()
                 ? fvm::laplacian(betav*alpha, h, "laplacian(alpha,h)")
