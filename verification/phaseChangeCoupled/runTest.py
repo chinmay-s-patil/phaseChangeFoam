@@ -172,7 +172,7 @@ boundaryField { ".*" { type calculated; value uniform 101325; } emptyFaces { typ
 """)
 
 
-def setup_coupled_case(base_dir, nOuterCorr=2):
+def setup_coupled_case(base_dir, nOuterCorr=2, endTime=2000, writeInterval=2000):
     os.chdir(base_dir)
     run_cmd("rm -rf [1-9]* 0.* constant/pcm/polyMesh constant/solid2/polyMesh constant/polyMesh system/pcm system/solid2")
 
@@ -203,8 +203,8 @@ boundary (
         f.write(f"""
 FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object controlDict; }}
 application phaseChangeMultiRegionFoam;
-startFrom startTime; startTime 0; stopAt endTime; endTime 2000; deltaT 2;
-writeControl runTime; writeInterval 2000; purgeWrite 0; writeFormat ascii;
+startFrom startTime; startTime 0; stopAt endTime; endTime {endTime}; deltaT 2;
+writeControl runTime; writeInterval {writeInterval}; purgeWrite 0; writeFormat ascii;
 """)
 
     with open("system/fvSchemes", "w") as f:
@@ -401,14 +401,61 @@ def main():
     print(f"nOuterCorr = 1 FatalError Triggered: {pass_t2}")
     print(f"Test 2 Status: {'PASSED' if pass_t2 else 'FAILED'}")
 
+    # Test 3: Coupled Write-and-Restart
+    print("\n--- Test 3: Coupled Write-and-Restart (0..1000 s then 1000..2000 s) ---")
+    case3_dir = os.path.join(base_dir, "case_coupled_restart")
+    os.makedirs(case3_dir, exist_ok=True)
+    setup_coupled_case(case3_dir, nOuterCorr=10, endTime=1000, writeInterval=1000)
+    
+    # Run 0..1000 s
+    run_cmd(f"cd {case3_dir} && bash -c '{of_env}; {solver_bin}'")
+    
+    # Check that disk fields exist at t=1000 and T_reversal BC is 'calculated'
+    t1000_trev = os.path.join(case3_dir, "1000/pcm/T_reversal")
+    pass_t3_disk = os.path.exists(t1000_trev)
+    if pass_t3_disk:
+        with open(t1000_trev, 'r') as f:
+            trev_content = f.read()
+        pcm_to_solid2_calculated = "pcm_to_solid2" in trev_content and "type            calculated;" in trev_content
+        print(f"1000/pcm/T_reversal field exists and pcm_to_solid2 patch is calculated: {pcm_to_solid2_calculated}")
+        pass_t3_disk = pass_t3_disk and pcm_to_solid2_calculated
+
+    # Update controlDict for restart: startFrom latestTime; endTime 2000;
+    with open(os.path.join(case3_dir, "system/controlDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
+application phaseChangeMultiRegionFoam;
+startFrom latestTime; stopAt endTime; endTime 2000; deltaT 2;
+writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii;
+""")
+    
+    # Continue solve 1000..2000 s
+    run_cmd(f"cd {case3_dir} && bash -c '{of_env}; {solver_bin}'")
+
+    T_pcm_restart_left = parse_openfoam_field(os.path.join(case3_dir, "2000/pcm/T"), num_cells=50)
+    T_pcm_restart_right = parse_openfoam_field(os.path.join(case3_dir, "2000/solid2/T"), num_cells=50)
+    
+    if T_pcm_restart_left and T_pcm_restart_right and T_pcm_left and T_pcm_right:
+        T_restart = T_pcm_restart_left + T_pcm_restart_right
+        T_nonrestart = T_pcm_left + T_pcm_right
+        diff_restart = max(abs(tr - tnr) for tr, tnr in zip(T_restart, T_nonrestart))
+        print(f"Restart vs Non-restart T max difference at t=2000 s: {diff_restart:.4e} K")
+        pass_t3_solution = diff_restart < 0.01
+    else:
+        pass_t3_solution = False
+
+    pass_t3 = pass_t3_disk and pass_t3_solution
+    print(f"Test 3 Status: {'PASSED' if pass_t3 else 'FAILED'}")
+
     print("\n=======================================================")
     print("      COUPLED MULTI-REGION VERIFICATION RESULTS        ")
     print("=======================================================")
     print(f"Test 1 (nOuterCorr = 2 Convergence) : {'PASSED' if pass_t1 else 'FAILED'}")
     print(f"Test 2 (nOuterCorr = 1 FatalError)  : {'PASSED' if pass_t2 else 'FAILED'}")
+    print(f"Test 3 (Coupled Write & Restart)    : {'PASSED' if pass_t3 else 'FAILED'}")
     print("-------------------------------------------------------")
 
-    if pass_t1 and pass_t2:
+    if pass_t1 and pass_t2 and pass_t3:
         print("\nALL COUPLED MULTI-REGION VERIFICATION TESTS PASSED SUCCESSFULLY!")
     else:
         print("\nCOUPLED TEST FAILED!")
@@ -416,3 +463,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

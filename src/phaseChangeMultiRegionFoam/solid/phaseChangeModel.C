@@ -172,7 +172,9 @@ Foam::phaseChangeModel::phaseChangeModel
             IOobject::READ_IF_PRESENT,
             IOobject::AUTO_WRITE
         ),
-        thermo.T()
+        mesh,
+        dimensionedScalar("T_reversal", dimTemperature, 0.0),
+        "calculated"
     ),
     phaseFraction_old_
     (
@@ -208,12 +210,19 @@ Foam::phaseChangeModel::phaseChangeModel
             IOobject::NO_READ,
             IOobject::NO_WRITE
         ),
-        T_reversal_
+        mesh,
+        dimensionedScalar("T_reversal_old", dimTemperature, 0.0),
+        "calculated"
     ),
     phaseFractionRestored_(false),
     suppressConvection_(suppressConvection)
 {
     phaseFractionRestored_ = phaseFraction_.headerOk();
+
+    if (!T_reversal_.headerOk())
+    {
+        T_reversal_ == thermo.T();
+    }
 
     // Backward compatibility for disk reads: if liquidFraction exists on disk but phaseFraction doesn't
     IOobject liquidFractionIO

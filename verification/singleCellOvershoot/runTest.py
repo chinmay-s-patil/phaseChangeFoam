@@ -714,8 +714,8 @@ heatSource {{ type scalarSemiImplicitSource; active true; selectionMode all; vol
         print("STATUS: CASE 21 FAILED!")
         all_passed = False
 
-    # --- Case 22: Restart test under direction both with hysteresis active true ---
-    print("\n--- Case 22: Restart test under direction both with hysteresis active true ---")
+    # --- Case 22: Continued-Cooling Restart Test under direction both with hysteresis active true ---
+    print("\n--- Case 22: Continued-Cooling Restart Test (direction both, hysteresis active true) ---")
     case22_dir = os.path.join(base_dir, "case22_hysteresisRestart")
     
     # Step 1: Heat T0 = 295 K -> 305 K (alpha = 0.5, heating branch traj = 1.0)
@@ -744,8 +744,16 @@ heatSource {{ type scalarSemiImplicitSource; active true; selectionMode all; vol
     T22_step2 = parse_openfoam_field(os.path.join(case22_dir, "200/phaseChange/T"))[0]
     a22_step2 = parse_openfoam_field(os.path.join(case22_dir, "200/phaseChange/phaseFraction"))[0]
 
-    # Step 3: Restart from t = 200 s to t = 300 s with reheating heat source Q_reheat > 0 (reheating 303 K to 308 K)
-    Q22_step3 = calc_exact_q_source(T0=303.0, T1=308.0, alpha0=0.5, alpha1=0.8, traj0=0.0, traj1=1.0, Cps=1980.0, Cpl=2320.0, rhoS=1000.0, rhoL=1000.0, L=100000.0)
+    # Direct disk field assertions at t = 200 s
+    disk_traj200 = parse_openfoam_field(os.path.join(case22_dir, "200/phaseChange/heatingTrajectory"))[0]
+    disk_Trev200 = parse_openfoam_field(os.path.join(case22_dir, "200/phaseChange/T_reversal"))[0]
+    print(f"Disk 200/heatingTrajectory = {disk_traj200:.1f} (Expected 0.0)")
+    print(f"Disk 200/T_reversal        = {disk_Trev200:.1f} K (Expected 303.0 K)")
+
+    # Step 3: Continued cooling test! Restart from t = 200 s to t = 300 s cooling 303 K -> 297 K
+    # Correct restore (cooling branch, traj = 0.0): alpha updates to a_freeze(297) = 0.20
+    # Failed restore (heating branch, traj = 1.0): alpha stays frozen at 0.5 (plateau)
+    Q22_step3 = calc_exact_q_source(T0=303.0, T1=297.0, alpha0=0.5, alpha1=0.2, traj0=0.0, traj1=0.0, Cps=1980.0, Cpl=2320.0, rhoS=1000.0, rhoL=1000.0, L=100000.0)
     with open(f"{case22_dir}/system/controlDict", "w") as f:
         f.write("""
 FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
@@ -804,18 +812,18 @@ heatSource
     T22_ref = parse_openfoam_field(os.path.join(case22_ref_dir, "300/phaseChange/T"))[0]
     a22_ref = parse_openfoam_field(os.path.join(case22_ref_dir, "300/phaseChange/phaseFraction"))[0]
 
-    err22 = abs(T22 - 308.0)
-    err_a22 = abs(a22 - 0.80)
+    err22 = abs(T22 - 297.0)
+    err_a22 = abs(a22 - 0.20)
     err22_ref = abs(T22 - T22_ref)
     err_a22_ref = abs(a22 - a22_ref)
 
     print(f"Simulated T = {T22:.6f} K, alphaL = {a22:.6f}")
-    print(f"Exact T     = 308.000000 K, alphaL = 0.800000")
+    print(f"Exact T     = 297.000000 K, alphaL = 0.200000")
     print(f"Ref T       = {T22_ref:.6f} K, alphaL = {a22_ref:.6f}")
     print(f"Temperature Error (vs exact) = {err22:.6f} K, Alpha Error = {err_a22:.6f}")
     print(f"Temperature Error (vs ref)   = {err22_ref:.6f} K, Alpha Error = {err_a22_ref:.6f}")
 
-    if err22 < 0.01 and err_a22 < 0.001 and err22_ref < 0.01 and err_a22_ref < 0.001:
+    if err22 < 0.01 and err_a22 < 0.001 and err22_ref < 0.01 and err_a22_ref < 0.001 and abs(disk_traj200 - 0.0) < 1e-4 and abs(disk_Trev200 - 303.0) < 1e-4:
         print("STATUS: CASE 22 PASSED!")
     else:
         print("STATUS: CASE 22 FAILED!")

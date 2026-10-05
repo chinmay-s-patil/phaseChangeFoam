@@ -1,0 +1,4 @@
+
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object fvSolution; }
+PIMPLE { nOuterCorrectors 10; nNonOrthogonalCorrectors 0; nNonLinearCorrectors 20; nonLinearTolerance 1e-5; }
+solvers { "h.*" { solver PCG; preconditioner DIC; tolerance 1e-12; relTol 0; } }

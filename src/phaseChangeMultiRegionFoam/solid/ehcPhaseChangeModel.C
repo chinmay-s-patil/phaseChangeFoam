@@ -50,6 +50,8 @@ Foam::ehcPhaseChangeModel::ehcPhaseChangeModel
         }
     };
     checkCalculatedPatches(phaseFraction_);
+    checkCalculatedPatches(heatingTrajectory_);
+    checkCalculatedPatches(T_reversal_);
     checkCalculatedPatches(phaseState_);
     checkCalculatedPatches(Cp_);
     checkCalculatedPatches(rho_);
