@@ -214,7 +214,7 @@ int main(int argc, char *argv[])
             }
 
             // Additional loops for energy solution only
-            if (!oCorr && nOuterCorr > 1)
+            if (coupled && !oCorr && nOuterCorr > 1)
             {
                 loopControl looping(runTime, pimple, "energyCoupling");
 

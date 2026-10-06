@@ -135,6 +135,46 @@ Foam::fluidPhaseChangeModel::~fluidPhaseChangeModel()
 // * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * * //
 
 Foam::tmp<Foam::volScalarField>
+Foam::fluidPhaseChangeModel::energySourceSp() const
+{
+    return tmp<volScalarField>::New
+    (
+        IOobject
+        (
+            "energySourceSp_zero",
+            mesh_.time().timeName(),
+            mesh_,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        mesh_,
+        dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
+    );
+}
+
+
+Foam::tmp<Foam::volScalarField>
+Foam::fluidPhaseChangeModel::energySourceSu() const
+{
+    return energySource();
+}
+
+
+Foam::tmp<Foam::volScalarField>
+Foam::fluidPhaseChangeModel::speciesSourceSp(const label specieIndex) const
+{
+    return zeroSpeciesSource_;
+}
+
+
+Foam::tmp<Foam::volScalarField>
+Foam::fluidPhaseChangeModel::speciesSourceSu(const word& specieName) const
+{
+    return speciesSource(specieName);
+}
+
+
+Foam::tmp<Foam::volScalarField>
 Foam::fluidPhaseChangeModel::speciesSource(const word& specieName) const
 {
     const label specieI = thermo_.composition().species().find(specieName);

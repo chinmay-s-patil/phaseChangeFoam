@@ -15,7 +15,10 @@ else
     }
 
     phaseChange.correct();
-    phaseChange.checkMassConservation();
+    if (oCorr == 0)
+    {
+        phaseChange.checkMassConservation();
+    }
 
     #include "UEqn.H"
     #include "YEqn.H"

@@ -13,6 +13,23 @@ Description
     Uses mixture density scaling (rho * Y_specie) for single-phase in-region
     species conversion and supports optional pressure-dependent Tsat(p).
 
+    Usage:
+    \verbatim
+    phaseChange
+    {
+        active          true;
+        type            Lee;
+        liquid          H2O_l;          // Liquid specie name (default: "liquid")
+        vapor           H2O_v;          // Vapor specie name (default: "vapor")
+        C_evap          0.1;            // Evaporation coefficient [1/s] (default: 0.1)
+        C_cond          0.1;            // Condensation coefficient [1/s] (default: 0.1)
+        latentHeat      2.26e6;         // Latent heat of vaporization [J/kg] (default: 2.26e6)
+        Tsat            373.15;         // Saturation temperature [K] (default: 373.15)
+        enableTsatP     false;          // Enable Clausius-Clapeyron Tsat(p) (default: false)
+        pRef            101325;         // Reference pressure for Tsat(p) [Pa] (default: 101325)
+    }
+    \endverbatim
+
     Physics Caveats & Model Scope:
     1. Single-Region Species Conversion Scope (massSource_ = 0):
        massSource() returns zero because this model converts species within a single phase/region
@@ -58,6 +75,7 @@ private:
         word vaporName_;
         label liquidIndex_;
         label vaporIndex_;
+        label timeIndex_;
 
         dimensionedScalar C_evap_;
         dimensionedScalar C_cond_;
@@ -69,8 +87,14 @@ private:
         volScalarField mDot_;
         volScalarField massSource_;
         volScalarField energySource_;
+        volScalarField energySourceSp_;
+        volScalarField energySourceSu_;
         volScalarField liquidSource_;
+        volScalarField liquidSourceSp_;
+        volScalarField liquidSourceSu_;
         volScalarField vaporSource_;
+        volScalarField vaporSourceSp_;
+        volScalarField vaporSourceSu_;
 
 
     // Private Member Functions
@@ -133,6 +157,18 @@ public:
 
             //- Return energy source [W/m^3]
             virtual tmp<volScalarField> energySource() const override;
+
+            //- Return implicit matrix coefficient Sp for energy equation [kg/(m^3 s)]
+            virtual tmp<volScalarField> energySourceSp() const override;
+
+            //- Return explicit matrix source Su for energy equation [W/m^3]
+            virtual tmp<volScalarField> energySourceSu() const override;
+
+            //- Return implicit matrix coefficient Sp for species equation by index [kg/(m^3 s)]
+            virtual tmp<volScalarField> speciesSourceSp(const label specieIndex) const override;
+
+            //- Return explicit matrix source Su for species equation by name [kg/(m^3 s)]
+            virtual tmp<volScalarField> speciesSourceSu(const word& specieName) const override;
 
             //- Update phase change state and source fields
             virtual void correct() override;

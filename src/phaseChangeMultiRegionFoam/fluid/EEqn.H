@@ -25,7 +25,7 @@
 
     if (phaseChange.active())
     {
-        EEqn -= phaseChange.energySource();
+        EEqn += fvm::Sp(phaseChange.energySourceSp(), he) - phaseChange.energySourceSu();
     }
 
     EEqn.relax();

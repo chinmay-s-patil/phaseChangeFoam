@@ -39,6 +39,7 @@ Foam::leeFluidPhaseChangeModel::leeFluidPhaseChangeModel
     vaporName_(dict_.getOrDefault<word>("vapor", "vapor")),
     liquidIndex_(thermo_.composition().species().find(liquidName_)),
     vaporIndex_(thermo_.composition().species().find(vaporName_)),
+    timeIndex_(-1),
     C_evap_
     (
         "C_evap",
@@ -109,6 +110,32 @@ Foam::leeFluidPhaseChangeModel::leeFluidPhaseChangeModel
         mesh,
         dimensionedScalar("zero", dimEnergy/dimVolume/dimTime, Zero)
     ),
+    energySourceSp_
+    (
+        IOobject
+        (
+            "energySourceSpLee",
+            mesh.time().timeName(),
+            mesh,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        mesh,
+        dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
+    ),
+    energySourceSu_
+    (
+        IOobject
+        (
+            "energySourceSuLee",
+            mesh.time().timeName(),
+            mesh,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        mesh,
+        dimensionedScalar("zero", dimEnergy/dimVolume/dimTime, Zero)
+    ),
     liquidSource_
     (
         IOobject
@@ -122,11 +149,63 @@ Foam::leeFluidPhaseChangeModel::leeFluidPhaseChangeModel
         mesh,
         dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
     ),
+    liquidSourceSp_
+    (
+        IOobject
+        (
+            "liquidSourceSpLee",
+            mesh.time().timeName(),
+            mesh,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        mesh,
+        dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
+    ),
+    liquidSourceSu_
+    (
+        IOobject
+        (
+            "liquidSourceSuLee",
+            mesh.time().timeName(),
+            mesh,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        mesh,
+        dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
+    ),
     vaporSource_
     (
         IOobject
         (
             "vaporSourceLee",
+            mesh.time().timeName(),
+            mesh,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        mesh,
+        dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
+    ),
+    vaporSourceSp_
+    (
+        IOobject
+        (
+            "vaporSourceSpLee",
+            mesh.time().timeName(),
+            mesh,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        mesh,
+        dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
+    ),
+    vaporSourceSu_
+    (
+        IOobject
+        (
+            "vaporSourceSuLee",
             mesh.time().timeName(),
             mesh,
             IOobject::NO_READ,
@@ -194,9 +273,59 @@ Foam::leeFluidPhaseChangeModel::speciesSource(const label specieIndex) const
 
 
 Foam::tmp<Foam::volScalarField>
+Foam::leeFluidPhaseChangeModel::speciesSourceSp(const label specieIndex) const
+{
+    if (specieIndex == liquidIndex_ && liquidIndex_ != -1)
+    {
+        return liquidSourceSp_;
+    }
+    else if (specieIndex == vaporIndex_ && vaporIndex_ != -1)
+    {
+        return vaporSourceSp_;
+    }
+    else
+    {
+        return zeroSpeciesSource_;
+    }
+}
+
+
+Foam::tmp<Foam::volScalarField>
+Foam::leeFluidPhaseChangeModel::speciesSourceSu(const word& specieName) const
+{
+    if (specieName == liquidName_ && liquidIndex_ != -1)
+    {
+        return liquidSourceSu_;
+    }
+    else if (specieName == vaporName_ && vaporIndex_ != -1)
+    {
+        return vaporSourceSu_;
+    }
+    else
+    {
+        return zeroSpeciesSource_;
+    }
+}
+
+
+Foam::tmp<Foam::volScalarField>
 Foam::leeFluidPhaseChangeModel::energySource() const
 {
     return energySource_;
+}
+
+
+Foam::tmp<Foam::volScalarField>
+Foam::leeFluidPhaseChangeModel::energySourceSp() const
+{
+    return energySourceSp_;
+}
+
+
+Foam::tmp<Foam::volScalarField>
+Foam::leeFluidPhaseChangeModel::energySourceSu() const
+{
+    return energySourceSu_;
 }
 
 
@@ -207,11 +336,16 @@ void Foam::leeFluidPhaseChangeModel::correct()
         return;
     }
 
-    const volScalarField& T = thermo_.T();
+    const volScalarField& T_old = thermo_.T().oldTime();
+    const volScalarField& p_old = thermo_.p().oldTime();
+    
+    const volScalarField* rhoPtr = mesh_.findObject<volScalarField>("rho");
     tmp<volScalarField> trho = thermo_.rho();
-    const volScalarField& rho = trho();
+    const volScalarField& rho_curr = trho();
+
     tmp<volScalarField> tCp = thermo_.Cp();
     const volScalarField& CpField = tCp();
+
     const PtrList<volScalarField>& Y = thermo_.composition().Y();
 
     const scalar dt = mesh_.time().deltaTValue();
@@ -235,7 +369,7 @@ void Foam::leeFluidPhaseChangeModel::correct()
         scalar Tsat_c = Tsat0;
         if (enableTsatP_)
         {
-            const scalar p_c = thermo_.p()[cellI];
+            const scalar p_c = p_old[cellI];
             if (p_c > 1e-3 && pRef_.value() > 1e-3)
             {
                 scalar invTsat = (1.0 / Tsat0) - (R_vap / L) * ::log(p_c / pRef_.value());
@@ -246,36 +380,43 @@ void Foam::leeFluidPhaseChangeModel::correct()
             }
         }
 
-        const scalar T_c = T[cellI];
-        const scalar rho_c = rho[cellI];
+        const scalar T0 = T_old[cellI];
+        const scalar T_curr = thermo_.T()[cellI];
+        const scalar rho_c = rho_curr[cellI];
         const scalar Cp_c = max(CpField[cellI], scalar(1.0));
-        const scalar Y_l = (liquidIndex_ != -1) ? max(Y[liquidIndex_][cellI], scalar(0)) : scalar(0);
-        const scalar Y_v = (vaporIndex_ != -1) ? max(Y[vaporIndex_][cellI], scalar(0)) : scalar(0);
+        const scalar Yl0 = (liquidIndex_ != -1) ? max(Y[liquidIndex_].oldTime()[cellI], scalar(0)) : scalar(0);
+        const scalar Yv0 = (vaporIndex_ != -1) ? max(Y[vaporIndex_].oldTime()[cellI], scalar(0)) : scalar(0);
 
         scalar mDotVal = 0.0;
-        if (T_c > Tsat_c)
-        {
-            const scalar mDot_raw = C_evap * rho_c * Y_l * (T_c - Tsat_c) / Tsat_c;
-            const scalar mDot_massCap = (dt > 1e-12) ? (rho_c * Y_l / dt) : mDot_raw;
-            const scalar mDot_thermalCap = (dt > 1e-12) ? (rho_c * Cp_c * (T_c - Tsat_c) / (L * dt)) : mDot_raw;
+        scalar energySourceVal = 0.0;
 
-            mDotVal = min(mDot_raw, min(mDot_massCap, mDot_thermalCap));
+        if (T0 > Tsat_c)
+        {
+            const scalar mDot_raw = C_evap * rho_c * Yl0 * max(T_curr - Tsat_c, scalar(0)) / Tsat_c;
+            const scalar massCap = (dt > 1e-12) ? (rho_c * Yl0 / dt) : mDot_raw;
+            const scalar thermalCap = (dt > 1e-12) ? (rho_c * Cp_c * max(T0 - Tsat_c, scalar(0)) / (L * dt)) : mDot_raw;
+
+            mDotVal = min(mDot_raw, min(massCap, thermalCap));
+            energySourceVal = - mDotVal * L;
         }
-        else if (T_c < Tsat_c)
+        else if (T0 < Tsat_c)
         {
-            const scalar mDot_raw = C_cond * rho_c * Y_v * (Tsat_c - T_c) / Tsat_c;
-            const scalar mDot_massCap = (dt > 1e-12) ? (rho_c * Y_v / dt) : mDot_raw;
-            const scalar mDot_thermalCap = (dt > 1e-12) ? (rho_c * Cp_c * (Tsat_c - T_c) / (L * dt)) : mDot_raw;
+            const scalar mDot_raw = C_cond * rho_c * Yv0 * max(Tsat_c - T_curr, scalar(0)) / Tsat_c;
+            const scalar massCap = (dt > 1e-12) ? (rho_c * Yv0 / dt) : mDot_raw;
+            const scalar thermalCap = (dt > 1e-12) ? (rho_c * Cp_c * max(Tsat_c - T0, scalar(0)) / (L * dt)) : mDot_raw;
 
-            mDotVal = - min(mDot_raw, min(mDot_massCap, mDot_thermalCap));
+            mDotVal = - min(mDot_raw, min(massCap, thermalCap));
+            energySourceVal = - mDotVal * L;
         }
 
         mDot_[cellI] = mDotVal;
+        liquidSource_[cellI] = - mDotVal;
+        liquidSourceSu_[cellI] = - mDotVal;
+        vaporSource_[cellI] = mDotVal;
+        vaporSourceSu_[cellI] = mDotVal;
+        energySource_[cellI] = energySourceVal;
+        energySourceSu_[cellI] = energySourceVal;
     }
-
-    liquidSource_ = - mDot_;
-    vaporSource_ = mDot_;
-    energySource_ = - mDot_ * latentHeat_;
 }
 
 
