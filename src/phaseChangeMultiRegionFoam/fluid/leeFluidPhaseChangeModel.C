@@ -188,19 +188,7 @@ Foam::leeFluidPhaseChangeModel::speciesSource(const label specieIndex) const
     }
     else
     {
-        return tmp<volScalarField>::New
-        (
-            IOobject
-            (
-                "zeroSpeciesSource_" + Foam::name(specieIndex),
-                mesh_.time().timeName(),
-                mesh_,
-                IOobject::NO_READ,
-                IOobject::NO_WRITE
-            ),
-            mesh_,
-            dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
-        );
+        return zeroSpeciesSource_;
     }
 }
 

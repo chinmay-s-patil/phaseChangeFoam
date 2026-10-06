@@ -48,6 +48,9 @@ protected:
         dictionary dict_;
         bool active_;
 
+        //- Cached zero species source field to avoid dynamic allocation
+        volScalarField zeroSpeciesSource_;
+
 
 private:
 
@@ -156,7 +159,8 @@ public:
             virtual void correct() = 0;
 
             //- Check mass conservation: returns true if sum(speciesSource(i)) == massSource()
-            virtual bool checkMassConservation(const scalar tol = 1e-6) const;
+            //  Uses relative tolerance against max|mDot| (default 1e-4) and absolute floor (default 1e-10).
+            virtual bool checkMassConservation(const scalar relTol = 1e-4, const scalar absTol = 1e-10) const;
 };
 
 

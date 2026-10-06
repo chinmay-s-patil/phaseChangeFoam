@@ -44,7 +44,20 @@ Foam::fluidPhaseChangeModel::fluidPhaseChangeModel
     U_(U),
     phi_(phi),
     dict_(subOrEmptyDict("phaseChange")),
-    active_(dict_.getOrDefault<bool>("active", false))
+    active_(dict_.getOrDefault<bool>("active", false)),
+    zeroSpeciesSource_
+    (
+        IOobject
+        (
+            "zeroSpeciesSource",
+            mesh.time().timeName(),
+            mesh,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        mesh,
+        dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
+    )
 {}
 
 
@@ -131,24 +144,16 @@ Foam::fluidPhaseChangeModel::speciesSource(const word& specieName) const
     }
     else
     {
-        return tmp<volScalarField>::New
-        (
-            IOobject
-            (
-                "speciesSource_" + specieName,
-                mesh_.time().timeName(),
-                mesh_,
-                IOobject::NO_READ,
-                IOobject::NO_WRITE
-            ),
-            mesh_,
-            dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
-        );
+        return zeroSpeciesSource_;
     }
 }
 
 
-bool Foam::fluidPhaseChangeModel::checkMassConservation(const scalar tol) const
+bool Foam::fluidPhaseChangeModel::checkMassConservation
+(
+    const scalar relTol,
+    const scalar absTol
+) const
 {
     if (!active_)
     {
@@ -176,15 +181,34 @@ bool Foam::fluidPhaseChangeModel::checkMassConservation(const scalar tol) const
     }
 
     tmp<volScalarField> tNetMass = massSource();
-    volScalarField diff = mag(sumSpecies - tNetMass());
+    const volScalarField& netMass = tNetMass();
 
+    volScalarField diff = mag(sumSpecies - netMass);
     const scalar maxDiff = max(diff).value();
-    if (maxDiff > tol)
+
+    const scalar maxSpeciesRate = max(mag(sumSpecies)).value();
+    const scalar maxNetMassRate = max(mag(netMass)).value();
+    const scalar maxRate = max(maxSpeciesRate, maxNetMassRate);
+
+    // Relative discrepancy against peak mass transfer rate in domain
+    const scalar relDiff = (maxRate > absTol) ? (maxDiff / maxRate) : maxDiff;
+
+    if (relDiff > relTol && maxDiff > absTol)
     {
+        #ifdef FULLDEBUG
+        FatalErrorInFunction
+            << "Mass conservation discrepancy in phaseChange model on region " << mesh_.name()
+            << ": max|sum(speciesSource) - massSource| = " << maxDiff
+            << " kg/(m^3 s) (relative error: " << relDiff
+            << " > relTol " << relTol << ")"
+            << exit(FatalError);
+        #else
         WarningInFunction
             << "Mass conservation discrepancy in phaseChange model on region " << mesh_.name()
             << ": max|sum(speciesSource) - massSource| = " << maxDiff
-            << " kg/(m^3 s) > tolerance " << tol << endl;
+            << " kg/(m^3 s) (relative error: " << relDiff
+            << " > relTol " << relTol << ")" << endl;
+        #endif
         return false;
     }
 
