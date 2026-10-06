@@ -298,7 +298,6 @@ heatSource
         injectionRateSuSp
         {{
             h           ({q_source} 0);
-            he          ({q_source} 0);
         }}
     }}
 }}
@@ -560,17 +559,41 @@ phaseChange
     setup_case(c8_dir, T_init=T_init8, Y_l_init=Yl_init8, Y_v_init=Yv_init8, c_evap=100.0, dt=dt8, end_time=t_end8, q_source=Q_in)
     run_cmd(f"cd {c8_dir} && bash -c '{of_env}; {solver_bin}'", cwd=c8_dir)
 
-    # Note: controlDict writes files at format '3' or '3.0' or '3.000000...'
-    # Let's find the highest time directory created
-    time_dirs = [d for d in os.listdir(c8_dir) if d.replace('.', '', 1).isdigit() and float(d) > 0]
-    latest_time_dir = max(time_dirs, key=lambda x: float(x))
+    # 1. Intermediate Plateau Check at t = 0.5s and t = 1.0s (during active boiling while Yl > 0)
+    def find_time_dir(target_t):
+        dirs = [d for d in os.listdir(c8_dir) if d.replace('.', '', 1).isdigit() and abs(float(d) - target_t) < 1e-4]
+        return dirs[0] if dirs else None
 
+    t05_dir = find_time_dir(0.5)
+    t10_dir = find_time_dir(1.0)
+    latest_time_dir = max([d for d in os.listdir(c8_dir) if d.replace('.', '', 1).isdigit() and float(d) > 0], key=lambda x: float(x))
+
+    T_05 = parse_openfoam_field(os.path.join(c8_dir, f"{t05_dir}/air/T"))[0]
+    Yl_05 = parse_openfoam_field(os.path.join(c8_dir, f"{t05_dir}/air/H2O_l"))[0]
+    rho_05 = parse_openfoam_field(os.path.join(c8_dir, f"{t05_dir}/air/rho"))[0]
+
+    T_10 = parse_openfoam_field(os.path.join(c8_dir, f"{t10_dir}/air/T"))[0]
+    Yl_10 = parse_openfoam_field(os.path.join(c8_dir, f"{t10_dir}/air/H2O_l"))[0]
+
+    # Exact analytical boiling plateau temperature under explicit heat input Q:
+    # T_plateau = Tsat + Q * dt / (rho * Cp)
+    T_plateau_anal = Tsat8 + (Q_in * dt8) / (rho_05 * Cp8)
+
+    print(f"Intermediate t = 0.5s: T = {T_05:.6f} K, Yl = {Yl_05:.6f}")
+    print(f"Intermediate t = 1.0s: T = {T_10:.6f} K, Yl = {Yl_10:.6f}")
+    print(f"Analytic Plateau T:     {T_plateau_anal:.6f} K (Tsat = {Tsat8} K)")
+
+    # Assert flat boiling plateau: T(t=0.5s) == T(t=1.0s) to within 0.05 K
+    assert abs(T_05 - T_10) < 0.05, f"FAIL: Boiling plateau temperature drifted between t=0.5s ({T_05:.4f} K) and t=1.0s ({T_10:.4f} K)!"
+    # Assert simulation plateau temperature matches exact analytical T_plateau to within 0.05 K
+    assert abs(T_05 - T_plateau_anal) < 0.05, f"FAIL: Plateau T ({T_05:.4f} K) differs from analytical T_plateau ({T_plateau_anal:.4f} K) by > 0.05 K!"
+
+    # 2. Final Energy Balance Check at t = 3.0s
     T_final8 = parse_openfoam_field(os.path.join(c8_dir, f"{latest_time_dir}/air/T"))[0]
     Yl_final8 = parse_openfoam_field(os.path.join(c8_dir, f"{latest_time_dir}/air/H2O_l"))[0]
     Yv_final8 = parse_openfoam_field(os.path.join(c8_dir, f"{latest_time_dir}/air/H2O_v"))[0]
     rho8 = parse_openfoam_field(os.path.join(c8_dir, f"{latest_time_dir}/air/rho"))[0]
 
-    # Energy Balance Check: Q * t_end = rho * Cp * (T_final - T_init) + rho * L * (Yv_final - Yv_init)
     E_input = Q_in * float(latest_time_dir)
     E_sensible = rho8 * Cp8 * (T_final8 - T_init8)
     E_latent = rho8 * L8 * (Yv_final8 - Yv_init8)
@@ -581,12 +604,53 @@ phaseChange
     print(f"Sensible Energy Stored:    {E_sensible:.2f} J/m^3")
     print(f"Latent Energy Stored:      {E_latent:.2f} J/m^3")
     print(f"Total Energy Stored:       {E_stored:.2f} J/m^3 (rel error: {rel_err8:.4%})")
-    print(f"Final T:                   {T_final8:.4f} K (Tsat = {Tsat8} K)")
-    print(f"Final Yl:                  {Yl_final8:.6f} (Yl_init = {Yl_init8})")
+    print(f"Final T (t=3.0s):          {T_final8:.4f} K")
+    print(f"Final Yl (t=3.0s):         {Yl_final8:.6f} (Yl_init = {Yl_init8})")
 
     assert rel_err8 < 0.01, f"FAIL: Energy balance relative error ({rel_err8:.4%}) > 1%!"
-    assert abs(T_final8 - Tsat8) < 5.0, f"FAIL: Final temperature ({T_final8:.2f} K) is far from Tsat ({Tsat8} K) during boiling plateau!"
     print("PASS: Heated Pot Physical Energy Balance Verification Passed!")
+
+    # Test 8b: Heated Pot Liquid Exhaustion & Superheating Verification (Yl_init = 0.05)
+    print("\n--- Test 8b: Heated Pot Liquid Exhaustion & Superheating Verification (Yl_init = 0.05) ---")
+    c8b_dir = os.path.join(base_dir, "case_heated_pot_exhaustion")
+    if os.path.exists(c8b_dir):
+        shutil.rmtree(c8b_dir)
+
+    Yl_init8b = 0.05
+    setup_case(c8b_dir, T_init=T_init8, Y_l_init=Yl_init8b, Y_v_init=Yv_init8, c_evap=100.0, dt=dt8, end_time=t_end8, q_source=Q_in)
+    run_cmd(f"cd {c8b_dir} && bash -c '{of_env}; {solver_bin}'", cwd=c8b_dir)
+
+    latest_time_dir_8b = max([d for d in os.listdir(c8b_dir) if d.replace('.', '', 1).isdigit() and float(d) > 0], key=lambda x: float(x))
+
+    T_final8b = parse_openfoam_field(os.path.join(c8b_dir, f"{latest_time_dir_8b}/air/T"))[0]
+    Yl_final8b = parse_openfoam_field(os.path.join(c8b_dir, f"{latest_time_dir_8b}/air/H2O_l"))[0]
+    Yv_final8b = parse_openfoam_field(os.path.join(c8b_dir, f"{latest_time_dir_8b}/air/H2O_v"))[0]
+    rho8b = parse_openfoam_field(os.path.join(c8b_dir, f"{latest_time_dir_8b}/air/rho"))[0]
+
+    # Analytical final temperature calculation after liquid depletion:
+    # All liquid Yl_init (0.05) is evaporated (consuming rho * L * Yl_init energy).
+    # The remaining energy Q*t - rho*L*Yl_init goes into sensible heating: rho * Cp * (T_final - T_init).
+    # T_final_anal = T_init + (Q*t - rho*L*Yl_init) / (rho * Cp)
+    E_input_8b = Q_in * float(latest_time_dir_8b)
+    E_latent_8b = rho8b * L8 * Yl_init8b
+    E_sensible_needed_8b = E_input_8b - E_latent_8b
+    T_final_anal_8b = T_init8 + E_sensible_needed_8b / (rho8b * Cp8)
+
+    E_sensible_8b = rho8b * Cp8 * (T_final8b - T_init8)
+    E_stored_8b = E_sensible_8b + rho8b * L8 * (Yv_final8b - Yv_init8)
+    rel_err_8b = abs(E_input_8b - E_stored_8b) / E_input_8b
+
+    print(f"Liquid Exhaustion Final Yl: {Yl_final8b:.6f} (Expected: 0.000000)")
+    print(f"Liquid Exhaustion Final T:  {T_final8b:.4f} K (Analytic T_final: {T_final_anal_8b:.4f} K)")
+    print(f"Sensible Energy fraction:   {E_sensible_8b / E_input_8b:.2%}")
+    print(f"Energy Balance rel error:   {rel_err_8b:.4%}")
+
+    # Assertions:
+    assert Yl_final8b >= 0.0, f"FAIL: Liquid mass fraction ({Yl_final8b}) fell below 0!"
+    assert Yl_final8b < 1e-5, f"FAIL: Liquid mass fraction ({Yl_final8b}) was not completely exhausted!"
+    assert abs(T_final8b - T_final_anal_8b) / T_final_anal_8b < 0.01, f"FAIL: Final temperature ({T_final8b:.2f} K) differs from analytical superheated T ({T_final_anal_8b:.2f} K) by > 1%!"
+    assert rel_err_8b < 0.01, f"FAIL: Energy balance relative error ({rel_err_8b:.4%}) > 1%!"
+    print("PASS: Heated Pot Liquid Exhaustion & Superheating Verification Passed!")
 
     print("\n=========================================================================")
     print("      LEE FLUID PHASE CHANGE MODEL QUANTITATIVE VERIFICATION PASS        ")
