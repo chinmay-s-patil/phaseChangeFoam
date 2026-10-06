@@ -81,7 +81,7 @@ boundary (
 FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
 application phaseChangeMultiRegionFoam;
 startFrom startTime; startTime 0; stopAt endTime; endTime 100; deltaT 100;
-writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii;
+writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii; writePrecision 12;
 """)
 
     with open("system/fvSchemes", "w") as f:

@@ -25,7 +25,7 @@
 
     if (phaseChange.active())
     {
-        EEqn += phaseChange.energySource();
+        EEqn -= phaseChange.energySource();
     }
 
     EEqn.relax();

@@ -10,8 +10,8 @@ Class
 
 Description
     Abstract base class for fluid-region phase-change and evaporation models.
-    Provides mass source rate mDot(), velocity divergence source divUSource(),
-    and energy-equation latent heat source/sink terms.
+    Provides net mass source rate massSource(), species source rates speciesSource(),
+    and energy-equation latent heat source/sink terms energySource().
 
 \*---------------------------------------------------------------------------*/
 
@@ -136,7 +136,7 @@ public:
             virtual tmp<volScalarField> massSource() const = 0;
 
             //- Species mass source rate per unit volume by specie index [kg/(m^3 s)]
-            //  Placed on RHS of species transport equation (YEqn.H: + phaseChange.speciesSource(i)).
+            //  Placed on RHS of species transport equation (YEqn.H: - phaseChange.speciesSource(i)).
             //  Positive for species creation (e.g. vapor created by evaporation),
             //  negative for species consumption (e.g. liquid species depleted in cell).
             virtual tmp<volScalarField> speciesSource(const label specieIndex) const = 0;
@@ -146,7 +146,7 @@ public:
             virtual tmp<volScalarField> speciesSource(const word& specieName) const;
 
             //- Latent and mass enthalpy source/sink term for energy equation [W/m^3]
-            //  Placed on RHS of energy equation (EEqn.H: EEqn == ... + phaseChange.energySource()).
+            //  Placed on RHS of energy equation (EEqn.H: - phaseChange.energySource()).
             //  Note: Evaporation absorbs latent heat, so latent term is negative (- mDot_evap * L).
             //  If net mixture mass enters the region (massSource() > 0), energySource() also
             //  includes the enthalpy carried by added mass (+ mDot_added * h_added).
@@ -154,6 +154,9 @@ public:
 
             //- Update phase change state and fields
             virtual void correct() = 0;
+
+            //- Check mass conservation: returns true if sum(speciesSource(i)) == massSource()
+            virtual bool checkMassConservation(const scalar tol = 1e-6) const;
 };
 
 

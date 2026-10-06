@@ -78,7 +78,7 @@ boundary (
 FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
 application phaseChangeMultiRegionFoam;
 startFrom startTime; startTime 0; stopAt endTime; endTime 2000; deltaT 2;
-writeControl runTime; writeInterval 2000; purgeWrite 0; writeFormat ascii;
+writeControl runTime; writeInterval 2000; purgeWrite 0; writeFormat ascii; writePrecision 12;
 """)
 
     with open("system/fvSchemes", "w") as f:
@@ -205,7 +205,7 @@ boundary (
 FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object controlDict; }}
 application phaseChangeMultiRegionFoam;
 startFrom startTime; startTime 0; stopAt endTime; endTime {endTime}; deltaT 2;
-writeControl runTime; writeInterval {writeInterval}; purgeWrite 0; writeFormat ascii;
+writeControl runTime; writeInterval {writeInterval}; purgeWrite 0; writeFormat ascii; writePrecision 12;
 """)
 
     with open("system/fvSchemes", "w") as f:
@@ -427,7 +427,7 @@ def main():
 FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
 application phaseChangeMultiRegionFoam;
 startFrom latestTime; stopAt endTime; endTime 2000; deltaT 2;
-writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii;
+writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii; writePrecision 12;
 """)
     
     # Continue solve 1000..2000 s

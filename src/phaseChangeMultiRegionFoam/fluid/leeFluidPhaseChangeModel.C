@@ -1,0 +1,273 @@
+/*---------------------------------------------------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     | Website:  https://openfoam.org
+    \\  /    A nd           | Copyright (C) OpenFOAM Foundation
+     \\/     M anipulation  |
+-------------------------------------------------------------------------------
+\*---------------------------------------------------------------------------*/
+
+#include "leeFluidPhaseChangeModel.H"
+#include "addToRunTimeSelectionTable.H"
+
+// * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
+
+namespace Foam
+{
+    defineTypeNameAndDebug(leeFluidPhaseChangeModel, 0);
+    addToRunTimeSelectionTable
+    (
+        fluidPhaseChangeModel,
+        leeFluidPhaseChangeModel,
+        dictionary
+    );
+}
+
+
+// * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
+
+Foam::leeFluidPhaseChangeModel::leeFluidPhaseChangeModel
+(
+    const fvMesh& mesh,
+    const rhoReactionThermo& thermo,
+    const volVectorField& U,
+    const surfaceScalarField& phi
+)
+:
+    fluidPhaseChangeModel(mesh, thermo, U, phi),
+    liquidName_(dict_.getOrDefault<word>("liquid", "liquid")),
+    vaporName_(dict_.getOrDefault<word>("vapor", "vapor")),
+    liquidIndex_(thermo_.composition().species().find(liquidName_)),
+    vaporIndex_(thermo_.composition().species().find(vaporName_)),
+    C_evap_
+    (
+        "C_evap",
+        dimless/dimTime,
+        dict_.getOrDefault<scalar>("C_evap", 0.1)
+    ),
+    C_cond_
+    (
+        "C_cond",
+        dimless/dimTime,
+        dict_.getOrDefault<scalar>("C_cond", 0.1)
+    ),
+    latentHeat_
+    (
+        "latentHeat",
+        dimEnergy/dimMass,
+        dict_.getOrDefault<scalar>("latentHeat", 2.26e6)
+    ),
+    TsatRef_
+    (
+        "Tsat",
+        dimTemperature,
+        dict_.getOrDefault<scalar>("Tsat", 373.15)
+    ),
+    pRef_
+    (
+        "pRef",
+        dimPressure,
+        dict_.getOrDefault<scalar>("pRef", 101325)
+    ),
+    enableTsatP_(dict_.getOrDefault<bool>("enableTsatP", false)),
+    mDot_
+    (
+        IOobject
+        (
+            "mDotLee",
+            mesh.time().timeName(),
+            mesh,
+            IOobject::NO_READ,
+            IOobject::AUTO_WRITE
+        ),
+        mesh,
+        dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
+    ),
+    massSource_
+    (
+        IOobject
+        (
+            "massSourceLee",
+            mesh.time().timeName(),
+            mesh,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        mesh,
+        dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
+    ),
+    energySource_
+    (
+        IOobject
+        (
+            "energySourceLee",
+            mesh.time().timeName(),
+            mesh,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        mesh,
+        dimensionedScalar("zero", dimEnergy/dimVolume/dimTime, Zero)
+    ),
+    liquidSource_
+    (
+        IOobject
+        (
+            "liquidSourceLee",
+            mesh.time().timeName(),
+            mesh,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        mesh,
+        dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
+    ),
+    vaporSource_
+    (
+        IOobject
+        (
+            "vaporSourceLee",
+            mesh.time().timeName(),
+            mesh,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        mesh,
+        dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
+    )
+{
+    active_ = true;
+
+    if (liquidIndex_ == -1)
+    {
+        Info<< "leeFluidPhaseChangeModel: liquid specie '" << liquidName_
+            << "' not found in thermo composition." << endl;
+    }
+    if (vaporIndex_ == -1)
+    {
+        Info<< "leeFluidPhaseChangeModel: vapor specie '" << vaporName_
+            << "' not found in thermo composition." << endl;
+    }
+}
+
+
+// * * * * * * * * * * * * * * * * Destructor  * * * * * * * * * * * * * * * //
+
+Foam::leeFluidPhaseChangeModel::~leeFluidPhaseChangeModel()
+{}
+
+
+// * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * * //
+
+Foam::tmp<Foam::volScalarField>
+Foam::leeFluidPhaseChangeModel::massSource() const
+{
+    return massSource_;
+}
+
+
+Foam::tmp<Foam::volScalarField>
+Foam::leeFluidPhaseChangeModel::speciesSource(const label specieIndex) const
+{
+    if (specieIndex == liquidIndex_ && liquidIndex_ != -1)
+    {
+        return liquidSource_;
+    }
+    else if (specieIndex == vaporIndex_ && vaporIndex_ != -1)
+    {
+        return vaporSource_;
+    }
+    else
+    {
+        return tmp<volScalarField>::New
+        (
+            IOobject
+            (
+                "zeroSpeciesSource_" + Foam::name(specieIndex),
+                mesh_.time().timeName(),
+                mesh_,
+                IOobject::NO_READ,
+                IOobject::NO_WRITE
+            ),
+            mesh_,
+            dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
+        );
+    }
+}
+
+
+Foam::tmp<Foam::volScalarField>
+Foam::leeFluidPhaseChangeModel::energySource() const
+{
+    return energySource_;
+}
+
+
+void Foam::leeFluidPhaseChangeModel::correct()
+{
+    if (!active_)
+    {
+        return;
+    }
+
+    const volScalarField& T = thermo_.T();
+    tmp<volScalarField> trho = thermo_.rho();
+    const volScalarField& rho = trho();
+    const PtrList<volScalarField>& Y = thermo_.composition().Y();
+
+    const scalar Tsat0 = TsatRef_.value();
+    const scalar L = latentHeat_.value();
+    const scalar C_evap = C_evap_.value();
+    const scalar C_cond = C_cond_.value();
+
+    scalar R_vap = 461.5; // Default gas constant for water vapor (J/kg/K)
+    if (vaporIndex_ != -1)
+    {
+        const scalar W_v = thermo_.composition().W(vaporIndex_);
+        if (W_v > 1e-3)
+        {
+            R_vap = 8314.463 / W_v; // Universal gas constant 8314.463 J/(kmol K)
+        }
+    }
+
+    forAll(mesh_.cells(), cellI)
+    {
+        scalar Tsat_c = Tsat0;
+        if (enableTsatP_)
+        {
+            const scalar p_c = thermo_.p()[cellI];
+            if (p_c > 1e-3 && pRef_.value() > 1e-3)
+            {
+                scalar invTsat = (1.0 / Tsat0) - (R_vap / L) * ::log(p_c / pRef_.value());
+                if (invTsat > 1e-6)
+                {
+                    Tsat_c = 1.0 / invTsat;
+                }
+            }
+        }
+
+        const scalar T_c = T[cellI];
+        const scalar rho_c = rho[cellI];
+        const scalar Y_l = (liquidIndex_ != -1) ? max(Y[liquidIndex_][cellI], scalar(0)) : scalar(0);
+        const scalar Y_v = (vaporIndex_ != -1) ? max(Y[vaporIndex_][cellI], scalar(0)) : scalar(0);
+
+        scalar mDotVal = 0.0;
+        if (T_c > Tsat_c)
+        {
+            mDotVal = C_evap * rho_c * Y_l * (T_c - Tsat_c) / Tsat_c;
+        }
+        else if (T_c < Tsat_c)
+        {
+            mDotVal = - C_cond * rho_c * Y_v * (Tsat_c - T_c) / Tsat_c;
+        }
+
+        mDot_[cellI] = mDotVal;
+    }
+
+    liquidSource_ = - mDot_;
+    vaporSource_ = mDot_;
+    energySource_ = - mDot_ * latentHeat_;
+}
+
+
+// ************************************************************************* //

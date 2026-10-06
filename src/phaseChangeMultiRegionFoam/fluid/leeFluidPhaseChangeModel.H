@@ -1,0 +1,130 @@
+/*---------------------------------------------------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     | Website:  https://openfoam.org
+    \\  /    A nd           | Copyright (C) OpenFOAM Foundation
+     \\/     M anipulation  |
+-------------------------------------------------------------------------------
+Class
+    Foam::leeFluidPhaseChangeModel
+
+Description
+    Lee volumetric phase-change model for fluid regions.
+    Uses mixture density scaling (rho * Y_specie) for single-phase in-region
+    species conversion and supports optional pressure-dependent Tsat(p).
+
+\*---------------------------------------------------------------------------*/
+
+#ifndef leeFluidPhaseChangeModel_H
+#define leeFluidPhaseChangeModel_H
+
+#include "fluidPhaseChangeModel.H"
+
+namespace Foam
+{
+
+/*---------------------------------------------------------------------------*\
+                Class leeFluidPhaseChangeModel Declaration
+\*---------------------------------------------------------------------------*/
+
+class leeFluidPhaseChangeModel
+:
+    public fluidPhaseChangeModel
+{
+
+private:
+
+    // Private Data
+
+        word liquidName_;
+        word vaporName_;
+        label liquidIndex_;
+        label vaporIndex_;
+
+        dimensionedScalar C_evap_;
+        dimensionedScalar C_cond_;
+        dimensionedScalar latentHeat_;
+        dimensionedScalar TsatRef_;
+        dimensionedScalar pRef_;
+        bool enableTsatP_;
+
+        volScalarField mDot_;
+        volScalarField massSource_;
+        volScalarField energySource_;
+        volScalarField liquidSource_;
+        volScalarField vaporSource_;
+
+
+    // Private Member Functions
+
+        //- Disallow default bitwise copy construct
+        leeFluidPhaseChangeModel(const leeFluidPhaseChangeModel&) = delete;
+
+        //- Disallow default bitwise assignment
+        void operator=(const leeFluidPhaseChangeModel&) = delete;
+
+
+public:
+
+    //- Runtime type information
+    TypeName("Lee");
+
+
+    // Constructors
+
+        //- Construct from mesh, thermo, U, phi
+        leeFluidPhaseChangeModel
+        (
+            const fvMesh& mesh,
+            const rhoReactionThermo& thermo,
+            const volVectorField& U,
+            const surfaceScalarField& phi
+        );
+
+
+    //- Destructor
+    virtual ~leeFluidPhaseChangeModel();
+
+
+    // Member Functions
+
+        // Access
+
+            //- Return true if active
+            virtual bool active() const override
+            {
+                return active_;
+            }
+
+            //- Return phase change mass rate field [kg/(m^3 s)]
+            const volScalarField& mDot() const
+            {
+                return mDot_;
+            }
+
+
+        // Abstract interface implementations
+
+            //- Return net mixture mass source rate [kg/(m^3 s)]
+            virtual tmp<volScalarField> massSource() const override;
+
+            //- Return species mass source rate by specie index [kg/(m^3 s)]
+            virtual tmp<volScalarField> speciesSource(const label specieIndex) const override;
+
+            //- Return energy source [W/m^3]
+            virtual tmp<volScalarField> energySource() const override;
+
+            //- Update phase change state and source fields
+            virtual void correct() override;
+};
+
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+} // End namespace Foam
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+#endif
+
+// ************************************************************************* //

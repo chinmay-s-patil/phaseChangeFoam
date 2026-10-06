@@ -42,7 +42,7 @@ if (Y.size())
 
             if (phaseChange.active())
             {
-                YiEqn += phaseChange.speciesSource(Yi.name());
+                YiEqn -= phaseChange.speciesSource(Yi.name());
             }
 
             YiEqn.relax();

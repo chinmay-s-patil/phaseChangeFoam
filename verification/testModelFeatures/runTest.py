@@ -62,7 +62,7 @@ def setup_base_case(case_dir):
 FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
 application phaseChangeMultiRegionFoam;
 startFrom startTime; startTime 0; stopAt endTime; endTime 10; deltaT 2;
-writeControl runTime; writeInterval 10; purgeWrite 0; writeFormat ascii;
+writeControl runTime; writeInterval 10; purgeWrite 0; writeFormat ascii; writePrecision 12;
 """)
     with open(os.path.join(case_dir, "system/fvSchemes"), "w") as f:
         f.write("""

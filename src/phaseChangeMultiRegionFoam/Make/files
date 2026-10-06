@@ -1,6 +1,8 @@
 fluid/compressibleCourantNo.C
 fluid/fluidPhaseChangeModel.C
 fluid/noneFluidPhaseChangeModel.C
+fluid/constantSourceFluidPhaseChangeModel.C
+fluid/leeFluidPhaseChangeModel.C
 solid/solidRegionDiffNo.C
 solid/phaseChangeModel.C
 solid/nonePhaseChangeModel.C

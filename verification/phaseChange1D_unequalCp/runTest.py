@@ -119,7 +119,7 @@ boundary (
 FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
 application phaseChangeMultiRegionFoam;
 startFrom startTime; startTime 0; stopAt endTime; endTime 2000; deltaT 2;
-writeControl runTime; writeInterval 2; purgeWrite 0; writeFormat ascii;
+writeControl runTime; writeInterval 2; purgeWrite 0; writeFormat ascii; writePrecision 12;
 """)
 
     with open("system/fvSchemes", "w") as f:
@@ -285,7 +285,7 @@ phaseChange
 FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
 application phaseChangeMultiRegionFoam;
 startFrom startTime; startTime 0; stopAt endTime; endTime 1000; deltaT 2;
-writeControl runTime; writeInterval 2; purgeWrite 0; writeFormat ascii;
+writeControl runTime; writeInterval 2; purgeWrite 0; writeFormat ascii; writePrecision 12;
 """)
     run_cmd(f"bash -c '{of_env}; blockMesh'")
     run_cmd("mkdir -p constant/pcm && cp -r constant/polyMesh constant/pcm/polyMesh 2>/dev/null || true")
@@ -333,7 +333,7 @@ phaseChange
 FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
 application phaseChangeMultiRegionFoam;
 startFrom startTime; startTime 0; stopAt endTime; endTime 2000; deltaT 2;
-writeControl runTime; writeInterval 2; purgeWrite 0; writeFormat ascii;
+writeControl runTime; writeInterval 2; purgeWrite 0; writeFormat ascii; writePrecision 12;
 """)
     run_cmd(f"bash -c '{of_env}; blockMesh'")
     run_cmd("mkdir -p constant/pcm && cp -r constant/polyMesh constant/pcm/polyMesh 2>/dev/null || true")

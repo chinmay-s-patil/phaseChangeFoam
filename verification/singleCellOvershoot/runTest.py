@@ -87,7 +87,7 @@ boundary ( walls { type empty; faces ((0 1 5 4) (3 2 6 7) (0 3 7 4) (1 2 6 5) (0
 FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
 application phaseChangeMultiRegionFoam;
 startFrom startTime; startTime 0; stopAt endTime; endTime 100; deltaT 100;
-writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii;
+writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii; writePrecision 12;
 """)
 
     with open("system/fvSchemes", "w") as f:
@@ -499,7 +499,7 @@ application phaseChangeMultiRegionFoam; startFrom latestTime; startTime 100; sto
 FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object controlDict; }}
 application phaseChangeMultiRegionFoam;
 startFrom startTime; startTime 0; stopAt endTime; endTime 300; deltaT 100;
-writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii;
+writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii; writePrecision 12;
 """)
     fvOpt13 = f"""
 FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object fvOptions; }}
@@ -567,7 +567,7 @@ heatSource
 FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object controlDict; }}
 application phaseChangeMultiRegionFoam;
 startFrom startTime; startTime 100; stopAt endTime; endTime 200; deltaT 100;
-writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii;
+writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii; writePrecision 12;
 """)
     fvOpt14_cool = f"""
 FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object fvOptions; }}
@@ -733,7 +733,7 @@ heatSource {{ type scalarSemiImplicitSource; active true; selectionMode all; vol
     with open(f"{case22_dir}/system/controlDict", "w") as f:
         f.write("""
 FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
-application phaseChangeMultiRegionFoam; startFrom latestTime; startTime 100; stopAt endTime; endTime 200; deltaT 100; writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii;
+application phaseChangeMultiRegionFoam; startFrom latestTime; startTime 100; stopAt endTime; endTime 200; deltaT 100; writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii; writePrecision 12;
 """)
     fvOpt22_step2 = f"""
 FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object fvOptions; }}
@@ -762,7 +762,7 @@ heatSource {{ type scalarSemiImplicitSource; active true; selectionMode all; vol
     with open(f"{case22_dir}/system/controlDict", "w") as f:
         f.write("""
 FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
-application phaseChangeMultiRegionFoam; startFrom latestTime; startTime 200; stopAt endTime; endTime 300; deltaT 100; writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii;
+application phaseChangeMultiRegionFoam; startFrom latestTime; startTime 200; stopAt endTime; endTime 300; deltaT 100; writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii; writePrecision 12;
 """)
     fvOpt22_step3 = f"""
 FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object fvOptions; }}
@@ -782,7 +782,7 @@ heatSource {{ type scalarSemiImplicitSource; active true; selectionMode all; vol
     with open(f"{case22_ref_dir}/system/controlDict", "w") as f:
         f.write("""
 FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
-application phaseChangeMultiRegionFoam; startFrom startTime; startTime 0; stopAt endTime; endTime 300; deltaT 100; writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii;
+application phaseChangeMultiRegionFoam; startFrom startTime; startTime 0; stopAt endTime; endTime 300; deltaT 100; writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii; writePrecision 12;
 """)
     fvOpt22_ref = f"""
 FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object fvOptions; }}

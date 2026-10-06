@@ -148,4 +148,48 @@ Foam::fluidPhaseChangeModel::speciesSource(const word& specieName) const
 }
 
 
+bool Foam::fluidPhaseChangeModel::checkMassConservation(const scalar tol) const
+{
+    if (!active_)
+    {
+        return true;
+    }
+
+    const speciesTable& species = thermo_.composition().species();
+    volScalarField sumSpecies
+    (
+        IOobject
+        (
+            "sumSpeciesSource",
+            mesh_.time().timeName(),
+            mesh_,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        mesh_,
+        dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
+    );
+
+    forAll(species, i)
+    {
+        sumSpecies += speciesSource(i);
+    }
+
+    tmp<volScalarField> tNetMass = massSource();
+    volScalarField diff = mag(sumSpecies - tNetMass());
+
+    const scalar maxDiff = max(diff).value();
+    if (maxDiff > tol)
+    {
+        WarningInFunction
+            << "Mass conservation discrepancy in phaseChange model on region " << mesh_.name()
+            << ": max|sum(speciesSource) - massSource| = " << maxDiff
+            << " kg/(m^3 s) > tolerance " << tol << endl;
+        return false;
+    }
+
+    return true;
+}
+
+
 // ************************************************************************* //
