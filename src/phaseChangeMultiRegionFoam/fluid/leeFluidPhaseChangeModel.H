@@ -13,6 +13,19 @@ Description
     Uses mixture density scaling (rho * Y_specie) for single-phase in-region
     species conversion and supports optional pressure-dependent Tsat(p).
 
+    Physics Caveats & Model Scope:
+    1. Boiling-Type Model Assumption:
+       Tsat(p) is evaluated against total cell pressure p. Phase change occurs
+       when mixture T > Tsat(p). Evaporation into non-condensable gas below the
+       boiling point (e.g. water evaporating into dry air) is driven by vapor
+       partial pressure (p_v,sat(T) vs X_v * p), which requires a boundary or
+       inter-region mass transfer model rather than total-pressure Lee.
+    2. Latent Heat vs Specie Enthalpy of Formation (Hf):
+       The energy source term energySource() = - mDot * L assumes sensible
+       enthalpy thermo where latent heat L is explicitly provided. If species
+       thermodynamic data already encodes phase enthalpy difference in Hf
+       (e.g., Hf_v - Hf_l = L), adding - mDot * L can double-count latent heat.
+
 \*---------------------------------------------------------------------------*/
 
 #ifndef leeFluidPhaseChangeModel_H

@@ -53,16 +53,16 @@ def parse_openfoam_field(file_path):
     block = content[start_paren+1:end_paren].strip()
     return [float(x) for x in block.split()]
 
-def setup_case(case_dir, T_init=380.0, Y_l_init=0.2, Y_v_init=0.0, enable_tsat_p=False, p_init=101325.0):
+def setup_case(case_dir, T_init=380.0, Y_l_init=0.2, Y_v_init=0.0, enable_tsat_p=False, p_init=101325.0, c_evap=0.1, c_cond=0.1, dt=1.0):
     os.makedirs(case_dir, exist_ok=True)
     
     # system/controlDict
     os.makedirs(os.path.join(case_dir, "system"), exist_ok=True)
     with open(os.path.join(case_dir, "system/controlDict"), "w") as f:
-        f.write("""
-FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
+        f.write(f"""
+FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object controlDict; }}
 application phaseChangeMultiRegionFoam;
-startFrom startTime; startTime 0; stopAt endTime; endTime 1; deltaT 1;
+startFrom startTime; startTime 0; stopAt endTime; endTime {dt}; deltaT {dt};
 writeControl timeStep; writeInterval 1; purgeWrite 0; writeFormat ascii; writePrecision 12;
 """)
 
@@ -189,8 +189,8 @@ phaseChange
     type Lee;
     liquid H2O_l;
     vapor H2O_v;
-    C_evap 0.1;
-    C_cond 0.1;
+    C_evap {c_evap};
+    C_cond {c_cond};
     latentHeat 2.26e6;
     Tsat 373.15;
     pRef 101325;
@@ -293,78 +293,182 @@ def main():
     solver_bin = find_solver()
     of_env = "source /usr/lib/openfoam/openfoam2412/etc/bashrc || source /usr/lib/openfoam/openfoam2406/etc/bashrc || true"
 
-    print("=== Lee Fluid Phase Change Model Verification Suite ===")
+    print("=== Lee Fluid Phase Change Model Quantitative Verification Suite ===")
 
-    # Test 1: In-region Evaporation Check (T0 = 380 K > Tsat = 373.15 K)
-    print("\n--- Test 1: In-Region Evaporation Verification (T0 > Tsat) ---")
-    c1_dir = os.path.join(base_dir, "case_evaporation")
+    # Test 1: Quantitative Evaporation Check (Small dt=0.1s, C=0.01/s)
+    print("\n--- Test 1: Quantitative Small dt Evaporation Verification ---")
+    c1_dir = os.path.join(base_dir, "case_evaporation_quant")
     if os.path.exists(c1_dir):
         shutil.rmtree(c1_dir)
-    setup_case(c1_dir, T_init=380.0, Y_l_init=0.2, Y_v_init=0.0)
+    
+    C_evap1 = 0.01
+    dt1 = 0.1
+    T_init1 = 380.0
+    Tsat1 = 373.15
+    Yl_init1 = 0.20
+    L1 = 2.26e6
+    Cp1 = 1000.0
 
+    setup_case(c1_dir, T_init=T_init1, Y_l_init=Yl_init1, Y_v_init=0.0, c_evap=C_evap1, dt=dt1)
     run_cmd(f"cd {c1_dir} && bash -c '{of_env}; {solver_bin}'", cwd=c1_dir)
 
-    T_init1 = parse_openfoam_field(os.path.join(c1_dir, "0/air/T"))[0]
-    T_final1 = parse_openfoam_field(os.path.join(c1_dir, "1/air/T"))[0]
-    Yl_init1 = parse_openfoam_field(os.path.join(c1_dir, "0/air/H2O_l"))[0]
-    Yl_final1 = parse_openfoam_field(os.path.join(c1_dir, "1/air/H2O_l"))[0]
-    Yv_init1 = parse_openfoam_field(os.path.join(c1_dir, "0/air/H2O_v"))[0]
-    Yv_final1 = parse_openfoam_field(os.path.join(c1_dir, "1/air/H2O_v"))[0]
+    T_final1 = parse_openfoam_field(os.path.join(c1_dir, f"{dt1}/air/T"))[0]
+    Yl_final1 = parse_openfoam_field(os.path.join(c1_dir, f"{dt1}/air/H2O_l"))[0]
+    Yv_final1 = parse_openfoam_field(os.path.join(c1_dir, f"{dt1}/air/H2O_v"))[0]
 
-    print(f"Evaporation T:    {T_init1:.2f} K -> {T_final1:.2f} K (deltaT = {T_final1 - T_init1:.4f} K)")
-    print(f"Evaporation H2O_l: {Yl_init1:.4f} -> {Yl_final1:.4f} (deltaYl = {Yl_final1 - Yl_init1:.6e})")
-    print(f"Evaporation H2O_v: {Yv_init1:.4f} -> {Yv_final1:.4f} (deltaYv = {Yv_final1 - Yv_init1:.6e})")
+    # Analytical formulas (mixture density rho cancels out!):
+    # dYl = - C_evap * Yl * (T - Tsat) / Tsat * dt
+    deltaYl_anal1 = - C_evap1 * Yl_init1 * (T_init1 - Tsat1) / Tsat1 * dt1
+    # dT = - mDot * L * dt / (rho * Cp) = - C_evap * Yl * (T - Tsat) / Tsat * L * dt / Cp
+    deltaT_anal1 = - C_evap1 * Yl_init1 * (T_init1 - Tsat1) / Tsat1 * L1 * dt1 / Cp1
 
-    assert T_final1 < T_init1, "FAIL: Temperature did not drop during evaporation (latent heat absorption missing)!"
-    assert Yl_final1 < Yl_init1, "FAIL: Liquid species fraction did not deplete during evaporation!"
-    assert Yv_final1 > Yv_init1, "FAIL: Vapor species fraction did not increase during evaporation!"
-    print("PASS: In-Region Evaporation Verification Passed!")
+    deltaYl_num1 = Yl_final1 - Yl_init1
+    deltaT_num1 = T_final1 - T_init1
 
-    # Test 2: In-region Condensation Check (T0 = 360 K < Tsat = 373.15 K)
-    print("\n--- Test 2: In-Region Condensation Verification (T0 < Tsat) ---")
-    c2_dir = os.path.join(base_dir, "case_condensation")
+    err_Y1 = abs(deltaYl_num1 - deltaYl_anal1) / abs(deltaYl_anal1)
+    err_T1 = abs(deltaT_num1 - deltaT_anal1) / abs(deltaT_anal1)
+
+    print(f"Numerical deltaYl:  {deltaYl_num1:.8e}")
+    print(f"Analytic deltaYl:   {deltaYl_anal1:.8e} (rel error: {err_Y1:.6e})")
+    print(f"Numerical deltaT:   {deltaT_num1:.6f} K")
+    print(f"Analytic deltaT:    {deltaT_anal1:.6f} K (rel error: {err_T1:.6e})")
+
+    assert err_Y1 < 1e-3, f"FAIL: deltaYl relative error ({err_Y1}) > 1e-3!"
+    assert err_T1 < 1e-3, f"FAIL: deltaT relative error ({err_T1}) > 1e-3!"
+    print("PASS: Quantitative Evaporation Verification Passed!")
+
+    # Test 2: Quantitative Condensation Check (Small dt=0.1s, C=0.01/s)
+    print("\n--- Test 2: Quantitative Small dt Condensation Verification ---")
+    c2_dir = os.path.join(base_dir, "case_condensation_quant")
     if os.path.exists(c2_dir):
         shutil.rmtree(c2_dir)
-    setup_case(c2_dir, T_init=360.0, Y_l_init=0.0, Y_v_init=0.2)
+    
+    C_cond2 = 0.01
+    dt2 = 0.1
+    T_init2 = 360.0
+    Yv_init2 = 0.20
 
+    setup_case(c2_dir, T_init=T_init2, Y_l_init=0.0, Y_v_init=Yv_init2, c_cond=C_cond2, dt=dt2)
     run_cmd(f"cd {c2_dir} && bash -c '{of_env}; {solver_bin}'", cwd=c2_dir)
 
-    T_init2 = parse_openfoam_field(os.path.join(c2_dir, "0/air/T"))[0]
-    T_final2 = parse_openfoam_field(os.path.join(c2_dir, "1/air/T"))[0]
-    Yl_init2 = parse_openfoam_field(os.path.join(c2_dir, "0/air/H2O_l"))[0]
-    Yl_final2 = parse_openfoam_field(os.path.join(c2_dir, "1/air/H2O_l"))[0]
-    Yv_init2 = parse_openfoam_field(os.path.join(c2_dir, "0/air/H2O_v"))[0]
-    Yv_final2 = parse_openfoam_field(os.path.join(c2_dir, "1/air/H2O_v"))[0]
+    T_final2 = parse_openfoam_field(os.path.join(c2_dir, f"{dt2}/air/T"))[0]
+    Yv_final2 = parse_openfoam_field(os.path.join(c2_dir, f"{dt2}/air/H2O_v"))[0]
 
-    print(f"Condensation T:    {T_init2:.2f} K -> {T_final2:.2f} K (deltaT = {T_final2 - T_init2:.4f} K)")
-    print(f"Condensation H2O_l: {Yl_init2:.4f} -> {Yl_final2:.4f} (deltaYl = {Yl_final2 - Yl_init2:.6e})")
-    print(f"Condensation H2O_v: {Yv_init2:.4f} -> {Yv_final2:.4f} (deltaYv = {Yv_final2 - Yv_init2:.6e})")
+    # Analytical formulas:
+    # dYv = - C_cond * Yv * (Tsat - T) / Tsat * dt
+    deltaYv_anal2 = - C_cond2 * Yv_init2 * (Tsat1 - T_init2) / Tsat1 * dt2
+    # dT = + C_cond * Yv * (Tsat - T) / Tsat * L * dt / Cp
+    deltaT_anal2 = + C_cond2 * Yv_init2 * (Tsat1 - T_init2) / Tsat1 * L1 * dt2 / Cp1
 
-    assert T_final2 > T_init2, "FAIL: Temperature did not rise during condensation (latent heat release missing)!"
-    assert Yl_final2 > Yl_init2, "FAIL: Liquid species fraction did not increase during condensation!"
-    assert Yv_final2 < Yv_init2, "FAIL: Vapor species fraction did not deplete during condensation!"
-    print("PASS: In-Region Condensation Verification Passed!")
+    deltaYv_num2 = Yv_final2 - Yv_init2
+    deltaT_num2 = T_final2 - T_init2
 
-    # Test 3: Pressure-Dependent Tsat(p) Check
-    print("\n--- Test 3: Pressure-Dependent Tsat(p) Check ---")
-    c3_dir = os.path.join(base_dir, "case_tsat_p")
-    if os.path.exists(c3_dir):
-        shutil.rmtree(c3_dir)
-    # At p = 200 kPa, Tsat(p) > 373.15 K (~393 K). T0 = 380 K is below Tsat(p=200kPa), so it should NOT evaporate!
-    setup_case(c3_dir, T_init=380.0, Y_l_init=0.2, Y_v_init=0.0, enable_tsat_p=True, p_init=200000.0)
+    err_Y2 = abs(deltaYv_num2 - deltaYv_anal2) / abs(deltaYv_anal2)
+    err_T2 = abs(deltaT_num2 - deltaT_anal2) / abs(deltaT_anal2)
 
-    run_cmd(f"cd {c3_dir} && bash -c '{of_env}; {solver_bin}'", cwd=c3_dir)
+    print(f"Numerical deltaYv:  {deltaYv_num2:.8e}")
+    print(f"Analytic deltaYv:   {deltaYv_anal2:.8e} (rel error: {err_Y2:.6e})")
+    print(f"Numerical deltaT:   {deltaT_num2:.6f} K")
+    print(f"Analytic deltaT:    {deltaT_anal2:.6f} K (rel error: {err_T2:.6e})")
 
-    Yl_init3 = parse_openfoam_field(os.path.join(c3_dir, "0/air/H2O_l"))[0]
-    Yl_final3 = parse_openfoam_field(os.path.join(c3_dir, "1/air/H2O_l"))[0]
-    print(f"Elevated Pressure (2 bar) H2O_l: {Yl_init3:.4f} -> {Yl_final3:.4f}")
+    assert err_Y2 < 1e-3, f"FAIL: deltaYv relative error ({err_Y2}) > 1e-3!"
+    assert err_T2 < 1e-3, f"FAIL: deltaT relative error ({err_T2}) > 1e-3!"
+    print("PASS: Quantitative Condensation Verification Passed!")
 
-    assert abs(Yl_final3 - Yl_init3) < 1e-6, "FAIL: Evaporation occurred at T=380K when p=200kPa elevated Tsat above 380K!"
-    print("PASS: Tsat(p) Pressure Dependence Verification Passed!")
+    # Test 3: Quantitative Tsat(p) Clausius-Clapeyron Verification (2 bar)
+    print("\n--- Test 3: Quantitative Tsat(p=200 kPa) Clausius-Clapeyron Verification ---")
+    p_test = 200000.0 # Pa
+    p_ref = 101325.0  # Pa
+    R_vap = 8314.463 / 18.015 # J/(kg K) = 461.53
+    L_vap = 2.26e6
 
-    print("\n=======================================================")
-    print("      LEE FLUID PHASE CHANGE MODEL VERIFICATION PASS   ")
-    print("=======================================================")
+    # Clausius-Clapeyron formula: 1/Tsat = 1/Tsat0 - (R/L)*ln(p/pRef)
+    Tsat_anal_2bar = 1.0 / ((1.0 / Tsat1) - (R_vap / L_vap) * math.log(p_test / p_ref))
+    print(f"Analytical Tsat(200 kPa): {Tsat_anal_2bar:.4f} K")
+
+    # Case 3A: T0 = 390 K < Tsat(200 kPa) => Must NOT evaporate (Tsat > 390 K)
+    c3a_dir = os.path.join(base_dir, "case_tsat_sub")
+    if os.path.exists(c3a_dir):
+        shutil.rmtree(c3a_dir)
+    setup_case(c3a_dir, T_init=390.0, Y_l_init=0.2, Y_v_init=0.0, enable_tsat_p=True, p_init=p_test, dt=0.1)
+    run_cmd(f"cd {c3a_dir} && bash -c '{of_env}; {solver_bin}'", cwd=c3a_dir)
+
+    Yl_final3a = parse_openfoam_field(os.path.join(c3a_dir, "0.1/air/H2O_l"))[0]
+    assert abs(Yl_final3a - 0.20) < 1e-6, "FAIL: Evaporation occurred when T0=390K < Tsat(200kPa)!"
+    print("PASS: Sub-saturated state (T0=390K < Tsat=393.9K) correctly prevented evaporation.")
+
+    # Case 3B: T0 = 400 K > Tsat(200 kPa) => Evaporates matching Tsat(200 kPa) formula
+    c3b_dir = os.path.join(base_dir, "case_tsat_super")
+    if os.path.exists(c3b_dir):
+        shutil.rmtree(c3b_dir)
+    C_evap3 = 0.01
+    dt3 = 0.1
+    T0_3b = 400.0
+    setup_case(c3b_dir, T_init=T0_3b, Y_l_init=0.2, Y_v_init=0.0, enable_tsat_p=True, p_init=p_test, c_evap=C_evap3, dt=dt3)
+    run_cmd(f"cd {c3b_dir} && bash -c '{of_env}; {solver_bin}'", cwd=c3b_dir)
+
+    Yl_final3b = parse_openfoam_field(os.path.join(c3b_dir, "0.1/air/H2O_l"))[0]
+    deltaYl_num3b = Yl_final3b - 0.20
+    deltaYl_anal3b = - C_evap3 * 0.20 * (T0_3b - Tsat_anal_2bar) / Tsat_anal_2bar * dt3
+    err_tsat = abs(deltaYl_num3b - deltaYl_anal3b) / abs(deltaYl_anal3b)
+
+    print(f"Super-saturated (T0=400K) Numerical deltaYl: {deltaYl_num3b:.8e}")
+    print(f"Super-saturated (T0=400K) Analytic deltaYl:  {deltaYl_anal3b:.8e} (rel error: {err_tsat:.6e})")
+
+    assert err_tsat < 1e-3, f"FAIL: Tsat(p) evaporation rate relative error ({err_tsat}) > 1e-3!"
+    print("PASS: Quantitative Tsat(p) Clausius-Clapeyron Verification Passed!")
+
+    # Test 4: Large C*dt Limiter Boundary Assertions (C=100/s, dt=1s)
+    print("\n--- Test 4: Large C*dt Limiter Boundary Assertions (C=100/s, dt=1s) ---")
+    c4_dir = os.path.join(base_dir, "case_large_Cdt")
+    if os.path.exists(c4_dir):
+        shutil.rmtree(c4_dir)
+    setup_case(c4_dir, T_init=380.0, Y_l_init=0.2, Y_v_init=0.0, c_evap=100.0, dt=1.0)
+    run_cmd(f"cd {c4_dir} && bash -c '{of_env}; {solver_bin}'", cwd=c4_dir)
+
+    T_final4 = parse_openfoam_field(os.path.join(c4_dir, "1/air/T"))[0]
+    Yl_final4 = parse_openfoam_field(os.path.join(c4_dir, "1/air/H2O_l"))[0]
+
+    print(f"Large C*dt Final T:    {T_final4:.4f} K (Tsat = 373.1500 K)")
+    print(f"Large C*dt Final Yl:   {Yl_final4:.6f} (Yl_init = 0.200000)")
+
+    # Assertion 1: Yl must stay non-negative (mass cap)
+    assert Yl_final4 >= 0.0, f"FAIL: Mass limiter breached! Yl ({Yl_final4}) went negative!"
+    # Assertion 2: T must NOT drop below Tsat (thermal cap)
+    assert T_final4 >= 373.15 - 1e-4, f"FAIL: Thermal limiter breached! T ({T_final4:.4f} K) dropped below Tsat (373.15 K)!"
+
+    # Test 5: Missing Species FatalIOError Verification
+    print("\n--- Test 5: Missing Species FatalIOError Verification ---")
+    c5_dir = os.path.join(base_dir, "case_missing_species")
+    if os.path.exists(c5_dir):
+        shutil.rmtree(c5_dir)
+    setup_case(c5_dir, T_init=380.0)
+    # Overwrite phaseChangeDict with non-existent liquid species name
+    with open(os.path.join(c5_dir, "constant/air/phaseChangeDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/air"; object phaseChangeDict; }
+phaseChange
+{
+    active true;
+    type Lee;
+    liquid nonExistentLiquid;
+    vapor H2O_v;
+    C_evap 0.1;
+    C_cond 0.1;
+    latentHeat 2.26e6;
+    Tsat 373.15;
+}
+""")
+    res5 = run_cmd(f"cd {c5_dir} && bash -c '{of_env}; {solver_bin}'", cwd=c5_dir, allow_failure=True)
+    out5 = res5.stdout + res5.stderr
+    pass_t5 = (res5.returncode != 0 and "nonExistentLiquid" in out5 and "not found in thermo composition" in out5)
+    print(f"Test 5 FatalIOError Triggered: {pass_t5}")
+    assert pass_t5, "FAIL: Missing species in active Lee model did not trigger FatalIOError!"
+    print("PASS: Missing Species FatalIOError Check Passed!")
+
+    print("\n=========================================================================")
+    print("      LEE FLUID PHASE CHANGE MODEL QUANTITATIVE VERIFICATION PASS        ")
+    print("=========================================================================")
 
 if __name__ == "__main__":
     main()

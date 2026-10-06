@@ -138,15 +138,24 @@ Foam::leeFluidPhaseChangeModel::leeFluidPhaseChangeModel
 {
     active_ = true;
 
-    if (liquidIndex_ == -1)
+    if (active_)
     {
-        Info<< "leeFluidPhaseChangeModel: liquid specie '" << liquidName_
-            << "' not found in thermo composition." << endl;
-    }
-    if (vaporIndex_ == -1)
-    {
-        Info<< "leeFluidPhaseChangeModel: vapor specie '" << vaporName_
-            << "' not found in thermo composition." << endl;
+        if (liquidIndex_ == -1)
+        {
+            FatalIOErrorInFunction(dict_)
+                << "liquid specie '" << liquidName_
+                << "' not found in thermo composition. Available species are: "
+                << thermo_.composition().species()
+                << exit(FatalIOError);
+        }
+        if (vaporIndex_ == -1)
+        {
+            FatalIOErrorInFunction(dict_)
+                << "vapor specie '" << vaporName_
+                << "' not found in thermo composition. Available species are: "
+                << thermo_.composition().species()
+                << exit(FatalIOError);
+        }
     }
 }
 
@@ -213,10 +222,13 @@ void Foam::leeFluidPhaseChangeModel::correct()
     const volScalarField& T = thermo_.T();
     tmp<volScalarField> trho = thermo_.rho();
     const volScalarField& rho = trho();
+    tmp<volScalarField> tCp = thermo_.Cp();
+    const volScalarField& CpField = tCp();
     const PtrList<volScalarField>& Y = thermo_.composition().Y();
 
+    const scalar dt = mesh_.time().deltaTValue();
     const scalar Tsat0 = TsatRef_.value();
-    const scalar L = latentHeat_.value();
+    const scalar L = max(latentHeat_.value(), scalar(1e-6));
     const scalar C_evap = C_evap_.value();
     const scalar C_cond = C_cond_.value();
 
@@ -248,17 +260,26 @@ void Foam::leeFluidPhaseChangeModel::correct()
 
         const scalar T_c = T[cellI];
         const scalar rho_c = rho[cellI];
+        const scalar Cp_c = max(CpField[cellI], scalar(1.0));
         const scalar Y_l = (liquidIndex_ != -1) ? max(Y[liquidIndex_][cellI], scalar(0)) : scalar(0);
         const scalar Y_v = (vaporIndex_ != -1) ? max(Y[vaporIndex_][cellI], scalar(0)) : scalar(0);
 
         scalar mDotVal = 0.0;
         if (T_c > Tsat_c)
         {
-            mDotVal = C_evap * rho_c * Y_l * (T_c - Tsat_c) / Tsat_c;
+            const scalar mDot_raw = C_evap * rho_c * Y_l * (T_c - Tsat_c) / Tsat_c;
+            const scalar mDot_massCap = (dt > 1e-12) ? (rho_c * Y_l / dt) : mDot_raw;
+            const scalar mDot_thermalCap = (dt > 1e-12) ? (rho_c * Cp_c * (T_c - Tsat_c) / (L * dt)) : mDot_raw;
+
+            mDotVal = min(mDot_raw, min(mDot_massCap, mDot_thermalCap));
         }
         else if (T_c < Tsat_c)
         {
-            mDotVal = - C_cond * rho_c * Y_v * (Tsat_c - T_c) / Tsat_c;
+            const scalar mDot_raw = C_cond * rho_c * Y_v * (Tsat_c - T_c) / Tsat_c;
+            const scalar mDot_massCap = (dt > 1e-12) ? (rho_c * Y_v / dt) : mDot_raw;
+            const scalar mDot_thermalCap = (dt > 1e-12) ? (rho_c * Cp_c * (Tsat_c - T_c) / (L * dt)) : mDot_raw;
+
+            mDotVal = - min(mDot_raw, min(mDot_massCap, mDot_thermalCap));
         }
 
         mDot_[cellI] = mDotVal;
