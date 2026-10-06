@@ -213,8 +213,11 @@ void Foam::leeFluidPhaseChangeModel::correct()
     
     const volScalarField& rho_old = mesh_.lookupObject<volScalarField>("rho").oldTime();
 
+    // thermo_.Cp() returns a fresh tmp<volScalarField> without historic oldTime() storage.
+    // Because correct() is called at oCorr == 0 before any equation solves (EEqn/YEqn),
+    // thermo_.Cp() evaluates Cp directly at the old-time state (T_0, Y_0).
     tmp<volScalarField> tCp = thermo_.Cp();
-    const volScalarField& Cp_old = tCp().oldTime();
+    const volScalarField& CpField = tCp();
 
     const PtrList<volScalarField>& Y = thermo_.composition().Y();
 
@@ -252,7 +255,7 @@ void Foam::leeFluidPhaseChangeModel::correct()
 
         const scalar T0 = T_old[cellI];
         const scalar rho0 = rho_old[cellI];
-        const scalar Cp_c = max(Cp_old[cellI], scalar(1.0));
+        const scalar Cp_c = max(CpField[cellI], scalar(1.0));
         const scalar Yl0 = (liquidIndex_ != -1) ? max(Y[liquidIndex_].oldTime()[cellI], scalar(0)) : scalar(0);
         const scalar Yv0 = (vaporIndex_ != -1) ? max(Y[vaporIndex_].oldTime()[cellI], scalar(0)) : scalar(0);
 
