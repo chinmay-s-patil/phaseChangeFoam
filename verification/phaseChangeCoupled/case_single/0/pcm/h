@@ -1,8 +1,0 @@
-
-FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object h; }
-dimensions [0 2 -2 0 0 0 0]; internalField uniform 560000;
-boundaryField {
-    pcm_cold { type fixedValue; value uniform 560000; }
-    pcm_hot { type fixedValue; value uniform 700000; }
-    emptyFaces { type empty; }
-}
