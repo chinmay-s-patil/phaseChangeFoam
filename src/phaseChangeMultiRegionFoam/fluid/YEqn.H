@@ -40,6 +40,11 @@ if (Y.size())
               + fvOptions(rho, Yi)
             );
 
+            if (phaseChange.active())
+            {
+                YiEqn += phaseChange.speciesSource(Yi.name());
+            }
+
             YiEqn.relax();
 
             fvOptions.constrain(YiEqn);

@@ -34,7 +34,33 @@ Foam::noneFluidPhaseChangeModel::noneFluidPhaseChangeModel
     const surfaceScalarField& phi
 )
 :
-    fluidPhaseChangeModel(mesh, thermo, U, phi)
+    fluidPhaseChangeModel(mesh, thermo, U, phi),
+    zeroMassSource_
+    (
+        IOobject
+        (
+            "zeroMassSource",
+            mesh.time().timeName(),
+            mesh,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        mesh,
+        dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
+    ),
+    zeroEnergySource_
+    (
+        IOobject
+        (
+            "zeroEnergySource",
+            mesh.time().timeName(),
+            mesh,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        mesh,
+        dimensionedScalar("zero", dimEnergy/dimVolume/dimTime, Zero)
+    )
 {
     active_ = false;
 }
@@ -49,59 +75,23 @@ Foam::noneFluidPhaseChangeModel::~noneFluidPhaseChangeModel()
 // * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * * //
 
 Foam::tmp<Foam::volScalarField>
-Foam::noneFluidPhaseChangeModel::mDot() const
+Foam::noneFluidPhaseChangeModel::massSource() const
 {
-    return tmp<volScalarField>::New
-    (
-        IOobject
-        (
-            "mDot",
-            mesh_.time().timeName(),
-            mesh_,
-            IOobject::NO_READ,
-            IOobject::NO_WRITE
-        ),
-        mesh_,
-        dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
-    );
+    return zeroMassSource_;
 }
 
 
 Foam::tmp<Foam::volScalarField>
-Foam::noneFluidPhaseChangeModel::divUSource() const
+Foam::noneFluidPhaseChangeModel::speciesSource(const label specieIndex) const
 {
-    return tmp<volScalarField>::New
-    (
-        IOobject
-        (
-            "divUSource",
-            mesh_.time().timeName(),
-            mesh_,
-            IOobject::NO_READ,
-            IOobject::NO_WRITE
-        ),
-        mesh_,
-        dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
-    );
+    return zeroMassSource_;
 }
 
 
 Foam::tmp<Foam::volScalarField>
 Foam::noneFluidPhaseChangeModel::energySource() const
 {
-    return tmp<volScalarField>::New
-    (
-        IOobject
-        (
-            "energySource",
-            mesh_.time().timeName(),
-            mesh_,
-            IOobject::NO_READ,
-            IOobject::NO_WRITE
-        ),
-        mesh_,
-        dimensionedScalar("zero", dimEnergy/dimVolume/dimTime, Zero)
-    );
+    return zeroEnergySource_;
 }
 
 

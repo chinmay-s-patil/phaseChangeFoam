@@ -451,7 +451,7 @@ writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii;
     print("\n=======================================================")
     print("      COUPLED MULTI-REGION VERIFICATION RESULTS        ")
     print("=======================================================")
-    print(f"Test 1 (nOuterCorr = 2 Convergence) : {'PASSED' if pass_t1 else 'FAILED'}")
+    print(f"Test 1 (nOuterCorr = 10 Convergence): {'PASSED' if pass_t1 else 'FAILED'}")
     print(f"Test 2 (nOuterCorr = 1 FatalError)  : {'PASSED' if pass_t2 else 'FAILED'}")
     print(f"Test 3 (Coupled Write & Restart)    : {'PASSED' if pass_t3 else 'FAILED'}")
     print("-------------------------------------------------------")

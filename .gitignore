@@ -19,5 +19,7 @@ __pycache__/
 
 # Test Run Directories
 singleCellOvershoot_run/
+verification/**/case*/
+verification/*/case*/
 
 ideas/

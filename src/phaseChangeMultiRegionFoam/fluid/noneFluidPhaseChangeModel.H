@@ -32,13 +32,19 @@ class noneFluidPhaseChangeModel
 
 private:
 
+    // Private Data
+
+        volScalarField zeroMassSource_;
+        volScalarField zeroEnergySource_;
+
+
     // Private Member Functions
 
         //- Disallow default bitwise copy construct
-        noneFluidPhaseChangeModel(const noneFluidPhaseChangeModel&);
+        noneFluidPhaseChangeModel(const noneFluidPhaseChangeModel&) = delete;
 
         //- Disallow default bitwise assignment
-        void operator=(const noneFluidPhaseChangeModel&);
+        void operator=(const noneFluidPhaseChangeModel&) = delete;
 
 
 public:
@@ -76,11 +82,11 @@ public:
 
         // Abstract interface implementations
 
-            //- Return zero mass transfer rate [kg/(m^3 s)]
-            virtual tmp<volScalarField> mDot() const override;
+            //- Return zero mixture mass source rate [kg/(m^3 s)]
+            virtual tmp<volScalarField> massSource() const override;
 
-            //- Return zero mass divergence source [kg/(m^3 s)]
-            virtual tmp<volScalarField> divUSource() const override;
+            //- Return zero species mass source rate by index [kg/(m^3 s)]
+            virtual tmp<volScalarField> speciesSource(const label specieIndex) const override;
 
             //- Return zero energy source [W/m^3]
             virtual tmp<volScalarField> energySource() const override;

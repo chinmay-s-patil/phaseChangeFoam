@@ -76,12 +76,19 @@ Foam::fluidPhaseChangeModel::New
         if (dict.found("phaseChange"))
         {
             const dictionary& subDict = dict.subDict("phaseChange");
-            if (subDict.getOrDefault<bool>("active", false))
+            const bool active = subDict.getOrDefault<bool>("active", false);
+            if (active)
             {
-                subDict.readIfPresent("phaseChangeMode", modelType);
+                if (!subDict.readIfPresent("type", modelType))
+                {
+                    subDict.readIfPresent("phaseChangeMode", modelType);
+                }
+
                 if (modelType == "none" || modelType == "off")
                 {
-                    modelType = "none";
+                    FatalIOErrorInFunction(subDict)
+                        << "active is true but no model type given"
+                        << exit(FatalIOError);
                 }
             }
         }
@@ -110,6 +117,35 @@ Foam::fluidPhaseChangeModel::New
 
 Foam::fluidPhaseChangeModel::~fluidPhaseChangeModel()
 {}
+
+
+// * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * * //
+
+Foam::tmp<Foam::volScalarField>
+Foam::fluidPhaseChangeModel::speciesSource(const word& specieName) const
+{
+    const label specieI = thermo_.composition().species().find(specieName);
+    if (specieI != -1)
+    {
+        return speciesSource(specieI);
+    }
+    else
+    {
+        return tmp<volScalarField>::New
+        (
+            IOobject
+            (
+                "speciesSource_" + specieName,
+                mesh_.time().timeName(),
+                mesh_,
+                IOobject::NO_READ,
+                IOobject::NO_WRITE
+            ),
+            mesh_,
+            dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
+        );
+    }
+}
 
 
 // ************************************************************************* //

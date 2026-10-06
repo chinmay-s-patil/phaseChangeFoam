@@ -54,10 +54,10 @@ private:
     // Private Member Functions
 
         //- Disallow default bitwise copy construct
-        fluidPhaseChangeModel(const fluidPhaseChangeModel&);
+        fluidPhaseChangeModel(const fluidPhaseChangeModel&) = delete;
 
         //- Disallow default bitwise assignment
-        void operator=(const fluidPhaseChangeModel&);
+        void operator=(const fluidPhaseChangeModel&) = delete;
 
 
 public:
@@ -129,13 +129,27 @@ public:
 
         // Abstract interface methods
 
-            //- Mass transfer rate per unit volume [kg/(m^3 s)]
-            virtual tmp<volScalarField> mDot() const = 0;
+            //- Net mixture mass source rate per unit volume [kg/(m^3 s)]
+            //  Placed in mass continuity / pressure equation (pEqn.H: - phaseChange.massSource()).
+            //  Zero for internal single-phase species conversion (conserves total domain mass);
+            //  non-zero if liquid enters from an external source (film, pool, or spray).
+            virtual tmp<volScalarField> massSource() const = 0;
 
-            //- Mass divergence / volume expansion source [kg/(m^3 s)]
-            virtual tmp<volScalarField> divUSource() const = 0;
+            //- Species mass source rate per unit volume by specie index [kg/(m^3 s)]
+            //  Placed on RHS of species transport equation (YEqn.H: + phaseChange.speciesSource(i)).
+            //  Positive for species creation (e.g. vapor created by evaporation),
+            //  negative for species consumption (e.g. liquid species depleted in cell).
+            virtual tmp<volScalarField> speciesSource(const label specieIndex) const = 0;
 
-            //- Latent heat source/sink term for energy equation [W/m^3]
+            //- Species mass source rate per unit volume by specie name [kg/(m^3 s)]
+            //  Default implementation maps specieName to index in thermo composition.
+            virtual tmp<volScalarField> speciesSource(const word& specieName) const;
+
+            //- Latent and mass enthalpy source/sink term for energy equation [W/m^3]
+            //  Placed on RHS of energy equation (EEqn.H: EEqn == ... + phaseChange.energySource()).
+            //  Note: Evaporation absorbs latent heat, so latent term is negative (- mDot_evap * L).
+            //  If net mixture mass enters the region (massSource() > 0), energySource() also
+            //  includes the enthalpy carried by added mass (+ mDot_added * h_added).
             virtual tmp<volScalarField> energySource() const = 0;
 
             //- Update phase change state and fields

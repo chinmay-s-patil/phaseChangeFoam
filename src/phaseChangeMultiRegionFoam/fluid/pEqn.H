@@ -34,8 +34,12 @@ constrainPressure(p_rgh, rho, U, phiHbyA, rhorAUf, MRF);
     (
         fvc::ddt(rho) + psi*correction(fvm::ddt(p_rgh))
       + fvc::div(phiHbyA)
-      - phaseChange.divUSource()
     );
+
+    if (phaseChange.active())
+    {
+        p_rghDDtEqn -= phaseChange.massSource();
+    }
 
     for (int nonOrth=0; nonOrth<=nNonOrthCorr; nonOrth++)
     {
