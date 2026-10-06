@@ -149,20 +149,8 @@ public:
             virtual tmp<volScalarField> speciesSource(const word& specieName) const;
 
             //- Latent and mass enthalpy source/sink term for energy equation [W/m^3]
-            //  Placed on RHS of energy equation (EEqn.H: - phaseChange.energySource()).
+            //  Placed on RHS of energy equation (EEqn.H: phaseChange.energySource()).
             virtual tmp<volScalarField> energySource() const = 0;
-
-            //- Return implicit matrix coefficient Sp for energy equation [kg/(m^3 s)]
-            virtual tmp<volScalarField> energySourceSp() const;
-
-            //- Return explicit matrix source Su for energy equation [W/m^3]
-            virtual tmp<volScalarField> energySourceSu() const;
-
-            //- Return implicit matrix coefficient Sp for species equation by index [kg/(m^3 s)]
-            virtual tmp<volScalarField> speciesSourceSp(const label specieIndex) const;
-
-            //- Return explicit matrix source Su for species equation by name [kg/(m^3 s)]
-            virtual tmp<volScalarField> speciesSourceSu(const word& specieName) const;
 
             //- Update phase change state and fields
             virtual void correct() = 0;

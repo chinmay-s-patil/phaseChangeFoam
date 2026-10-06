@@ -42,7 +42,7 @@ if (Y.size())
 
             if (phaseChange.active())
             {
-                YiEqn += fvm::Sp(phaseChange.speciesSourceSp(i), Yi) - phaseChange.speciesSourceSu(Yi.name());
+                YiEqn -= phaseChange.speciesSource(i);
             }
 
             YiEqn.relax();

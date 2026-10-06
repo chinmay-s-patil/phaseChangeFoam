@@ -6,6 +6,13 @@ import shutil
 import math
 
 def find_solver():
+    home = os.environ.get("HOME", "/home/lavender")
+    matches = [
+        os.path.join(home, "OpenFOAM", "lavender-v2412/platforms/linux64GccDPInt32Opt/bin/phaseChangeMultiRegionFoam")
+    ]
+    for m in matches:
+        if os.path.exists(m):
+            return m
     user_appbin = os.environ.get("FOAM_USER_APPBIN")
     if user_appbin:
         path = os.path.join(user_appbin, "phaseChangeMultiRegionFoam")
@@ -14,13 +21,6 @@ def find_solver():
     path = shutil.which("phaseChangeMultiRegionFoam")
     if path:
         return path
-    home = os.environ.get("HOME", "/home/lavender")
-    matches = [
-        os.path.join(home, "OpenFOAM", f"lavender-v2412/platforms/linux64GccDPInt32Opt/bin/phaseChangeMultiRegionFoam")
-    ]
-    for m in matches:
-        if os.path.exists(m):
-            return m
     return "phaseChangeMultiRegionFoam"
 
 def run_cmd(cmd, cwd=None, allow_failure=False):
@@ -467,53 +467,54 @@ phaseChange
     assert pass_t5, "FAIL: Missing species in active Lee model did not trigger FatalIOError!"
     print("PASS: Missing Species FatalIOError Check Passed!")
 
-    # Test 6: Evaporation Multi-Outer-Corrector Oscillation-Free Verification (nOuterCorrectors=3 vs nOuterCorrectors=1)
-    print("\n--- Test 6: Evaporation Multi-Outer-Corrector Oscillation-Free Verification (nOuterCorrectors=3) ---")
-    c6_dir = os.path.join(base_dir, "case_multi_outer_corr")
-    if os.path.exists(c6_dir):
-        shutil.rmtree(c6_dir)
-    setup_case(c6_dir, T_init=380.0, Y_l_init=0.2, Y_v_init=0.0, c_evap=100.0, dt=1.0, n_outer_corr=3)
-    run_cmd(f"cd {c6_dir} && bash -c '{of_env}; {solver_bin}'", cwd=c6_dir)
+    # Test 6: Evaporation Multi-Outer-Corrector Invariance Verification (nOuterCorrectors in [2, 3, 4] vs 1)
+    print("\n--- Test 6: Evaporation Multi-Outer-Corrector Invariance Verification (nOuterCorrectors in [2, 3, 4]) ---")
+    for n_corr in [2, 3, 4]:
+        c6_dir = os.path.join(base_dir, f"case_evap_multi_outer_{n_corr}")
+        if os.path.exists(c6_dir):
+            shutil.rmtree(c6_dir)
+        setup_case(c6_dir, T_init=380.0, Y_l_init=0.2, Y_v_init=0.0, c_evap=100.0, dt=1.0, n_outer_corr=n_corr)
+        run_cmd(f"cd {c6_dir} && bash -c '{of_env}; {solver_bin}'", cwd=c6_dir)
 
-    T_final6 = parse_openfoam_field(os.path.join(c6_dir, "1/air/T"))[0]
-    Yl_final6 = parse_openfoam_field(os.path.join(c6_dir, "1/air/H2O_l"))[0]
+        T_final6 = parse_openfoam_field(os.path.join(c6_dir, "1/air/T"))[0]
+        Yl_final6 = parse_openfoam_field(os.path.join(c6_dir, "1/air/H2O_l"))[0]
 
-    print(f"nOuter=3 Final T:  {T_final6:.6f} K (nOuter=1 Final T: {T_final4:.6f} K)")
-    print(f"nOuter=3 Final Yl: {Yl_final6:.6f} (nOuter=1 Final Yl: {Yl_final4:.6f})")
+        print(f"Evap nOuter={n_corr} Final T:  {T_final6:.6f} K (nOuter=1 Final T: {T_final4:.6f} K)")
+        print(f"Evap nOuter={n_corr} Final Yl: {Yl_final6:.6f} (nOuter=1 Final Yl: {Yl_final4:.6f})")
 
-    assert abs(T_final6 - T_final4) < 1e-4, f"FAIL: nOuter=3 final T ({T_final6:.4f} K) differs from nOuter=1 ({T_final4:.4f} K)!"
-    assert abs(Yl_final6 - Yl_final4) < 1e-6, f"FAIL: nOuter=3 final Yl ({Yl_final6:.6f}) differs from nOuter=1 ({Yl_final4:.6f})!"
-    assert abs(T_final6 - 373.15) < 1e-4, f"FAIL: Final T ({T_final6:.4f} K) did not land on Tsat (373.15 K)!"
-    print("PASS: Evaporation Multi-Outer-Corrector Oscillation-Free Check Passed!")
+        assert abs(T_final6 - T_final4) < 1e-4, f"FAIL: Evap nOuter={n_corr} final T ({T_final6:.4f} K) differs from nOuter=1 ({T_final4:.4f} K)!"
+        assert abs(Yl_final6 - Yl_final4) < 1e-6, f"FAIL: Evap nOuter={n_corr} final Yl ({Yl_final6:.6f}) differs from nOuter=1 ({Yl_final4:.6f})!"
+        assert abs(T_final6 - 373.15) < 1e-4, f"FAIL: Evap nOuter={n_corr} final T ({T_final6:.4f} K) did not land on Tsat (373.15 K)!"
+    print("PASS: Evaporation Multi-Outer-Corrector Invariance Check Passed!")
 
-    # Test 7: Condensation Multi-Outer-Corrector Oscillation-Free Verification (C_cond=100/s, dt=1s, nOuterCorrectors=3 vs 1)
-    print("\n--- Test 7: Condensation Multi-Outer-Corrector Oscillation-Free Verification (C_cond=100/s, dt=1s) ---")
+    # Test 7: Condensation Multi-Outer-Corrector Invariance Verification (C_cond=100/s, dt=1s, nOuterCorrectors in [2, 3, 4] vs 1)
+    print("\n--- Test 7: Condensation Multi-Outer-Corrector Invariance Verification (nOuterCorrectors in [2, 3, 4]) ---")
     c7_n1_dir = os.path.join(base_dir, "case_cond_large_Cdt_n1")
-    c7_n3_dir = os.path.join(base_dir, "case_cond_large_Cdt_n3")
     if os.path.exists(c7_n1_dir):
         shutil.rmtree(c7_n1_dir)
-    if os.path.exists(c7_n3_dir):
-        shutil.rmtree(c7_n3_dir)
-
     setup_case(c7_n1_dir, T_init=360.0, Y_l_init=0.0, Y_v_init=0.2, c_cond=100.0, dt=1.0, n_outer_corr=1)
-    setup_case(c7_n3_dir, T_init=360.0, Y_l_init=0.0, Y_v_init=0.2, c_cond=100.0, dt=1.0, n_outer_corr=3)
-
     run_cmd(f"cd {c7_n1_dir} && bash -c '{of_env}; {solver_bin}'", cwd=c7_n1_dir)
-    run_cmd(f"cd {c7_n3_dir} && bash -c '{of_env}; {solver_bin}'", cwd=c7_n3_dir)
 
     T_final7_n1 = parse_openfoam_field(os.path.join(c7_n1_dir, "1/air/T"))[0]
     Yv_final7_n1 = parse_openfoam_field(os.path.join(c7_n1_dir, "1/air/H2O_v"))[0]
 
-    T_final7_n3 = parse_openfoam_field(os.path.join(c7_n3_dir, "1/air/T"))[0]
-    Yv_final7_n3 = parse_openfoam_field(os.path.join(c7_n3_dir, "1/air/H2O_v"))[0]
+    for n_corr in [2, 3, 4]:
+        c7_n_dir = os.path.join(base_dir, f"case_cond_multi_outer_{n_corr}")
+        if os.path.exists(c7_n_dir):
+            shutil.rmtree(c7_n_dir)
+        setup_case(c7_n_dir, T_init=360.0, Y_l_init=0.0, Y_v_init=0.2, c_cond=100.0, dt=1.0, n_outer_corr=n_corr)
+        run_cmd(f"cd {c7_n_dir} && bash -c '{of_env}; {solver_bin}'", cwd=c7_n_dir)
 
-    print(f"Condensation nOuter=1 Final T:  {T_final7_n1:.6f} K, Final Yv: {Yv_final7_n1:.6f}")
-    print(f"Condensation nOuter=3 Final T:  {T_final7_n3:.6f} K, Final Yv: {Yv_final7_n3:.6f}")
+        T_final7_n = parse_openfoam_field(os.path.join(c7_n_dir, "1/air/T"))[0]
+        Yv_final7_n = parse_openfoam_field(os.path.join(c7_n_dir, "1/air/H2O_v"))[0]
 
-    assert abs(T_final7_n3 - T_final7_n1) < 1e-4, f"FAIL: Condensation nOuter=3 final T ({T_final7_n3:.4f} K) differs from nOuter=1 ({T_final7_n1:.4f} K)!"
-    assert abs(Yv_final7_n3 - Yv_final7_n1) < 1e-6, f"FAIL: Condensation nOuter=3 final Yv ({Yv_final7_n3:.6f}) differs from nOuter=1 ({Yv_final7_n1:.6f})!"
-    assert abs(T_final7_n3 - 373.15) < 1e-4, f"FAIL: Condensation final T ({T_final7_n3:.4f} K) did not land on Tsat (373.15 K)!"
-    print("PASS: Condensation Multi-Outer-Corrector Oscillation-Free Check Passed!")
+        print(f"Cond nOuter={n_corr} Final T:  {T_final7_n:.6f} K (nOuter=1 Final T: {T_final7_n1:.6f} K)")
+        print(f"Cond nOuter={n_corr} Final Yv: {Yv_final7_n:.6f} (nOuter=1 Final Yv: {Yv_final7_n1:.6f})")
+
+        assert abs(T_final7_n - T_final7_n1) < 1e-4, f"FAIL: Cond nOuter={n_corr} final T ({T_final7_n:.4f} K) differs from nOuter=1 ({T_final7_n1:.4f} K)!"
+        assert abs(Yv_final7_n - Yv_final7_n1) < 1e-6, f"FAIL: Cond nOuter={n_corr} final Yv ({Yv_final7_n:.6f}) differs from nOuter=1 ({Yv_final7_n1:.6f})!"
+        assert abs(T_final7_n - 373.15) < 1e-4, f"FAIL: Cond nOuter={n_corr} final T ({T_final7_n:.4f} K) did not land on Tsat (373.15 K)!"
+    print("PASS: Condensation Multi-Outer-Corrector Invariance Check Passed!")
 
     print("\n=========================================================================")
     print("      LEE FLUID PHASE CHANGE MODEL QUANTITATIVE VERIFICATION PASS        ")
