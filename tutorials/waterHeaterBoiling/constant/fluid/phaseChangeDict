@@ -1,0 +1,46 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant/fluid";
+    object      phaseChangeDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+active          true;
+
+phaseChange
+{
+    active          true;
+
+    // -------------------------------------------------------------------------
+    // Fluid Phase Change Model: Lee (Evaporation & Condensation)
+    // -------------------------------------------------------------------------
+    type            Lee;
+
+    // Species names in thermo composition (must match thermophysicalProperties)
+    liquid          liquid;       // Liquid water species name
+    vapor           vapor;        // Water steam/vapor species name
+
+    // Phase Change Rate Coefficients [1/s]
+    C_evap          10.0;         // Evaporation relaxation coefficient (for boiling water)
+    C_cond          10.0;         // Condensation relaxation coefficient
+
+    // Latent Heat & Saturation Temperature
+    latentHeat      2.26e6;       // Latent heat of vaporization for water [J/kg]
+    Tsat            373.15;       // Saturation temperature at atmospheric pressure (100 deg C) [K]
+    pRef            101325;       // Reference atmospheric pressure [Pa]
+
+    // Pressure-dependent Saturation Temperature Toggle
+    enableTsatP     false;        // Set to true to enable Clausius-Clapeyron Tsat(p) variation
+}
+
+// ************************************************************************* //

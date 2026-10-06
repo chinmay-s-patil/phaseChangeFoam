@@ -1,0 +1,85 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant/pcm";
+    object      phaseChangeDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+active          true;
+
+phaseChange
+{
+    active          true;
+
+    // -------------------------------------------------------------------------
+    // Solid Phase-Change Model: EHC (Effective Heat Capacity)
+    // Material: savE(R) OM37 Organic Phase Change Material
+    // -------------------------------------------------------------------------
+    phaseChangeMode EHC;
+    direction       both;
+
+    // -------------------------------------------------------------------------
+    // Forward / Melting Properties (savE OM37 datasheet: 32 °C to 42 °C range)
+    // -------------------------------------------------------------------------
+    forward
+    {
+        T_lowerBound    305.15;   // Solidus temperature: 32 °C (305.15 K)
+        T_upperBound    315.15;   // Liquidus temperature: 42 °C (315.15 K)
+        latentHeat      186000.0; // Melting latent heat: 186 kJ/kg
+    }
+
+    // -------------------------------------------------------------------------
+    // Reverse / Freezing Properties (savE OM37 datasheet: 42 °C to 32 °C range)
+    // -------------------------------------------------------------------------
+    reverse
+    {
+        T_lowerBound    305.15;   // Freezing lower bound: 32 °C (305.15 K)
+        T_upperBound    315.15;   // Freezing upper bound: 42 °C (315.15 K)
+        latentHeat      196000.0; // Freezing latent heat: 196 kJ/kg
+    }
+
+    // -------------------------------------------------------------------------
+    // Thermal Hysteresis Tracking
+    // -------------------------------------------------------------------------
+    hysteresis
+    {
+        active              true;
+        reversalTolerance   1e-6;
+    }
+
+    // -------------------------------------------------------------------------
+    // Phase Density Properties (savE OM37 datasheet)
+    // -------------------------------------------------------------------------
+    density
+    {
+        model                       linear;
+        rhoRef                      916.5;    // Reference average density [kg/m^3]
+        rhoSolid                    973.0;    // Solid density @ 30 °C: 973 kg/m^3
+        rhoLiquid                   860.0;    // Liquid density @ 47 °C: 860 kg/m^3
+        allowNonConservativeDensity true;
+    }
+
+    // -------------------------------------------------------------------------
+    // Thermophysical Properties (savE OM37 datasheet)
+    // -------------------------------------------------------------------------
+    thermophysical
+    {
+        mode            custom;
+        CpSolid         2550.0;   // Solid specific heat @ 30 °C: 2.55 kJ/kg K
+        CpLiquid        2630.0;   // Liquid specific heat @ 47 °C: 2.63 kJ/kg K
+        kSolid          0.16;     // Solid thermal conductivity @ 30 °C: 0.16 W/m K
+        kLiquid         0.13;     // Liquid thermal conductivity @ 50 °C: 0.13 W/m K
+    }
+}
+
+// ************************************************************************* //

@@ -1,0 +1,73 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant/fluid";
+    object      thermophysicalProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+thermoType
+{
+    type            heRhoThermo;
+    mixture         multiComponentMixture;
+    transport       const;
+    thermo          hConst;
+    equationOfState perfectGas;
+    specie          specie;
+    energy          sensibleEnthalpy;
+}
+
+defaultSpecie   liquid;
+
+species
+(
+    liquid
+    vapor
+);
+
+liquid
+{
+    specie
+    {
+        molWeight       18.015;
+    }
+    thermodynamics
+    {
+        Cp              4182;      // Specific heat capacity of liquid water [J/(kg K)]
+        Hf              0;
+    }
+    transport
+    {
+        mu              1.0e-3;    // Dynamic viscosity [Pa s]
+        Pr              7.0;       // Prandtl number
+    }
+}
+
+vapor
+{
+    specie
+    {
+        molWeight       18.015;
+    }
+    thermodynamics
+    {
+        Cp              2080;      // Specific heat capacity of steam [J/(kg K)]
+        Hf              2.26e6;    // Formation enthalpy (latent heat offset) [J/kg]
+    }
+    transport
+    {
+        mu              1.2e-5;    // Dynamic viscosity of steam [Pa s]
+        Pr              1.0;       // Prandtl number of steam
+    }
+}
+
+// ************************************************************************* //

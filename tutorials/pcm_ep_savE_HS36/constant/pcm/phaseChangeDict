@@ -1,0 +1,94 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant/pcm";
+    object      phaseChangeDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+active          true;
+
+phaseChange
+{
+    active          true;
+
+    // -------------------------------------------------------------------------
+    // Solid Phase-Change Model: Enthalpy-Porosity (EP)
+    // Material: savE(R) HS36 Inorganic Phase Change Material
+    // -------------------------------------------------------------------------
+    phaseChangeMode enthalpyPorosity;
+    direction       both;
+
+    // -------------------------------------------------------------------------
+    // Forward / Melting Properties (savE HS36 datasheet: 30 °C to 40 °C range)
+    // -------------------------------------------------------------------------
+    forward
+    {
+        T_lowerBound    303.15;   // Solidus temperature: 30 °C (303.15 K)
+        T_upperBound    313.15;   // Liquidus temperature: 40 °C (313.15 K)
+        latentHeat      163000.0; // Latent heat of fusion: 163 kJ/kg
+    }
+
+    // -------------------------------------------------------------------------
+    // Reverse / Freezing Properties (savE HS36 datasheet: 40 °C to 30 °C range)
+    // -------------------------------------------------------------------------
+    reverse
+    {
+        T_lowerBound    303.15;   // Freezing lower bound: 30 °C (303.15 K)
+        T_upperBound    313.15;   // Freezing upper bound: 40 °C (313.15 K)
+        latentHeat      163000.0; // Freezing latent heat: 163 kJ/kg
+    }
+
+    // -------------------------------------------------------------------------
+    // Stateful Thermal Hysteresis Tracking
+    // -------------------------------------------------------------------------
+    hysteresis
+    {
+        active              true;
+        reversalTolerance   1e-6;
+    }
+
+    // -------------------------------------------------------------------------
+    // Phase Density Properties (savE HS36 datasheet)
+    // -------------------------------------------------------------------------
+    density
+    {
+        model                       linear;
+        rhoRef                      1908.5;   // Reference average density [kg/m^3]
+        rhoSolid                    1967.0;   // Solid density @ 20 °C: 1967 kg/m^3
+        rhoLiquid                   1850.0;   // Liquid density @ 45 °C: 1850 kg/m^3
+        allowNonConservativeDensity true;
+    }
+
+    // -------------------------------------------------------------------------
+    // Thermophysical Properties (savE HS36 datasheet)
+    // -------------------------------------------------------------------------
+    thermophysical
+    {
+        mode            custom;
+        CpSolid         1980.0;   // Solid specific heat @ 20 °C: 1.98 kJ/kg K
+        CpLiquid        2320.0;   // Liquid specific heat @ 50 °C: 2.32 kJ/kg K
+        kSolid          0.50;     // Solid thermal conductivity @ 24 °C: 0.50 W/m K
+        kLiquid         0.47;     // Liquid thermal conductivity @ 44 °C: 0.47 W/m K
+    }
+
+    // -------------------------------------------------------------------------
+    // Mushy Zone Porosity Parameters (Enthalpy-Porosity Formulation)
+    // -------------------------------------------------------------------------
+    porosity
+    {
+        A_cu            1.0e5;    // Darcy constant for mushy zone flow resistance
+        eps             1.0e-3;   // Small division tolerance to prevent zero-divide
+    }
+}
+
+// ************************************************************************* //

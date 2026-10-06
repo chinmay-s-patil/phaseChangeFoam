@@ -1,0 +1,47 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    location    "0/heater";
+    object      T;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+dimensions      [0 0 0 1 0 0 0];
+
+internalField   uniform 385.0;     // Initial solid heater temperature: 385 K
+
+boundaryField
+{
+    // Interface coupled with the fluid water/steam region
+    heater_to_fluid
+    {
+        type            compressible::turbulentTemperatureCoupledBaffleMixed;
+        Tnbr            T;
+        kappaMethod     solidThermo;
+        value           uniform 385.0;
+    }
+
+    // Bottom heating element surface (electric heating element / heat source)
+    bottomHeater
+    {
+        type            fixedValue;
+        value           uniform 400.0; // Constant 400 K (126.85 deg C) heater plate
+    }
+
+    // Insulated side walls
+    walls
+    {
+        type            zeroGradient;
+    }
+}
+
+// ************************************************************************* //

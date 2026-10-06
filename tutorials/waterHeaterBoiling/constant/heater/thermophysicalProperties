@@ -1,0 +1,49 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant/heater";
+    object      thermophysicalProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+thermoType
+{
+    type            heSolidThermo;
+    mixture         pureMixture;
+    transport       constIsotropic;
+    thermo          hConst;
+    equationOfState rhoConst;
+    energy          sensibleEnthalpy;
+}
+
+mixture
+{
+    specie
+    {
+        molWeight       63.55;    // Copper heater
+    }
+    transport
+    {
+        kappa           385;       // Thermal conductivity k [W/(m K)]
+    }
+    thermodynamics
+    {
+        Hf              0;
+        Cp              385;       // Specific heat capacity Cp [J/(kg K)]
+    }
+    equationOfState
+    {
+        rho             8960;      // Density [kg/m^3]
+    }
+}
+
+// ************************************************************************* //
