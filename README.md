@@ -27,11 +27,10 @@
 
 ## Overview & Solvers
 
-The suite provides three primary multi-region solvers and companion utility binaries:
+The suite provides primary multi-region solvers and companion utility binaries:
 
 * **[`phaseChangeMultiRegionFoam`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/phaseChangeMultiRegionFoam.C)**: Transient solver for multi-region conjugate heat transfer with species fluid phase change (Lee model) and solid region phase change (EHC / Enthalpy-Porosity).
 * **[`phaseChangeMultiRegionSimpleFoam`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionSimpleFoam)**: Steady-state solver for multi-region conjugate heat transfer and phase change.
-* **[`chtMultiRegionTwoPhaseEulerFoam`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/chtMultiRegionTwoPhaseEulerFoam)**: Multi-region CHT solver featuring two-phase Euler-Euler fluid dynamics coupled with thermal solid regions and radiation models.
 * **[`writePCDict`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/utilities/writePCDict/writePCDict.C)**: Utility to automatically generate fully documented template `phaseChangeDict` files for case setup.
 
 ---

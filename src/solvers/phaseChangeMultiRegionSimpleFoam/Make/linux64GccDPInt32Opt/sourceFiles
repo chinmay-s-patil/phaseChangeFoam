@@ -1,0 +1,14 @@
+SOURCE = \
+../phaseChangeMultiRegionFoam/fluid/compressibleCourantNo.C \
+../phaseChangeMultiRegionFoam/fluid/fluidPhaseChangeModel.C \
+../phaseChangeMultiRegionFoam/fluid/noneFluidPhaseChangeModel.C \
+../phaseChangeMultiRegionFoam/fluid/constantSourceFluidPhaseChangeModel.C \
+../phaseChangeMultiRegionFoam/fluid/leeFluidPhaseChangeModel.C \
+../phaseChangeMultiRegionFoam/solid/solidRegionDiffNo.C \
+../phaseChangeMultiRegionFoam/solid/phaseChangeModel.C \
+../phaseChangeMultiRegionFoam/solid/nonePhaseChangeModel.C \
+../phaseChangeMultiRegionFoam/solid/ehcPhaseChangeModel.C \
+../phaseChangeMultiRegionFoam/solid/enthalpyPorosityPhaseChangeModel.C \
+phaseChangeMultiRegionSimpleFoam.C \
+
+# sources

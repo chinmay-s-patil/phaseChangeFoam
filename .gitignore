@@ -23,4 +23,4 @@ verification/**/case*/
 verification/*/case*/
 
 ideas/
-src/solvers/phaseChangeMultiRegionSimpleFoam/
+# src/solvers/phaseChangeMultiRegionSimpleFoam/
