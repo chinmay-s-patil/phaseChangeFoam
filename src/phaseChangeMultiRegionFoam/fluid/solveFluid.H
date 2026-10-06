@@ -12,11 +12,7 @@ else
     if (oCorr == 0)
     {
         #include "rhoEqn.H"
-    }
-
-    phaseChange.correct();
-    if (oCorr == 0)
-    {
+        phaseChange.correct();
         phaseChange.checkMassConservation();
     }
 

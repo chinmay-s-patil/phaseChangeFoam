@@ -53,8 +53,9 @@ def parse_openfoam_field(file_path):
     block = content[start_paren+1:end_paren].strip()
     return [float(x) for x in block.split()]
 
-def setup_case(case_dir, T_init=380.0, Y_l_init=0.2, Y_v_init=0.0, enable_tsat_p=False, p_init=101325.0, c_evap=0.1, c_cond=0.1, dt=1.0, n_outer_corr=1):
+def setup_case(case_dir, T_init=380.0, Y_l_init=0.2, Y_v_init=0.0, enable_tsat_p=False, p_init=101325.0, c_evap=0.1, c_cond=0.1, dt=1.0, n_outer_corr=1, q_source=0.0, end_time=None):
     os.makedirs(case_dir, exist_ok=True)
+    end_t = end_time if end_time is not None else dt
     
     # system/controlDict
     os.makedirs(os.path.join(case_dir, "system"), exist_ok=True)
@@ -62,7 +63,7 @@ def setup_case(case_dir, T_init=380.0, Y_l_init=0.2, Y_v_init=0.0, enable_tsat_p
         f.write(f"""
 FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object controlDict; }}
 application phaseChangeMultiRegionFoam;
-startFrom startTime; startTime 0; stopAt endTime; endTime {dt}; deltaT {dt};
+startFrom startTime; startTime 0; stopAt endTime; endTime {end_t}; deltaT {dt};
 writeControl timeStep; writeInterval 1; purgeWrite 0; writeFormat ascii; writePrecision 12;
 """)
 
@@ -281,6 +282,28 @@ dimensions [0 0 0 0 0 0 0]; internalField uniform {Y_v_init};
 boundaryField {{ walls {{ type zeroGradient; }} }}
 """)
 
+    if q_source > 0.0:
+        with open(os.path.join(air_const, "fvOptions"), "w") as f:
+            f.write(f"""
+FoamFile {{ version 2.0; format ascii; class dictionary; location "constant/air"; object fvOptions; }}
+heatSource
+{{
+    type            scalarSemiImplicitSource;
+    active          true;
+    selectionMode   all;
+    scalarSemiImplicitSourceCoeffs
+    {{
+        selectionMode   all;
+        volumeMode      specific;
+        injectionRateSuSp
+        {{
+            h           ({q_source} 0);
+            he          ({q_source} 0);
+        }}
+    }}
+}}
+""")
+
     # Mesh generation and region directory copies
     of_env = "source /usr/lib/openfoam/openfoam2412/etc/bashrc || source /usr/lib/openfoam/openfoam2406/etc/bashrc || true"
     run_cmd(f"cd {case_dir} && bash -c '{of_env}; blockMesh'", cwd=case_dir)
@@ -288,6 +311,8 @@ boundaryField {{ walls {{ type zeroGradient; }} }}
     run_cmd(f"cp -r {case_dir}/constant/polyMesh {case_dir}/constant/air/polyMesh 2>/dev/null || true")
     run_cmd(f"cp {case_dir}/system/fvSchemes {case_dir}/system/air/fvSchemes 2>/dev/null || true")
     run_cmd(f"cp {case_dir}/system/fvSolution {case_dir}/system/air/fvSolution 2>/dev/null || true")
+    if q_source > 0.0:
+        run_cmd(f"cp {air_const}/fvOptions {case_dir}/system/air/fvOptions 2>/dev/null || true")
 
 def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -515,6 +540,53 @@ phaseChange
         assert abs(Yv_final7_n - Yv_final7_n1) < 1e-6, f"FAIL: Cond nOuter={n_corr} final Yv ({Yv_final7_n:.6f}) differs from nOuter=1 ({Yv_final7_n1:.6f})!"
         assert abs(T_final7_n - 373.15) < 1e-4, f"FAIL: Cond nOuter={n_corr} final T ({T_final7_n:.4f} K) did not land on Tsat (373.15 K)!"
     print("PASS: Condensation Multi-Outer-Corrector Invariance Check Passed!")
+
+    # Test 8: Heated Pot Physical Energy Balance Verification
+    print("\n--- Test 8: Heated Pot Physical Energy Balance Verification ---")
+    c8_dir = os.path.join(base_dir, "case_heated_pot")
+    if os.path.exists(c8_dir):
+        shutil.rmtree(c8_dir)
+
+    Q_in = 100000.0  # 1e5 W/m^3
+    dt8 = 0.01
+    t_end8 = 3.0
+    T_init8 = 350.0
+    Tsat8 = 373.15
+    Yl_init8 = 0.20
+    Yv_init8 = 0.0
+    L8 = 2.26e6
+    Cp8 = 1000.0
+
+    setup_case(c8_dir, T_init=T_init8, Y_l_init=Yl_init8, Y_v_init=Yv_init8, c_evap=100.0, dt=dt8, end_time=t_end8, q_source=Q_in)
+    run_cmd(f"cd {c8_dir} && bash -c '{of_env}; {solver_bin}'", cwd=c8_dir)
+
+    # Note: controlDict writes files at format '3' or '3.0' or '3.000000...'
+    # Let's find the highest time directory created
+    time_dirs = [d for d in os.listdir(c8_dir) if d.replace('.', '', 1).isdigit() and float(d) > 0]
+    latest_time_dir = max(time_dirs, key=lambda x: float(x))
+
+    T_final8 = parse_openfoam_field(os.path.join(c8_dir, f"{latest_time_dir}/air/T"))[0]
+    Yl_final8 = parse_openfoam_field(os.path.join(c8_dir, f"{latest_time_dir}/air/H2O_l"))[0]
+    Yv_final8 = parse_openfoam_field(os.path.join(c8_dir, f"{latest_time_dir}/air/H2O_v"))[0]
+    rho8 = parse_openfoam_field(os.path.join(c8_dir, f"{latest_time_dir}/air/rho"))[0]
+
+    # Energy Balance Check: Q * t_end = rho * Cp * (T_final - T_init) + rho * L * (Yv_final - Yv_init)
+    E_input = Q_in * float(latest_time_dir)
+    E_sensible = rho8 * Cp8 * (T_final8 - T_init8)
+    E_latent = rho8 * L8 * (Yv_final8 - Yv_init8)
+    E_stored = E_sensible + E_latent
+    rel_err8 = abs(E_input - E_stored) / E_input
+
+    print(f"Total Heat Injected (Q*t): {E_input:.2f} J/m^3")
+    print(f"Sensible Energy Stored:    {E_sensible:.2f} J/m^3")
+    print(f"Latent Energy Stored:      {E_latent:.2f} J/m^3")
+    print(f"Total Energy Stored:       {E_stored:.2f} J/m^3 (rel error: {rel_err8:.4%})")
+    print(f"Final T:                   {T_final8:.4f} K (Tsat = {Tsat8} K)")
+    print(f"Final Yl:                  {Yl_final8:.6f} (Yl_init = {Yl_init8})")
+
+    assert rel_err8 < 0.01, f"FAIL: Energy balance relative error ({rel_err8:.4%}) > 1%!"
+    assert abs(T_final8 - Tsat8) < 5.0, f"FAIL: Final temperature ({T_final8:.2f} K) is far from Tsat ({Tsat8} K) during boiling plateau!"
+    print("PASS: Heated Pot Physical Energy Balance Verification Passed!")
 
     print("\n=========================================================================")
     print("      LEE FLUID PHASE CHANGE MODEL QUANTITATIVE VERIFICATION PASS        ")

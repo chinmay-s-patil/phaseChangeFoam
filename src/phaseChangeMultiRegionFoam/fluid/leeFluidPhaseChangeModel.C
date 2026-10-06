@@ -214,7 +214,7 @@ void Foam::leeFluidPhaseChangeModel::correct()
     const volScalarField& rho_old = mesh_.lookupObject<volScalarField>("rho").oldTime();
 
     tmp<volScalarField> tCp = thermo_.Cp();
-    const volScalarField& CpField = tCp();
+    const volScalarField& Cp_old = tCp().oldTime();
 
     const PtrList<volScalarField>& Y = thermo_.composition().Y();
 
@@ -252,7 +252,7 @@ void Foam::leeFluidPhaseChangeModel::correct()
 
         const scalar T0 = T_old[cellI];
         const scalar rho0 = rho_old[cellI];
-        const scalar Cp_c = max(CpField[cellI], scalar(1.0));
+        const scalar Cp_c = max(Cp_old[cellI], scalar(1.0));
         const scalar Yl0 = (liquidIndex_ != -1) ? max(Y[liquidIndex_].oldTime()[cellI], scalar(0)) : scalar(0);
         const scalar Yv0 = (vaporIndex_ != -1) ? max(Y[vaporIndex_].oldTime()[cellI], scalar(0)) : scalar(0);
 
