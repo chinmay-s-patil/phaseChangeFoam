@@ -480,6 +480,11 @@ application phaseChangeMultiRegionFoam; startFrom latestTime; startTime 100; sto
     print(f"Simulated T = {T12:.6f} K, alphaL = {a12:.6f}")
     print(f"Exact T     = 280.000000 K, alphaL = 0.000000")
     print(f"Temperature Error = {err12:.6f} K, Alpha Error = {err_a12:.6f}")
+    if err12 < 0.01 and err_a12 < 0.001:
+        print("STATUS: CASE 12 PASSED!")
+    else:
+        print("STATUS: CASE 12 FAILED!")
+        all_passed = False
     # --- Case 13: Continuous Multi-Step Cooling Reversal with Unequal Cp (308 -> 306 -> 304 -> 302 K) ---
     print("\n--- Case 13: Continuous Multi-Step Cooling Reversal with Unequal Cp (308 -> 306 -> 304 -> 302 K) ---")
     case13_dir = os.path.join(base_dir, "case13_multiStepReversal")
@@ -823,7 +828,8 @@ heatSource
     print(f"Temperature Error (vs exact) = {err22:.6f} K, Alpha Error = {err_a22:.6f}")
     print(f"Temperature Error (vs ref)   = {err22_ref:.6f} K, Alpha Error = {err_a22_ref:.6f}")
 
-    if err22 < 0.01 and err_a22 < 0.001 and err22_ref < 0.01 and err_a22_ref < 0.001 and abs(disk_traj200 - 0.0) < 1e-4 and abs(disk_Trev200 - 303.0) < 1e-4:
+    pass22 = err22 < 0.01 and err_a22 < 0.001 and err22_ref < 0.01 and err_a22_ref < 0.001 and abs(disk_traj200 - 0.0) < 1e-4 and abs(disk_Trev200 - 303.0) < 1e-4
+    if pass22:
         print("STATUS: CASE 22 PASSED!")
     else:
         print("STATUS: CASE 22 FAILED!")
@@ -832,28 +838,28 @@ heatSource
     print("\n=======================================================")
     print("      SINGLE-CELL VERIFICATION SUITE SUMMARY           ")
     print("=======================================================")
-    print(f"Case 1 (Heating Jump)          : {'PASSED' if err1 < 0.01 else 'FAILED'} (err = {err1:.6f} K)")
-    print(f"Case 2 (Cooling Jump)          : {'PASSED' if err2 < 0.01 else 'FAILED'} (err = {err2:.6f} K)")
-    print(f"Case 3 (Partial Melt)          : {'PASSED' if err3 < 0.01 else 'FAILED'} (err = {err3:.6f} K)")
-    print(f"Case 4 (Realistic L)           : {'PASSED' if err4 < 0.30 else 'FAILED'} (err = {err4:.6f} K)")
-    print(f"Case 5 (Mushy Start & Melt)    : {'PASSED' if err5 < 0.01 else 'FAILED'} (err = {err5:.6f} K)")
-    print(f"Case 6 (Cooling Reversal)      : {'PASSED' if err6 < 0.01 else 'FAILED'} (err = {err6:.6f} K)")
-    print(f"Case 7 (Heating Reversal)      : {'PASSED' if err7 < 0.01 else 'FAILED'} (err = {err7:.6f} K)")
-    print(f"Case 8 (Exact Path Integrated) : {'PASSED' if err8 < 0.01 else 'FAILED'} (err = {err8:.6f} K)")
-    print(f"Case 9 (Variable Density)      : {'PASSED' if err9 < 0.01 else 'FAILED'} (err = {err9:.6f} K)")
-    print(f"Case 10 (Unequal Cp Cooling)   : {'PASSED' if err10 < 0.01 else 'FAILED'} (err = {err10:.6f} K)")
-    print(f"Case 11 (Unequal Cp Reversal)  : {'PASSED' if err11 < 0.01 else 'FAILED'} (err = {err11:.6f} K)")
-    print(f"Case 12 (Closed Cycle Net H=0) : {'PASSED' if err12 < 0.01 else 'FAILED'} (err = {err12:.6f} K)")
-    print(f"Case 13 (Multi-Step Reversal)  : {'PASSED' if err13 < 0.001 else 'FAILED'} (err = {err13:.6f} K)")
-    print(f"Case 14 (Unequal Cp Closed)    : {'PASSED' if err14 < 0.01 else 'FAILED'} (err = {err14:.6f} K)")
-    print(f"Case 15 (Liquid Reversal)      : {'PASSED' if err15 < 0.01 else 'FAILED'} (err = {err15:.6f} K)")
-    print(f"Case 16 (Forward Locked Cool)  : {'PASSED' if err16 < 0.01 else 'FAILED'} (err = {err16:.6f} K)")
-    print(f"Case 17 (Forward Liquid Split) : {'PASSED' if err17 < 0.01 else 'FAILED'} (err = {err17:.6f} K)")
-    print(f"Case 18 (Reverse Solid Split)  : {'PASSED' if err18 < 0.01 else 'FAILED'} (err = {err18:.6f} K)")
-    print(f"Case 19 (Forward Non-Hys Cool) : {'PASSED' if err19 < 0.01 else 'FAILED'} (err = {err19:.6f} K)")
-    print(f"Case 20 (Reverse Non-Hys Heat) : {'PASSED' if err20 < 0.01 else 'FAILED'} (err = {err20:.6f} K)")
-    print(f"Case 21 (Forward Restart Test) : {'PASSED' if err21 < 0.01 else 'FAILED'} (err = {err21:.6f} K)")
-    print(f"Case 22 (Hysteresis Restart)   : {'PASSED' if err22 < 0.01 and err22_ref < 0.01 else 'FAILED'} (err = {err22:.6f} K)")
+    print(f"Case 1 (Heating Jump)          : {'PASSED' if err1 < 0.01 and abs(a1 - 1.0) < 0.001 else 'FAILED'} (err = {err1:.6f} K)")
+    print(f"Case 2 (Cooling Jump)          : {'PASSED' if err2 < 0.01 and abs(a2 - 0.0) < 0.001 else 'FAILED'} (err = {err2:.6f} K)")
+    print(f"Case 3 (Partial Melt)          : {'PASSED' if err3 < 0.01 and err_a3 < 0.001 else 'FAILED'} (err = {err3:.6f} K)")
+    print(f"Case 4 (Realistic L)           : {'PASSED' if err4 < 0.30 and abs(a4 - 1.0) < 0.001 else 'FAILED'} (err = {err4:.6f} K)")
+    print(f"Case 5 (Mushy Start & Melt)    : {'PASSED' if err5 < 0.001 and err_a5 < 0.001 else 'FAILED'} (err = {err5:.6f} K)")
+    print(f"Case 6 (Cooling Reversal)      : {'PASSED' if err6 < 0.001 and err_a6 < 0.001 else 'FAILED'} (err = {err6:.6f} K)")
+    print(f"Case 7 (Heating Reversal)      : {'PASSED' if err7 < 0.001 and err_a7 < 0.001 else 'FAILED'} (err = {err7:.6f} K)")
+    print(f"Case 8 (Exact Path Integrated) : {'PASSED' if err8 < 0.01 and abs(a8 - 1.0) < 0.001 else 'FAILED'} (err = {err8:.6f} K)")
+    print(f"Case 9 (Variable Density)      : {'PASSED' if err9 < 0.01 and abs(a9 - 1.0) < 0.001 else 'FAILED'} (err = {err9:.6f} K)")
+    print(f"Case 10 (Unequal Cp Cooling)   : {'PASSED' if err10 < 0.01 and abs(a10 - 0.0) < 0.001 else 'FAILED'} (err = {err10:.6f} K)")
+    print(f"Case 11 (Unequal Cp Reversal)  : {'PASSED' if err11 < 0.001 and err_a11 < 0.001 else 'FAILED'} (err = {err11:.6f} K)")
+    print(f"Case 12 (Closed Cycle Net H=0) : {'PASSED' if err12 < 0.01 and err_a12 < 0.001 else 'FAILED'} (err = {err12:.6f} K)")
+    print(f"Case 13 (Multi-Step Reversal)  : {'PASSED' if err13 < 0.001 and abs(a13a - 0.8) < 0.001 and abs(a13b - 0.8) < 0.001 and abs(a13c - 0.7) < 0.001 else 'FAILED'} (err = {err13:.6f} K)")
+    print(f"Case 14 (Unequal Cp Closed)    : {'PASSED' if err14 < 0.01 and err_a14 < 0.001 else 'FAILED'} (err = {err14:.6f} K)")
+    print(f"Case 15 (Liquid Reversal)      : {'PASSED' if err15 < 0.01 and err_a15 < 0.001 else 'FAILED'} (err = {err15:.6f} K)")
+    print(f"Case 16 (Forward Locked Cool)  : {'PASSED' if err16 < 0.01 and err_a16 < 0.001 else 'FAILED'} (err = {err16:.6f} K)")
+    print(f"Case 17 (Forward Liquid Split) : {'PASSED' if err17 < 0.01 and err_a17 < 0.001 else 'FAILED'} (err = {err17:.6f} K)")
+    print(f"Case 18 (Reverse Solid Split)  : {'PASSED' if err18 < 0.01 and err_a18 < 0.001 else 'FAILED'} (err = {err18:.6f} K)")
+    print(f"Case 19 (Forward Non-Hys Cool) : {'PASSED' if err19 < 0.01 and err_a19 < 0.001 else 'FAILED'} (err = {err19:.6f} K)")
+    print(f"Case 20 (Reverse Non-Hys Heat) : {'PASSED' if err20 < 0.01 and err_a20 < 0.001 else 'FAILED'} (err = {err20:.6f} K)")
+    print(f"Case 21 (Forward Restart Test) : {'PASSED' if err21 < 0.01 and err_a21 < 0.001 else 'FAILED'} (err = {err21:.6f} K)")
+    print(f"Case 22 (Hysteresis Restart)   : {'PASSED' if pass22 else 'FAILED'} (err = {err22:.6f} K)")
     print("-------------------------------------------------------")
 
     if all_passed:

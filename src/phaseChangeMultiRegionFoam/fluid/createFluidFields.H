@@ -1,8 +1,11 @@
+#include "fluidPhaseChangeModel.H"
+
 // Initialise fluid field pointer lists
 PtrList<rhoReactionThermo> thermoFluid(fluidRegions.size());
 PtrList<volScalarField> rhoFluid(fluidRegions.size());
 PtrList<volVectorField> UFluid(fluidRegions.size());
 PtrList<surfaceScalarField> phiFluid(fluidRegions.size());
+PtrList<fluidPhaseChangeModel> fluidPhaseChangeModels(fluidRegions.size());
 PtrList<uniformDimensionedScalarField> hRefFluid(fluidRegions.size());
 PtrList<volScalarField> ghFluid(fluidRegions.size());
 PtrList<surfaceScalarField> ghfFluid(fluidRegions.size());
@@ -293,6 +296,19 @@ forAll(fluidRegions, i)
     (
         i,
         new fv::options(fluidRegions[i])
+    );
+
+    Info<< "    Adding fluid phase change model\n" << endl;
+    fluidPhaseChangeModels.set
+    (
+        i,
+        fluidPhaseChangeModel::New
+        (
+            fluidRegions[i],
+            thermoFluid[i],
+            UFluid[i],
+            phiFluid[i]
+        )
     );
 
     UEqFluid.set

@@ -20,6 +20,7 @@
         rho*(U&g)
       + rad.Sh(thermo, he)
       + Qdot
+      + phaseChange.energySource()
       + fvOptions(rho, he)
     );
 

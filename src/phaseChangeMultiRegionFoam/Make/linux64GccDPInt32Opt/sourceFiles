@@ -1,5 +1,7 @@
 SOURCE = \
 fluid/compressibleCourantNo.C \
+fluid/fluidPhaseChangeModel.C \
+fluid/noneFluidPhaseChangeModel.C \
 solid/solidRegionDiffNo.C \
 solid/phaseChangeModel.C \
 solid/nonePhaseChangeModel.C \

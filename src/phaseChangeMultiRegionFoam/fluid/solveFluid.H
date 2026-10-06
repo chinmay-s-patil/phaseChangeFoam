@@ -14,6 +14,8 @@ else
         #include "rhoEqn.H"
     }
 
+    phaseChange.correct();
+
     #include "UEqn.H"
     #include "YEqn.H"
     #include "EEqn.H"

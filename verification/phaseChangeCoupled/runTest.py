@@ -3,6 +3,7 @@ import os
 import sys
 import subprocess
 import shutil
+import re
 
 def find_solver():
     user_appbin = os.environ.get("FOAM_USER_APPBIN")
@@ -416,7 +417,7 @@ def main():
     if pass_t3_disk:
         with open(t1000_trev, 'r') as f:
             trev_content = f.read()
-        pcm_to_solid2_calculated = "pcm_to_solid2" in trev_content and "type            calculated;" in trev_content
+        pcm_to_solid2_calculated = re.search(r'pcm_to_solid2\s*\{[^}]*type\s+calculated\s*;', trev_content) is not None
         print(f"1000/pcm/T_reversal field exists and pcm_to_solid2 patch is calculated: {pcm_to_solid2_calculated}")
         pass_t3_disk = pass_t3_disk and pcm_to_solid2_calculated
 
