@@ -54,19 +54,18 @@ phaseChange
     hysteresis
     {
         active              true;
-        reversalTolerance   1e-6;
+        reversalTolerance   1e-3;
     }
 
     // -------------------------------------------------------------------------
-    // Phase Density Properties (savE HS36 datasheet)
+    // Phase Density Properties (Conservative thermo density)
+    // Note: In a fixed-volume solid domain, constant density (model thermo)
+    // is required to strictly preserve mass and energy conservation.
     // -------------------------------------------------------------------------
     density
     {
-        model                       linear;
+        model                       thermo;   // Conservative constant density
         rhoRef                      1908.5;   // Reference average density [kg/m^3]
-        rhoSolid                    1967.0;   // Solid density @ 20 °C: 1967 kg/m^3
-        rhoLiquid                   1850.0;   // Liquid density @ 45 °C: 1850 kg/m^3
-        allowNonConservativeDensity true;
     }
 
     // -------------------------------------------------------------------------

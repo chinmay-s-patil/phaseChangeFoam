@@ -45,8 +45,31 @@ if (adjustTimeStep)
         DiNum = SMALL;
     }
 
+    scalar maxAlphaCo = runTime.controlDict().getOrDefault<scalar>("maxAlphaCo", 0.2);
+
+    scalar maxAlphaRate = 0.0;
+    forAll(solidRegions, i)
+    {
+        const phaseChangeModel& pcModel = phaseChangeModels[i];
+        if (pcModel.active())
+        {
+            scalar maxDAlpha = max(mag(pcModel.phaseFraction() - pcModel.phaseFractionOld())).value();
+            maxAlphaRate = max(maxAlphaRate, maxDAlpha / (runTime.deltaTValue() + SMALL));
+        }
+    }
+    forAll(fluidRegions, i)
+    {
+        const phaseChangeModel& pcmModel = pcmModelsFluid[i];
+        if (pcmModel.active())
+        {
+            scalar maxDAlpha = max(mag(pcmModel.phaseFraction() - pcmModel.phaseFractionOld())).value();
+            maxAlphaRate = max(maxAlphaRate, maxDAlpha / (runTime.deltaTValue() + SMALL));
+        }
+    }
+
     scalar maxDeltaTFluid = maxCo/(CoNum + SMALL);
     scalar maxDeltaTSolid = maxDi/(DiNum + SMALL);
+    scalar maxDeltaTAlpha = (maxAlphaRate > 1e-6) ? (maxAlphaCo / maxAlphaRate) : maxDeltaT;
 
     scalar deltaTFluid =
         min
@@ -55,11 +78,13 @@ if (adjustTimeStep)
             1.2
         );
 
+    scalar deltaTLimited = min(min(deltaTFluid, maxDeltaTSolid)*runTime.deltaTValue(), maxDeltaTAlpha);
+
     runTime.setDeltaT
     (
         min
         (
-            min(deltaTFluid, maxDeltaTSolid)*runTime.deltaTValue(),
+            deltaTLimited,
             maxDeltaT
         )
     );

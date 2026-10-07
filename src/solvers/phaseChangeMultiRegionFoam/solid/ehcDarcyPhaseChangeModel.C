@@ -83,7 +83,7 @@ void Foam::ehcDarcyPhaseChangeModel::readPorosityDict()
             if (pcDict.found("convection"))
             {
                 suppressConvection_ =
-                    pcDict.subDict("convection").getOrDefault<bool>("suppress", false);
+                    pcDict.subDict("convection").getOrDefault<bool>("suppress", suppressConvection_);
             }
 
             // Read momentum damping parameters
@@ -118,7 +118,7 @@ Foam::tmp<Foam::volScalarField> Foam::ehcDarcyPhaseChangeModel::momentumSp() con
             mesh_.time().timeName(),
             mesh_,
             IOobject::NO_READ,
-            IOobject::AUTO_WRITE
+            IOobject::NO_WRITE
         ),
         mesh_,
         dimensionedScalar("zero", dimMass/dimVolume/dimTime, 0.0)

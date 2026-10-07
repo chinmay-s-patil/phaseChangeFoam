@@ -44,11 +44,6 @@ else
     }
 }
 
-if (pcmModel.active() && finalIter)
-{
-    pcmModel.updateHistory();
-}
-
 if (finalIter)
 {
     mesh.data().setFinalIteration(false);

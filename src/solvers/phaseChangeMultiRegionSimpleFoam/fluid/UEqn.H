@@ -11,7 +11,7 @@
         fvOptions(rho, U)
     );
 
-    if (pcmModel.active())
+    if (pcmModel.active() && !pcmModel.suppressConvection())
     {
         UEqn += fvm::Sp(pcmModel.momentumSp(), U);
     }

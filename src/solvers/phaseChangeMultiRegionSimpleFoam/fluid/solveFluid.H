@@ -28,8 +28,5 @@
         }
     }
 
-    if (pcmModel.active() && finalIter)
-    {
-        pcmModel.updateHistory();
-    }
+
 

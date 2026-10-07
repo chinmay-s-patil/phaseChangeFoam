@@ -61,7 +61,7 @@ The framework relies on runtime selection tables for both fluid and solid region
 ```
 
 * **Fluid Models** derive from [`fluidPhaseChangeModel`](src/solvers/phaseChangeMultiRegionFoam/fluid/fluidPhaseChangeModel.H) and feed mass sources to continuity/pressure (`pEqn`), species mass fraction sources to `YEqn`, and latent heat sources to energy equations (`EEqn`).
-* **Solid/PCM Models** derive from [`phaseChangeModel`](src/solvers/phaseChangeMultiRegionFoam/solid/phaseChangeModel.H) and supply path-integrated heat capacities $C_{p,eff}$, exact Newton secant linearisation $S_p$, latent energy sources $S_u$, effective thermal conductivities $k_{eff}$, densities $\rho_{eff}$, and Darcy momentum drag forces $S_{u,drag}$.
+* **Solid/PCM Models** derive from [`phaseChangeModel`](src/solvers/phaseChangeMultiRegionFoam/solid/phaseChangeModel.H) and supply path-integrated heat capacities $C_{p,eff}$, quasi-Newton secant linearisation $S_p$, latent energy sources $S_u$, effective thermal conductivities $k_{eff}$, densities $\rho_{eff}$, and Darcy momentum drag forces $S_{u,drag}$.
 
 
 ---
@@ -154,7 +154,7 @@ Activated in solid/PCM regions via `constant/<region>/phaseChangeDict`.
 
 Class: [`ehcPhaseChangeModel`](src/solvers/phaseChangeMultiRegionFoam/solid/ehcPhaseChangeModel.H)
 
-Solid-liquid phase change model utilizing path-integral Effective Heat Capacity ($C_{p,eff}$) with exact Newton/secant linearisation of latent heat, stateful hysteresis tracking, and path-integral thermophysical property evaluation.
+Solid-liquid phase change model utilizing path-integral Effective Heat Capacity ($C_{p,eff}$) with quasi-Newton fixed-point secant linearisation of latent heat, stateful hysteresis tracking, and path-integral thermophysical property evaluation.
 
 #### Key Features:
 * **Transformed Phase Fraction $\alpha \in [0, 1]$**: Smooth transition between solidus ($T_{solidus}$) and liquidus ($T_{liquidus}$).
@@ -164,7 +164,7 @@ Solid-liquid phase change model utilizing path-integral Effective Heat Capacity 
   - `reverse`: Irreversible freezing (phase fraction cannot increase).
 * **Stateful Thermal Hysteresis (`hysteresis`)**: Tracks heating vs cooling history ($T_{reversal}$) and enforces hysteresis plateaus when temperature reverses within deadband `reversalTolerance`.
 * **Path-Integral Thermophysics (`thermophysical`)**: Computes exact step sensible enthalpy change $\Delta h_{sens} / \Delta T$ to prevent numerical temperature overshoot across phase transition boundaries.
-* **Exact Newton Secant Linearization**: Generates implicit diagonal coefficient $S_p = \frac{\bar{\rho} L \frac{d\alpha}{dT}}{\Delta t C_{p,thermo}}$ and explicit source $S_u = \frac{\bar{\rho} L (\alpha - \alpha_{old})}{\Delta t}$.
+* **Quasi-Newton Secant Linearization**: Generates implicit diagonal coefficient $S_p = \frac{\bar{\rho} L \frac{d\alpha}{dT}}{\Delta t C_{p,thermo}}$ and explicit source $S_u = \frac{\bar{\rho} L (\alpha - \alpha_{old})}{\Delta t}$ for fixed-point non-linear iteration.
 
 ---
 
@@ -182,7 +182,10 @@ $$C_{drag} = C_u \frac{(1 - f)^2}{f^3 + q} \ge 0 \quad \left[\frac{\text{kg}}{\t
 
 Added implicitly in `UEqn.H`:
 ```cpp
-UEqn += fvm::Sp(pcmModel.momentumSp(), U);
+if (pcmModel.active() && !pcmModel.suppressConvection())
+{
+    UEqn += fvm::Sp(pcmModel.momentumSp(), U);
+}
 ```
 
 Where:
@@ -271,10 +274,10 @@ phaseChange
         kLiquid         1.0;    // Custom liquid thermal conductivity k [W/(m K)]
     }
 
-    // Convection Suppression (Solid Regions)
+    // Convection Suppression Control
     convection
     {
-        suppress        true;   // Suppress fluid convection in solid regions
+        suppress        false;  // Set true to disable momentum drag in UEqn (default: false in fluid regions, true in solid regions without U)
     }
 
     // Mushy Zone Porosity Drag (Enthalpy-Porosity Mode Only)
@@ -430,15 +433,15 @@ fvScalarMatrix hEqn
 
 if (pcmModel.active())
 {
-    // Linearized latent heat source
-    hEqn += pcmModel.latentHeatSource()
-          + fvm::Sp(pcmModel.latentHeatSp(), h)
-          - pcmModel.latentHeatSp() * h;
+    // Linearized latent heat source (scaled by solid volume fraction betav)
+    hEqn += betav * pcmModel.latentHeatSource()
+          + fvm::Sp(betav * pcmModel.latentHeatSp(), h)
+          - betav * pcmModel.latentHeatSp() * h;
 }
 hEqn.solve();
 
 // 4. Implicit Momentum Damping (for EHCDarcy / Enthalpy-Porosity fluid mushy zone flows)
-if (pcmModel.active())
+if (pcmModel.active() && !pcmModel.suppressConvection())
 {
     UEqn += fvm::Sp(pcmModel.momentumSp(), U);
 }

@@ -11,7 +11,7 @@
         fvOptions(rho, U)
     );
 
-    if (pcmModel.active())
+    if (pcmModel.active() && !pcmModel.suppressConvection())
     {
         tmp<volScalarField> tsp = pcmModel.momentumSp();
         UEqn += fvm::Sp(tsp, U);

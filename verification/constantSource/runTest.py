@@ -94,7 +94,7 @@ solvers {
 }
 PIMPLE
 {
-    nOuterCorrectors 1;
+    nOuterCorrectors 2;
     nCorrectors 1;
     nNonLinearCorrectors 1;
     pRefCell 0;

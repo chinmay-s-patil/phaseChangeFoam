@@ -25,7 +25,7 @@ namespace Foam
  Description
     Unified base class for general multi-region phase-change thermal models
     (solidification/melting, alloys, phase-change materials, ice-water
-    transition, and thermal storage) with exact Newton linearization,
+    transition, and thermal storage) with quasi-Newton fixed-point linearization,
     stateful hysteresis, path-integral thermophysics, and fluid momentum damping.
 \*---------------------------------------------------------------------------*/
 
@@ -128,6 +128,7 @@ protected:
 
     void readDict();
     void readConvectionDict(const dictionary& pcDict);
+    void initPhaseFractionFromTemperature();
 
     // Exact sensible enthalpy integral for custom thermo mode
     scalar hSens(scalar T, scalar traj) const;
@@ -198,6 +199,12 @@ public:
     virtual const volScalarField& phaseFraction() const
     {
         return phaseFraction_;
+    }
+
+    //- Access start-of-step phase fraction field
+    virtual const volScalarField& phaseFractionOld() const
+    {
+        return phaseFraction_old_;
     }
 
     //- Backward compatibility alias for liquid fraction

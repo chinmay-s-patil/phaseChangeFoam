@@ -72,15 +72,22 @@ if (coupled && !fvMatrixAssemblyPtr)
 
 {
     fvSolution solutionDict(runTime);
-    const dictionary& pimple = solutionDict.subDict("PIMPLE");
-    const int nOuterCorr = pimple.getOrDefault<int>("nOuterCorrectors", 1);
-    
-    bool anyPhaseChangeActive = false;
+    const dictionary* pimplePtr =
+        solutionDict.found("PIMPLE")
+      ? &solutionDict.subDict("PIMPLE")
+      : (solutionDict.found("SIMPLE") ? &solutionDict.subDict("SIMPLE") : nullptr);
+
+    const int nOuterCorr =
+        pimplePtr
+      ? pimplePtr->getOrDefault<int>("nOuterCorrectors", 1)
+      : 1;
+
+    bool anySolidPhaseChangeActive = false;
     forAll(solidRegions, i)
     {
         if (phaseChangeModels[i].active())
         {
-            anyPhaseChangeActive = true;
+            anySolidPhaseChangeActive = true;
             if (coupled)
             {
                 Info<< "Phase change active in coupled solid region "
@@ -89,15 +96,29 @@ if (coupled && !fvMatrixAssemblyPtr)
             }
         }
     }
-    
+
+    bool anyFluidPhaseChangeActive = false;
+    forAll(fluidRegions, i)
+    {
+        if (pcmModelsFluid[i].active() || fluidPhaseChangeModels[i].active())
+        {
+            anyFluidPhaseChangeActive = true;
+            Info<< "Phase change active in fluid region "
+                << fluidRegions[i].name()
+                << " with nOuterCorrectors = " << nOuterCorr << endl;
+        }
+    }
+
+    const bool anyPhaseChangeActive = anySolidPhaseChangeActive || anyFluidPhaseChangeActive;
     const bool isMultiRegion = (fluidRegions.size() + solidRegions.size()) > 1;
-    if (anyPhaseChangeActive && (coupled || isMultiRegion) && nOuterCorr < 2)
+
+    if (anyPhaseChangeActive && (anyFluidPhaseChangeActive || coupled || isMultiRegion) && nOuterCorr < 2)
     {
         FatalErrorInFunction
-            << "Phase change is active in a multi-region coupled domain, but nOuterCorrectors = "
+            << "Phase change is active in a fluid, coupled, or multi-region domain, but nOuterCorrectors = "
             << nOuterCorr << " < 2.\n"
-            << "Multi-region phase change requires nOuterCorrectors >= 2 "
-            << "to converge non-linear latent heat and temperature across region boundaries."
+            << "Fluid, coupled, and multi-region phase change require nOuterCorrectors >= 2 "
+            << "to non-linearly iterate and converge latent heat release and temperature within each time step."
             << exit(FatalError);
     }
 }

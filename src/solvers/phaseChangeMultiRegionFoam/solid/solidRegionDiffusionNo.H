@@ -5,22 +5,17 @@ forAll(solidRegions, i)
     //- Note: do not use setRegionSolidFields.H to avoid double registering Cp
     //#include "setRegionSolidFields.H"
     const solidThermo& thermo = thermos[i];
+    const phaseChangeModel& pcModel = phaseChangeModels[i];
 
-    tmp<volScalarField> magKappa;
-    if (thermo.isotropic())
-    {
-        magKappa = thermo.kappa();
-    }
-    else
-    {
-        magKappa = mag(thermo.Kappa());
-    }
+    tmp<volScalarField> magKappa =
+        pcModel.active()
+      ? pcModel.k()
+      : (thermo.isotropic() ? thermo.kappa() : tmp<volScalarField>(mag(thermo.Kappa())));
 
-    tmp<volScalarField> tcp = thermo.Cp();
-    const volScalarField& cp = tcp();
+    tmp<volScalarField> tcp = pcModel.active() ? pcModel.CpEff() : tmp<volScalarField>(thermo.Cp());
+    tmp<volScalarField> trho = pcModel.active() ? pcModel.rhoEff() : tmp<volScalarField>(thermo.rho());
 
-    tmp<volScalarField> trho = thermo.rho();
-    const volScalarField& rho = trho();
+    volScalarField Cprho("Cprho", trho() * tcp());
 
     DiNum = max
     (
@@ -28,7 +23,7 @@ forAll(solidRegions, i)
         (
             solidRegions[i],
             runTime,
-            rho*cp,
+            Cprho,
             magKappa()
         ),
         DiNum

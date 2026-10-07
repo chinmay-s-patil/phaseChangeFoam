@@ -45,7 +45,7 @@ Foam::phaseChangeModel::phaseChangeModel
     Tuf_(310.0),
     Lf_(1.0e5),
     hysteresisActive_(false),
-    reversalTol_(1e-6),
+    reversalTol_(1e-3),
     densityModel_("thermo"),
     rhoRef_(1000.0),
     rhoSolid_(1000.0),
@@ -216,7 +216,7 @@ Foam::phaseChangeModel::phaseChangeModel
         "calculated"
     ),
     phaseFractionRestored_(false),
-    suppressConvection_(suppressConvection)
+    suppressConvection_(mesh.foundObject<volVectorField>("U") ? suppressConvection : true)
 {
     phaseFractionRestored_ = phaseFraction_.headerOk();
 
@@ -242,11 +242,13 @@ Foam::phaseChangeModel::phaseChangeModel
         phaseFractionRestored_ = true;
     }
 
+    readDict();
+
+    initPhaseFractionFromTemperature();
+
     phaseFraction_old_ == phaseFraction_;
     heatingTrajectory_old_ == heatingTrajectory_;
     T_reversal_old_ == T_reversal_;
-
-    readDict();
 }
 
 
@@ -401,27 +403,10 @@ void Foam::phaseChangeModel::readDict()
                 << mesh_.name() << exit(FatalIOError);
         }
 
-        // Forward defaults to reverse values
+        // Forward defaults to reverse values (forwardKey is ignored in reverse direction)
         Tlm_ = Tlf_;
         Tum_ = Tuf_;
         Lm_  = Lf_;
-
-        if (!forwardKey.empty())
-        {
-            const dictionary& meltDict = pcDict.subDict(forwardKey);
-            checkAllowedKeys(meltDict, {"T_lowerBound", "T_upperBound", "latentHeat"});
-            Tlm_ = meltDict.lookupOrDefault<scalar>("T_lowerBound", Tlf_);
-            Tum_ = meltDict.lookupOrDefault<scalar>("T_upperBound", Tuf_);
-            Lm_  = meltDict.lookupOrDefault<scalar>("latentHeat", Lf_);
-
-            if (Tum_ <= Tlm_)
-            {
-                FatalIOErrorInFunction(meltDict)
-                    << "T_upperBound (" << Tum_ << ") must be strictly greater than "
-                    << "T_lowerBound (" << Tlm_ << ") in forward/melting block for region "
-                    << mesh_.name() << exit(FatalIOError);
-            }
-        }
     }
     else
     {
@@ -458,7 +443,8 @@ void Foam::phaseChangeModel::readDict()
         Tuf_ = Tum_;
         Lf_  = Lm_;
 
-        if (!reverseKey.empty())
+        // Reverse sub-dictionary is read only if direction is 'both' and reverse block is present
+        if (dir_ == direction::both && !reverseKey.empty())
         {
             const dictionary& freezeDict = pcDict.subDict(reverseKey);
             checkAllowedKeys(freezeDict, {"T_lowerBound", "T_upperBound", "latentHeat"});
@@ -490,7 +476,20 @@ void Foam::phaseChangeModel::readDict()
         }
         else
         {
-            reversalTol_ = hysDict.lookupOrDefault<scalar>("reversalTolerance", 1e-6);
+            reversalTol_ = hysDict.lookupOrDefault<scalar>("reversalTolerance", 1e-3);
+        }
+    }
+
+    if (!hysteresisActive_ && dir_ == direction::both)
+    {
+        if (mag(Tlf_ - Tlm_) > SMALL || mag(Tuf_ - Tum_) > SMALL || mag(Lf_ - Lm_) > SMALL)
+        {
+            FatalIOErrorInFunction(pcDict)
+                << "Distinct 'forward' and 'reverse' phase-change parameters specified for region "
+                << mesh_.name() << ", but 'hysteresis { active true; }' is not set.\n"
+                << "To use distinct melting and freezing curves, set 'hysteresis { active true; }'.\n"
+                << "Otherwise, set hysteresis active true or use identical forward/reverse parameters for a single equilibrium curve."
+                << exit(FatalIOError);
         }
     }
 
@@ -540,6 +539,15 @@ void Foam::phaseChangeModel::readDict()
                     << ") across all cells (max diff = " << maxCpDiff << ")."
                     << exit(FatalIOError);
             }
+
+            scalar maxKappaDiff = gMax(mag(thermo_.kappa()().primitiveField() - ks_));
+            if (maxKappaDiff > 1e-4)
+            {
+                FatalIOErrorInFunction(pcDict)
+                    << "In custom thermo mode, thermophysicalProperties transport kappa must match kSolid (" << ks_
+                    << ") across all cells (max diff = " << maxKappaDiff << ")."
+                    << exit(FatalIOError);
+            }
         }
     }
 
@@ -549,6 +557,13 @@ void Foam::phaseChangeModel::readDict()
 
 void Foam::phaseChangeModel::readConvectionDict(const dictionary& pcDict)
 {
+    const bool hasU = mesh_.foundObject<volVectorField>("U");
+
+    if (!hasU)
+    {
+        suppressConvection_ = true;
+    }
+
     if (pcDict.found("convection"))
     {
         const dictionary& convDict = pcDict.subDict("convection");
@@ -557,7 +572,7 @@ void Foam::phaseChangeModel::readConvectionDict(const dictionary& pcDict)
             convDict.getOrDefault<bool>("suppress", suppressConvection_);
     }
 
-    if (!suppressConvection_ && !mesh_.foundObject<volVectorField>("U"))
+    if (!suppressConvection_ && !hasU)
     {
         FatalIOErrorInFunction(pcDict)
             << "phaseChange.convection.suppress = false requested for region "
@@ -565,6 +580,94 @@ void Foam::phaseChangeModel::readConvectionDict(const dictionary& pcDict)
             << "Set suppress true or use EHCDarcy mode on a fluid region."
             << exit(FatalIOError);
     }
+}
+
+
+void Foam::phaseChangeModel::initPhaseFractionFromTemperature()
+{
+    if (phaseFractionRestored_)
+    {
+        return;
+    }
+
+    const scalarField& T = thermo_.T().primitiveField();
+    scalarField& f = phaseFraction_.primitiveFieldRef();
+    scalarField& state = phaseState_.primitiveFieldRef();
+    scalarField& traj = heatingTrajectory_.primitiveFieldRef();
+    scalarField& Trev = T_reversal_.primitiveFieldRef();
+
+    const scalar windowMelt = Tum_ - Tlm_;
+
+    forAll(T, i)
+    {
+        scalar Tc = T[i];
+        Trev[i] = Tc;
+
+        if (Tc <= Tlm_)
+        {
+            f[i] = 0.0;
+            state[i] = 0.0; // solid
+            traj[i] = 1.0;  // heating
+        }
+        else if (Tc >= Tum_)
+        {
+            f[i] = 1.0;
+            state[i] = 2.0; // liquid
+            traj[i] = 0.0;  // cooling/liquid
+        }
+        else
+        {
+            f[i] = (windowMelt > SMALL) ? (Tc - Tlm_) / windowMelt : 1.0;
+            state[i] = 1.0; // melting
+            traj[i] = 1.0;  // heating
+        }
+    }
+
+    // Boundary fields for non-constraint patches
+    forAll(mesh_.boundaryMesh(), patchI)
+    {
+        const polyPatch& pp = mesh_.boundaryMesh()[patchI];
+        if (polyPatch::constraintType(pp.type()))
+        {
+            continue;
+        }
+
+        const scalarField& Tface = thermo_.T().boundaryField()[patchI];
+        scalarField& fFace = phaseFraction_.boundaryFieldRef()[patchI];
+        scalarField& stateFace = phaseState_.boundaryFieldRef()[patchI];
+        scalarField& trajFace = heatingTrajectory_.boundaryFieldRef()[patchI];
+        scalarField& TrevFace = T_reversal_.boundaryFieldRef()[patchI];
+
+        forAll(Tface, faceI)
+        {
+            scalar Tf = Tface[faceI];
+            TrevFace[faceI] = Tf;
+
+            if (Tf <= Tlm_)
+            {
+                fFace[faceI] = 0.0;
+                stateFace[faceI] = 0.0;
+                trajFace[faceI] = 1.0;
+            }
+            else if (Tf >= Tum_)
+            {
+                fFace[faceI] = 1.0;
+                stateFace[faceI] = 2.0;
+                trajFace[faceI] = 0.0;
+            }
+            else
+            {
+                fFace[faceI] = (windowMelt > SMALL) ? (Tf - Tlm_) / windowMelt : 1.0;
+                stateFace[faceI] = 1.0;
+                trajFace[faceI] = 1.0;
+            }
+        }
+    }
+
+    phaseFraction_.correctBoundaryConditions();
+    phaseState_.correctBoundaryConditions();
+    heatingTrajectory_.correctBoundaryConditions();
+    T_reversal_.correctBoundaryConditions();
 }
 
 
@@ -684,14 +787,14 @@ Foam::phaseChangeModel::StateResult Foam::phaseChangeModel::evalState
     {
         if (traj > 0.5) // Heating branch
         {
-            if ((Tc > Tlm_ && Tc < Tum_) || (Tc >= Tum_ && aOld < 1.0))
+            if ((Tc >= Tlm_ && Tc < Tum_) || (Tc >= Tum_ && aOld < 1.0) || (Tc <= Tlm_ && aOld > 0.0))
             {
                 dAlpha_dT = (Tum_ > Tlm_) ? (1.0 / (Tum_ - Tlm_)) : 0.0;
             }
         }
         else // Cooling branch
         {
-            if ((Tc > Tlf_ && Tc < Tuf_) || (Tc <= Tlf_ && aOld > 0.0))
+            if ((Tc > Tlf_ && Tc <= Tuf_) || (Tc <= Tlf_ && aOld > 0.0) || (Tc >= Tuf_ && aOld < 1.0))
             {
                 dAlpha_dT = (Tuf_ > Tlf_) ? (1.0 / (Tuf_ - Tlf_)) : 0.0;
             }
@@ -1033,6 +1136,21 @@ void Foam::phaseChangeModel::correct()
     rho_.correctBoundaryConditions();
     Cp_.correctBoundaryConditions();
     k_.correctBoundaryConditions();
+    if (thermoMode_ == "custom")
+    {
+        if (mesh_.foundObject<volScalarField>("kappa"))
+        {
+            volScalarField& thermoKappa = const_cast<volScalarField&>(mesh_.lookupObject<volScalarField>("kappa"));
+            thermoKappa.primitiveFieldRef() = k_.primitiveField();
+            thermoKappa.boundaryFieldRef() = k_.boundaryField();
+        }
+        if (mesh_.foundObject<volScalarField>("Kappa"))
+        {
+            volScalarField& thermoKappa = const_cast<volScalarField&>(mesh_.lookupObject<volScalarField>("Kappa"));
+            thermoKappa.primitiveFieldRef() = k_.primitiveField();
+            thermoKappa.boundaryFieldRef() = k_.boundaryField();
+        }
+    }
     Su_.correctBoundaryConditions();
     Sp_.correctBoundaryConditions();
     T_reversal_.correctBoundaryConditions();

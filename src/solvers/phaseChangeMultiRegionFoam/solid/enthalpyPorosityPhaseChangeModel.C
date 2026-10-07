@@ -386,6 +386,8 @@ void Foam::enthalpyPorosityPhaseChangeModel::correct()
         return;
     }
 
+    const_cast<basicThermo&>(thermo_).correct();
+
     // Sync base phaseChangeModel::Cp_ and phaseChangeModel::rho_ fields with thermo
     phaseChangeModel::Cp_.primitiveFieldRef() = thermo_.Cp()().primitiveField();
     phaseChangeModel::Cp_.correctBoundaryConditions();
@@ -504,7 +506,7 @@ Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::momentum
             mesh_.time().timeName(),
             mesh_,
             IOobject::NO_READ,
-            IOobject::AUTO_WRITE
+            IOobject::NO_WRITE
         ),
         mesh_,
         dimensionedScalar("zero", dimMass/dimVolume/dimTime, 0.0)

@@ -20,7 +20,7 @@ namespace Foam
                      Class ehcPhaseChangeModel Declaration
 
  Description
-    Effective Heat Capacity (EHC) model with exact Newton/secant latent heat
+    Effective Heat Capacity (EHC) model with quasi-Newton fixed-point secant latent heat
     linearisation, stateful hysteresis, and path-integral thermophysics
     for solid phase-change heat transfer.
 \*---------------------------------------------------------------------------*/

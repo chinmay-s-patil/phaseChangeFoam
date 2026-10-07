@@ -562,6 +562,164 @@ boundaryField {{ ".*" {{ type zeroGradient; }} emptyFaces {{ type empty; }} }}
     pass_t10 = (res10.returncode != 0 and "must not be a phase-changing specie" in out10)
     print(f"Test 10 inertSpecie Collision FatalError Triggered: {pass_t10}")
 
+    # Test 11: EHC Hot Startup Initial Phase Fraction & Spurious Latent Heat Sink Check
+    print("\n--- Test 11: EHC Hot Startup Phase Fraction Initialization Check ---")
+    c11_dir = os.path.join(base_dir, "case_ehc_hot_startup")
+    setup_base_case(c11_dir)
+    # Set initial T = 320 K (above 300-310 K melting window)
+    with open(os.path.join(c11_dir, "0/pcm/T"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object T; }
+dimensions [0 0 0 1 0 0 0]; internalField uniform 320;
+boundaryField { ".*" { type zeroGradient; } emptyFaces { type empty; } }
+""")
+    with open(os.path.join(c11_dir, "0/pcm/h"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object h; }
+dimensions [0 2 -2 0 0 0 0]; internalField uniform 633600;
+boundaryField { ".*" { type zeroGradient; } emptyFaces { type empty; } }
+""")
+    with open(os.path.join(c11_dir, "constant/pcm/phaseChangeDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange {
+    type EHC;
+    active true;
+    convection { suppress true; }
+    forward { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 100000.0; }
+}
+""")
+    res11 = run_cmd(f"cd {c11_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=False)
+    # Read end-time T and phaseFraction
+    t11_arr = parse_openfoam_field(os.path.join(c11_dir, "10/pcm/T"))
+    alpha11_arr = parse_openfoam_field(os.path.join(c11_dir, "10/pcm/phaseFraction"))
+    t11_val = t11_arr[0] if t11_arr else 0.0
+    alpha11_val = alpha11_arr[0] if alpha11_arr else 0.0
+
+    # alpha should be 1.0 (liquid) and T should remain 320.0 K (no spurious latent sink)
+    pass_t11 = (abs(alpha11_val - 1.0) < 1e-4 and abs(t11_val - 320.0) < 1e-2)
+    print(f"Test 11 EHC Hot Startup Phase Fraction (alpha = {alpha11_val:.4f}, T = {t11_val:.2f} K): {'PASS' if pass_t11 else 'FAIL'}")
+
+    # Test 12: Solid Region Default Convection Suppression Check (no convection block in dict)
+    print("\n--- Test 12: Solid Region Default Convection Suppression Check ---")
+    c12_dir = os.path.join(base_dir, "case_solid_default_suppress")
+    setup_base_case(c12_dir)
+    with open(os.path.join(c12_dir, "constant/pcm/phaseChangeDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange {
+    type enthalpyPorosity;
+    active true;
+    forward { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 100000.0; }
+}
+""")
+    res12 = run_cmd(f"cd {c12_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=True)
+    pass_t12 = (res12.returncode == 0)
+    print(f"Test 12 Solid Region Default Convection Suppression Check: {'PASS' if pass_t12 else 'FAIL'}")
+
+    # Test 13: Ignored Dictionary Block Non-Abort Check (direction reverse with malformed forward block)
+    print("\n--- Test 13: Ignored Dictionary Block Non-Abort Check ---")
+    c13_dir = os.path.join(base_dir, "case_ignored_block_reverse")
+    setup_base_case(c13_dir)
+    with open(os.path.join(c13_dir, "constant/pcm/phaseChangeDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange {
+    type EHC;
+    active true;
+    direction reverse;
+    reverse { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 100000.0; }
+    forward { T_lowerBound 310.0; T_upperBound 300.0; latentHeat -999.0; }
+}
+""")
+    res13 = run_cmd(f"cd {c13_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=True)
+    pass_t13 = (res13.returncode == 0)
+    print(f"Test 13 Ignored Dictionary Block Non-Abort Check: {'PASS' if pass_t13 else 'FAIL'}")
+
+    # Test 14: Non-Hysteresis Multi-Curve Rejection Check (hysteresis active false with distinct forward and reverse curves)
+    print("\n--- Test 14: Non-Hysteresis Multi-Curve Rejection Check ---")
+    c14_dir = os.path.join(base_dir, "case_non_hysteresis_multicurve")
+    setup_base_case(c14_dir)
+    with open(os.path.join(c14_dir, "constant/pcm/phaseChangeDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange {
+    type EHC;
+    active true;
+    direction both;
+    forward { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 100000.0; }
+    reverse { T_lowerBound 295.0; T_upperBound 305.0; latentHeat 100000.0; }
+    hysteresis { active false; }
+}
+""")
+    res14 = run_cmd(f"cd {c14_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=True)
+    out14 = res14.stdout + res14.stderr
+    pass_t14 = ("Distinct 'forward' and 'reverse' phase-change parameters specified" in out14 or res14.returncode != 0)
+    print(f"Test 14 Non-Hysteresis Multi-Curve Rejection Check: {'PASS' if pass_t14 else 'FAIL'}")
+
+    # Test 15: Custom Mode Kappa vs kSolid Mismatch Check
+    print("\n--- Test 15: Custom Mode Kappa vs kSolid Mismatch Check ---")
+    c15_dir = os.path.join(base_dir, "case_kappa_mismatch")
+    setup_base_case(c15_dir)
+    with open(os.path.join(c15_dir, "constant/pcm/phaseChangeDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange {
+    type EHC;
+    active true;
+    forward { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 100000.0; }
+    thermophysical { mode custom; CpSolid 2000.0; CpLiquid 2000.0; kSolid 5.0; kLiquid 5.0; }
+}
+""")
+    res15 = run_cmd(f"cd {c15_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=True)
+    out15 = res15.stdout + res15.stderr
+    pass_t15 = ("thermophysicalProperties transport kappa must match kSolid" in out15 or res15.returncode != 0)
+    print(f"Test 15 Custom Mode Kappa vs kSolid Mismatch Check: {'PASS' if pass_t15 else 'FAIL'}")
+
+    # Test 16: Fluid Region PCM nOuterCorrectors < 2 FatalError Check
+    print("\n--- Test 16: Fluid Region PCM nOuterCorrectors < 2 Check ---")
+    c16_dir = os.path.join(base_dir, "case_fluid_nouter1")
+    setup_fluid_base_case(c16_dir)
+    with open(os.path.join(c16_dir, "system/fvSolution"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object fvSolution; }
+solvers {
+    "h.*" { solver PBiCGStab; preconditioner DILU; tolerance 1e-10; relTol 0; }
+    "T.*" { solver PBiCGStab; preconditioner DILU; tolerance 1e-10; relTol 0; }
+    "Yi.*" { solver PBiCGStab; preconditioner DILU; tolerance 1e-10; relTol 0; }
+    "air.*" { solver PBiCGStab; preconditioner DILU; tolerance 1e-10; relTol 0; }
+    "H2O.*" { solver PBiCGStab; preconditioner DILU; tolerance 1e-10; relTol 0; }
+    "p.*" { solver PCG; preconditioner DIC; tolerance 1e-10; relTol 0; }
+    "p_rgh.*" { solver PCG; preconditioner DIC; tolerance 1e-10; relTol 0; }
+    "U.*" { solver PBiCGStab; preconditioner DILU; tolerance 1e-10; relTol 0; }
+    "rho.*" { solver PCG; preconditioner DIC; tolerance 1e-10; relTol 0; }
+}
+PIMPLE
+{
+    nOuterCorrectors 1;
+    nCorrectors 1;
+}
+""")
+    with open(os.path.join(c16_dir, "constant/pcm/phaseChangeDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange {
+    type EHC;
+    active true;
+    forward { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 100000.0; }
+}
+""")
+    res16 = run_cmd(f"cd {c16_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=True)
+    out16 = res16.stdout + res16.stderr
+    pass_t16 = (res16.returncode != 0 and "nOuterCorrectors" in out16)
+    print(f"Test 16 Fluid Region PCM nOuterCorrectors < 2 FatalError Check: {'PASS' if pass_t16 else 'FAIL'}")
+
     print("\n=======================================================")
     print("      MODEL FEATURES & VALIDATION SUMMARY             ")
     print("=======================================================")
@@ -575,8 +733,16 @@ boundaryField {{ ".*" {{ type zeroGradient; }} emptyFaces {{ type empty; }} }}
     print(f"Test 8 (speciesModel & meltingModel keys)     : {'PASS' if pass_t8 else 'FAIL'}")
     print(f"Test 9 (fluid PCM unequal Cps/Cpl FatalError): {'PASS' if pass_t9 else 'FAIL'}")
     print(f"Test 10 (inertSpecie phase-change collision) : {'PASS' if pass_t10 else 'FAIL'}")
+    print(f"Test 11 (EHC hot startup alpha initialization): {'PASS' if pass_t11 else 'FAIL'}")
+    print(f"Test 12 (solid region default convection)     : {'PASS' if pass_t12 else 'FAIL'}")
+    print(f"Test 13 (ignored forward block non-abort)     : {'PASS' if pass_t13 else 'FAIL'}")
+    print(f"Test 14 (non-hysteresis multi-curve rejection): {'PASS' if pass_t14 else 'FAIL'}")
+    print(f"Test 15 (custom mode kappa vs kSolid check)   : {'PASS' if pass_t15 else 'FAIL'}")
+    print(f"Test 16 (fluid region PCM nOuterCorrectors check): {'PASS' if pass_t16 else 'FAIL'}")
 
-    all_pass = pass_t1 and pass_t2 and pass_t3 and pass_t4 and pass_t5 and pass_t6 and pass_t7 and pass_t8 and pass_t9 and pass_t10
+    all_pass = (pass_t1 and pass_t2 and pass_t3 and pass_t4 and pass_t5 and pass_t6 and
+                pass_t7 and pass_t8 and pass_t9 and pass_t10 and pass_t11 and pass_t12 and
+                pass_t13 and pass_t14 and pass_t15 and pass_t16)
     if all_pass:
         print("\nALL MODEL FEATURE & ERROR TESTS PASSED SUCCESSFULLY!")
     else:

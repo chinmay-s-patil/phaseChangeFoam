@@ -283,7 +283,7 @@ void Foam::leeFluidPhaseChangeModel::correct()
             Hs_l = thermo_.composition().Hs(liquidIndex_, p_old[cellI], T0);
         }
         const scalar deltaHs = Hs_v - Hs_l;
-        const scalar L_eff = max(L - deltaHs, scalar(0.1) * L);
+        const scalar L_eff = max(L - deltaHs, SMALL);
 
         if (T0 > Tsat_c)
         {

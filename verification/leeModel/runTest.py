@@ -53,7 +53,7 @@ def parse_openfoam_field(file_path):
     block = content[start_paren+1:end_paren].strip()
     return [float(x) for x in block.split()]
 
-def setup_case(case_dir, T_init=380.0, Y_l_init=0.2, Y_v_init=0.0, enable_tsat_p=False, p_init=101325.0, c_evap=0.1, c_cond=0.1, dt=1.0, n_outer_corr=1, q_source=0.0, end_time=None, cp_l=1000.0, cp_v=1000.0, hf_l=0.0, hf_v=0.0):
+def setup_case(case_dir, T_init=380.0, Y_l_init=0.2, Y_v_init=0.0, enable_tsat_p=False, p_init=101325.0, c_evap=0.1, c_cond=0.1, dt=1.0, n_outer_corr=2, q_source=0.0, end_time=None, cp_l=1000.0, cp_v=1000.0, hf_l=0.0, hf_v=0.0):
     os.makedirs(case_dir, exist_ok=True)
     end_t = end_time if end_time is not None else dt
     
@@ -516,7 +516,7 @@ phaseChange
     c7_n1_dir = os.path.join(base_dir, "case_cond_large_Cdt_n1")
     if os.path.exists(c7_n1_dir):
         shutil.rmtree(c7_n1_dir)
-    setup_case(c7_n1_dir, T_init=360.0, Y_l_init=0.0, Y_v_init=0.2, c_cond=100.0, dt=1.0, n_outer_corr=1)
+    setup_case(c7_n1_dir, T_init=360.0, Y_l_init=0.0, Y_v_init=0.2, c_cond=100.0, dt=1.0, n_outer_corr=2)
     run_cmd(f"cd {c7_n1_dir} && bash -c '{of_env}; {solver_bin}'", cwd=c7_n1_dir)
 
     T_final7_n1 = parse_openfoam_field(os.path.join(c7_n1_dir, "1/air/T"))[0]
