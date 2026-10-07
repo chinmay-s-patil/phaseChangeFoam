@@ -251,6 +251,63 @@ phaseChange {
     pass_t4 = (res4.returncode == 0 and "Ratio rhoEff*CpEff/(rho*Cp)" not in out4)
     print(f"Test 4 EP ratio validation: {pass_t4}")
 
+    # Test 5: Partial forward block missing latentHeat FatalIOError check
+    print("\n--- Test 5: Partial forward block (missing latentHeat) FatalIOError Check ---")
+    c5_dir = os.path.join(base_dir, "case_ep_partial_fwd")
+    setup_base_case(c5_dir)
+    with open(os.path.join(c5_dir, "constant/pcm/phaseChangeDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange {
+    type enthalpyPorosity;
+    active true;
+    convection { suppress true; }
+    forward { T_lowerBound 300.0; T_upperBound 310.0; }
+}
+""")
+    res5 = run_cmd(f"cd {c5_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=True)
+    out5 = res5.stdout + res5.stderr
+    pass_t5 = (res5.returncode != 0 and ("Entry 'latentHeat' not found" in out5 or "latentHeat" in out5))
+    print(f"Test 5 Partial forward FatalIOError Triggered: {pass_t5}")
+
+    # Test 6: Non-hConst thermo FatalIOError check
+    print("\n--- Test 6: Non-hConst thermo FatalIOError Check ---")
+    c6_dir = os.path.join(base_dir, "case_ep_non_hconst")
+    setup_base_case(c6_dir)
+    with open(os.path.join(c6_dir, "constant/pcm/thermophysicalProperties"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object thermophysicalProperties; }
+thermoType { type heSolidThermo; mixture pureMixture; transport polynomial; thermo hPolynomial; equationOfState rhoConst; specie specie; energy sensibleEnthalpy; }
+mixture {
+    specie { molWeight 200.0; }
+    transport {
+        kappaCoeffs<8> ( 0.5 0 0 0 0 0 0 0 );
+    }
+    thermodynamics {
+        Hf 0;
+        Sf 0;
+        CpCoeffs<8> ( 1980 1 0 0 0 0 0 0 );
+    }
+    equationOfState { rho 1967.0; }
+}
+""")
+    with open(os.path.join(c6_dir, "constant/pcm/phaseChangeDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange {
+    type enthalpyPorosity;
+    active true;
+    convection { suppress true; }
+    forward { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 163000.0; }
+}
+""")
+    res6 = run_cmd(f"cd {c6_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=True)
+    out6 = res6.stdout + res6.stderr
+    pass_t6 = (res6.returncode != 0 and "requires constant Cp (hConst)" in out6)
+    print(f"Test 6 Non-hConst Thermo FatalIOError Triggered: {pass_t6}")
+
     print("\n=======================================================")
     print("      MODEL FEATURES & VALIDATION SUMMARY             ")
     print("=======================================================")
@@ -258,8 +315,10 @@ phaseChange {
     print(f"Test 2 (legacy liquidFraction disk restore)    : {'PASS' if pass_t2 else 'FAIL'}")
     print(f"Test 3 (hysteresis active false execution)     : {'PASS' if pass_t3 else 'FAIL'}")
     print(f"Test 4 (EP rhoEff*CpEff/(rho*Cp) == 1 check)   : {'PASS' if pass_t4 else 'FAIL'}")
+    print(f"Test 5 (EP missing forward key FatalIOError)  : {'PASS' if pass_t5 else 'FAIL'}")
+    print(f"Test 6 (EP non-hConst thermo FatalIOError)   : {'PASS' if pass_t6 else 'FAIL'}")
 
-    all_pass = pass_t1 and pass_t2 and pass_t3 and pass_t4
+    all_pass = pass_t1 and pass_t2 and pass_t3 and pass_t4 and pass_t5 and pass_t6
     if all_pass:
         print("\nALL MODEL FEATURE & ERROR TESTS PASSED SUCCESSFULLY!")
     else:

@@ -166,9 +166,9 @@ void Foam::enthalpyPorosityPhaseChangeModel::readEPDict()
     }
 
     const dictionary& fwdDict = pcDict.subDict("forward");
-    Ts_ = fwdDict.lookupOrDefault<scalar>("T_lowerBound", 300.0);
-    Tl_ = fwdDict.lookupOrDefault<scalar>("T_upperBound", 310.0);
-    L_  = fwdDict.lookupOrDefault<scalar>("latentHeat", 1.0e5);
+    Ts_ = fwdDict.get<scalar>("T_lowerBound");
+    Tl_ = fwdDict.get<scalar>("T_upperBound");
+    L_  = fwdDict.get<scalar>("latentHeat");
 
     if (Tl_ < Ts_)
     {
@@ -298,7 +298,75 @@ void Foam::enthalpyPorosityPhaseChangeModel::readEPDict()
         }
     }
 
+    // 9. Validate that thermo uses constant Cp (hConst or eConst)
+    IOobject tpIO
+    (
+        "thermophysicalProperties",
+        mesh_.time().constant(),
+        mesh_,
+        IOobject::READ_IF_PRESENT,
+        IOobject::NO_WRITE
+    );
 
+    if (tpIO.typeHeaderOk<dictionary>(true))
+    {
+        IOdictionary tpDict(tpIO);
+        if (tpDict.found("thermoType"))
+        {
+            word thermoModel = "";
+            if (tpDict.isDict("thermoType"))
+            {
+                thermoModel = tpDict.subDict("thermoType").lookupOrDefault<word>("thermo", "hConst");
+            }
+            if (thermoModel != "hConst" && thermoModel != "eConst" && thermoModel != "")
+            {
+                FatalIOErrorInFunction(pcDict)
+                    << "Model 'enthalpyPorosity' requires constant Cp (hConst). Found thermo model '"
+                    << thermoModel << "'."
+                    << exit(FatalIOError);
+            }
+        }
+    }
+
+    tmp<volScalarField> tCpCheck = thermo_.Cp();
+    const scalarField& cpCellsCheck = tCpCheck().primitiveField();
+    if (cpCellsCheck.size() > 0)
+    {
+        scalar minCp = cpCellsCheck[0];
+        scalar maxCp = cpCellsCheck[0];
+        forAll(cpCellsCheck, i)
+        {
+            minCp = min(minCp, cpCellsCheck[i]);
+            maxCp = max(maxCp, cpCellsCheck[i]);
+        }
+        reduce(minCp, minOp<scalar>());
+        reduce(maxCp, maxOp<scalar>());
+        if ((maxCp - minCp) / (minCp + SMALL) > 1e-4)
+        {
+            FatalIOErrorInFunction(pcDict)
+                << "Model 'enthalpyPorosity' requires constant Cp (hConst). Found non-uniform Cp range: ["
+                << minCp << ", " << maxCp << "] J/(kg K)."
+                << exit(FatalIOError);
+        }
+    }
+
+    // 10. Validate ratio rhoEff*CpEff / (rho*Cp) == 1 once at construction
+    {
+        tmp<volScalarField> trhoEff = rhoEff();
+        tmp<volScalarField> tCpEff = CpEff();
+        tmp<volScalarField> trhoThermo = thermo_.rho();
+        tmp<volScalarField> tCpThermo = thermo_.Cp();
+
+        const scalar maxDev = max(mag(trhoEff()*tCpEff()/(trhoThermo()*tCpThermo()) - 1.0)).value();
+        if (maxDev > 1e-5)
+        {
+            FatalIOErrorInFunction(pcDict)
+                << "Ratio rhoEff*CpEff/(rho*Cp) = " << maxDev + 1.0
+                << " deviates from 1 for model 'enthalpyPorosity'. "
+                << "Max deviation: " << maxDev
+                << exit(FatalIOError);
+        }
+    }
 }
 
 
@@ -325,7 +393,8 @@ void Foam::enthalpyPorosityPhaseChangeModel::correct()
     }
     k_.correctBoundaryConditions();
 
-    // Runtime assertion: ratio (rhoEff * CpEff) / (thermo.rho * thermo.Cp) == 1 within round-off
+    #ifdef FULLDEBUG
+    // Debug assertion under FULLDEBUG
     tmp<volScalarField> trhoEff = rhoEff();
     tmp<volScalarField> tCpEff = CpEff();
     tmp<volScalarField> trhoThermo = thermo_.rho();
@@ -340,6 +409,7 @@ void Foam::enthalpyPorosityPhaseChangeModel::correct()
             << "Max deviation: " << maxDev
             << exit(FatalError);
     }
+    #endif
 }
 
 
