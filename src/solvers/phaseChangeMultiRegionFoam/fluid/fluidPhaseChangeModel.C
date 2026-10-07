@@ -92,9 +92,21 @@ Foam::fluidPhaseChangeModel::New
             const bool active = subDict.getOrDefault<bool>("active", false);
             if (active)
             {
-                if (!subDict.readIfPresent("type", modelType))
+                bool typeFound = false;
+                if (subDict.found("speciesModel"))
                 {
-                    subDict.readIfPresent("phaseChangeMode", modelType);
+                    modelType = subDict.get<word>("speciesModel");
+                    typeFound = true;
+                }
+                else if (subDict.found("type"))
+                {
+                    modelType = subDict.get<word>("type");
+                    typeFound = true;
+                }
+                else if (subDict.found("phaseChangeMode"))
+                {
+                    modelType = subDict.get<word>("phaseChangeMode");
+                    typeFound = true;
                 }
 
                 auto toLowerStr = [](const word& w)
@@ -113,10 +125,57 @@ Foam::fluidPhaseChangeModel::New
                     modelType = "none";
                 }
 
-                if (modelType == "none" || modelType == "off")
+                bool speciesKeysFound = (
+                    subDict.found("liquid") ||
+                    subDict.found("vapor") ||
+                    subDict.found("C_evap") ||
+                    subDict.found("C_cond") ||
+                    subDict.found("T_sat") ||
+                    subDict.found("rate")
+                );
+
+                if (!typeFound)
                 {
-                    // No fluid species phase change model
+                    if (speciesKeysFound)
+                    {
+                        FatalIOErrorInFunction(subDict)
+                            << "Active phaseChange dictionary in region " << mesh.name()
+                            << " contains species phase change parameters (liquid, vapor, C_evap, etc.), "
+                            << "but missing 'type' or 'speciesModel' keyword."
+                            << exit(FatalIOError);
+                    }
+                    else if (!subDict.found("meltingModel") && !subDict.found("porosity") && !subDict.found("forward"))
+                    {
+                        FatalIOErrorInFunction(subDict)
+                            << "Active phaseChange dictionary in region " << mesh.name()
+                            << " is missing 'type', 'speciesModel', or 'meltingModel' keyword."
+                            << exit(FatalIOError);
+                    }
+                }
+                else if (modelType == "none" || modeLower == "none" || modeLower == "off")
+                {
+                    if (speciesKeysFound)
+                    {
+                        FatalIOErrorInFunction(subDict)
+                            << "Fluid species phase change model resolved to 'none' for region " << mesh.name()
+                            << ", but species phase change parameters (liquid, vapor, C_evap, etc.) were found in phaseChangeDict."
+                            << exit(FatalIOError);
+                    }
                     modelType = "none";
+                }
+                else
+                {
+                    if (!dictionaryConstructorTablePtr_->cfind(modelType).good())
+                    {
+                        for (auto iter = dictionaryConstructorTablePtr_->cbegin(); iter != dictionaryConstructorTablePtr_->cend(); ++iter)
+                        {
+                            if (toLowerStr(iter.key()) == modeLower)
+                            {
+                                modelType = iter.key();
+                                break;
+                            }
+                        }
+                    }
                 }
             }
         }

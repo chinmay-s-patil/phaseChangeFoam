@@ -1070,36 +1070,82 @@ Foam::autoPtr<Foam::phaseChangeModel> Foam::phaseChangeModel::New
             if (pcActive)
             {
                 word modeName = "none";
-                if (pcDict.found("phaseChangeMode"))
+                bool typeFound = false;
+
+                if (pcDict.found("meltingModel"))
                 {
-                    modeName = pcDict.get<word>("phaseChangeMode");
+                    modeName = pcDict.get<word>("meltingModel");
+                    typeFound = true;
                 }
                 else if (pcDict.found("type"))
                 {
-                    word typeName = pcDict.get<word>("type");
-                    auto cstrTest = dictionaryConstructorTablePtr_->cfind(typeName);
-                    if (cstrTest.good())
+                    modeName = pcDict.get<word>("type");
+                    typeFound = true;
+                }
+                else if (pcDict.found("phaseChangeMode"))
+                {
+                    modeName = pcDict.get<word>("phaseChangeMode");
+                    typeFound = true;
+                }
+
+                auto toLowerStr = [](const word& w)
+                {
+                    std::string s(w);
+                    for (char& c : s)
                     {
-                        modeName = typeName;
+                        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                    }
+                    return s;
+                };
+
+                std::string modeLower = toLowerStr(modeName);
+
+                bool pcmKeysFound = (
+                    pcDict.found("porosity") ||
+                    pcDict.found("forward") ||
+                    pcDict.found("thermophysical")
+                );
+
+                if (!typeFound)
+                {
+                    if (pcmKeysFound)
+                    {
+                        FatalIOErrorInFunction(pcDict)
+                            << "Active phaseChange dictionary in region " << mesh.name()
+                            << " contains PCM melting parameters (forward, porosity, thermophysical), "
+                            << "but missing 'type' or 'meltingModel' keyword."
+                            << exit(FatalIOError);
+                    }
+                }
+                else if (modeName == "none" || modeLower == "none" || modeLower == "off")
+                {
+                    if (pcmKeysFound)
+                    {
+                        FatalIOErrorInFunction(pcDict)
+                            << "PCM melting model resolved to 'none' for region " << mesh.name()
+                            << ", but PCM melting parameters (forward, porosity, thermophysical) were found in phaseChangeDict."
+                            << exit(FatalIOError);
+                    }
+                    modeName = "none";
+                }
+                else
+                {
+                    if (modeLower == "lee" || modeLower == "constantsource")
+                    {
+                        modeName = "none";
                     }
                     else
                     {
-                        auto toLowerStr = [](const word& w)
+                        auto cstrTest = dictionaryConstructorTablePtr_->cfind(modeName);
+                        if (!cstrTest.good())
                         {
-                            std::string s(w);
-                            for (char& c : s)
+                            for (auto iter = dictionaryConstructorTablePtr_->cbegin(); iter != dictionaryConstructorTablePtr_->cend(); ++iter)
                             {
-                                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                            }
-                            return s;
-                        };
-
-                        for (auto iter = dictionaryConstructorTablePtr_->cbegin(); iter != dictionaryConstructorTablePtr_->cend(); ++iter)
-                        {
-                            if (toLowerStr(iter.key()) == toLowerStr(typeName))
-                            {
-                                modeName = iter.key();
-                                break;
+                                if (toLowerStr(iter.key()) == modeLower)
+                                {
+                                    modeName = iter.key();
+                                    break;
+                                }
                             }
                         }
                     }

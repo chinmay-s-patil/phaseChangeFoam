@@ -156,6 +156,139 @@ boundaryField { ".*" { type calculated; value uniform 101325; } emptyFaces { typ
     run_cmd(f"cp {case_dir}/system/fvSchemes {case_dir}/system/pcm/fvSchemes 2>/dev/null || true")
     run_cmd(f"cp {case_dir}/system/fvSolution {case_dir}/system/pcm/fvSolution 2>/dev/null || true")
 
+def setup_fluid_base_case(case_dir):
+    os.makedirs(case_dir, exist_ok=True)
+    of_env = "source /usr/lib/openfoam/openfoam2412/etc/bashrc || source /usr/lib/openfoam/openfoam2406/etc/bashrc || true"
+    os.makedirs(os.path.join(case_dir, "system"), exist_ok=True)
+    with open(os.path.join(case_dir, "system/controlDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
+application phaseChangeMultiRegionFoam;
+startFrom startTime; startTime 0; stopAt endTime; endTime 10; deltaT 2;
+writeControl runTime; writeInterval 10; purgeWrite 0; writeFormat ascii; writePrecision 12;
+""")
+    with open(os.path.join(case_dir, "system/fvSchemes"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object fvSchemes; }
+ddtSchemes { default Euler; }
+gradSchemes { default Gauss linear; }
+divSchemes { default Gauss linear; }
+laplacianSchemes { default Gauss linear corrected; }
+interpolationSchemes { default linear; }
+snGradSchemes { default corrected; }
+""")
+    with open(os.path.join(case_dir, "system/fvSolution"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object fvSolution; }
+solvers {
+    "h.*" { solver PBiCGStab; preconditioner DILU; tolerance 1e-8; relTol 0; }
+    "he.*" { solver PBiCGStab; preconditioner DILU; tolerance 1e-8; relTol 0; }
+    "T.*" { solver PBiCGStab; preconditioner DILU; tolerance 1e-8; relTol 0; }
+    "rho.*" { solver PCG; preconditioner DIC; tolerance 1e-8; relTol 0; }
+    "p_rgh.*" { solver PCG; preconditioner DIC; tolerance 1e-8; relTol 0; }
+    "U.*" { solver PBiCGStab; preconditioner DILU; tolerance 1e-20; relTol 0; }
+}
+PIMPLE { nOuterCorrectors 1; nCorrectors 1; pRefCell 0; pRefValue 101325; }
+""")
+    with open(os.path.join(case_dir, "system/blockMeshDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object blockMeshDict; }
+scale 1;
+vertices ( (0 0 0) (0.1 0 0) (0.1 0.01 0) (0 0.01 0) (0 0 0.01) (0.1 0 0.01) (0.1 0.01 0.01) (0 0.01 0.01) );
+blocks ( hex (0 1 2 3 4 5 6 7) (10 1 1) simpleGrading (1 1 1) );
+edges ();
+boundary (
+    hot { type patch; faces ((0 4 7 3)); }
+    cold { type patch; faces ((1 2 6 5)); }
+    emptyFaces { type empty; faces ((0 1 5 4) (3 7 6 2) (0 3 2 1) (4 5 6 7)); }
+);
+""")
+
+    os.makedirs(os.path.join(case_dir, "constant"), exist_ok=True)
+    with open(os.path.join(case_dir, "constant/g"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class uniformDimensionedVectorField; location "constant"; object g; }
+dimensions [0 1 -2 0 0 0 0]; value (0 0 0);
+""")
+    with open(os.path.join(case_dir, "constant/regionProperties"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant"; object regionProperties; }
+regions ( fluid (pcm) solid () porousFluid () porousSolid () );
+""")
+    
+    os.makedirs(os.path.join(case_dir, "constant/pcm"), exist_ok=True)
+    with open(os.path.join(case_dir, "constant/pcm/thermophysicalProperties"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object thermophysicalProperties; }
+thermoType { type heRhoThermo; mixture pureMixture; transport const; thermo hConst; equationOfState rhoConst; specie specie; energy sensibleEnthalpy; }
+mixture {
+    specie { molWeight 200.0; }
+    transport { mu 1e-5; Pr 0.0099; }
+    thermodynamics { Cp 1980.0; Hf 0; Tref 0; Href 0; }
+    equationOfState { rho 1967.0; }
+}
+""")
+    with open(os.path.join(case_dir, "constant/pcm/turbulenceProperties"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object turbulenceProperties; }
+simulationType laminar;
+""")
+
+    os.makedirs(os.path.join(case_dir, "0/pcm"), exist_ok=True)
+    with open(os.path.join(case_dir, "0/pcm/phaseFraction"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object phaseFraction; }
+dimensions [0 0 0 0 0 0 0]; internalField uniform 0;
+boundaryField { ".*" { type calculated; value uniform 0; } emptyFaces { type empty; } }
+""")
+    with open(os.path.join(case_dir, "0/pcm/T"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object T; }
+dimensions [0 0 0 1 0 0 0]; internalField uniform 280;
+boundaryField { ".*" { type zeroGradient; } emptyFaces { type empty; } }
+""")
+    with open(os.path.join(case_dir, "0/pcm/he"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object he; }
+dimensions [0 2 -2 0 0 0 0]; internalField uniform -35937;
+boundaryField { ".*" { type zeroGradient; } emptyFaces { type empty; } }
+""")
+    with open(os.path.join(case_dir, "0/pcm/p"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object p; }
+dimensions [1 -1 -2 0 0 0 0]; internalField uniform 101325;
+boundaryField { ".*" { type calculated; value uniform 101325; } emptyFaces { type empty; } }
+""")
+    with open(os.path.join(case_dir, "0/pcm/p_rgh"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object p_rgh; }
+dimensions [1 -1 -2 0 0 0 0]; internalField uniform 101325;
+boundaryField { ".*" { type fixedFluxPressure; value uniform 101325; } emptyFaces { type empty; } }
+""")
+    with open(os.path.join(case_dir, "0/pcm/U"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class volVectorField; location "0/pcm"; object U; }
+dimensions [0 1 -1 0 0 0 0]; internalField uniform (0 0 0);
+boundaryField { ".*" { type fixedValue; value uniform (0 0 0); } emptyFaces { type empty; } }
+""")
+    with open(os.path.join(case_dir, "0/pcm/phi"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class surfaceScalarField; location "0/pcm"; object phi; }
+dimensions [1 0 -1 0 0 0 0]; internalField uniform 0;
+boundaryField { ".*" { type calculated; value uniform 0; } emptyFaces { type empty; } }
+""")
+    with open(os.path.join(case_dir, "0/pcm/rho"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object rho; }
+dimensions [1 -3 0 0 0 0 0]; internalField uniform 1967;
+boundaryField { ".*" { type calculated; value uniform 1967; } emptyFaces { type empty; } }
+""")
+    run_cmd(f"cd {case_dir} && bash -c '{of_env}; blockMesh'", cwd=case_dir)
+    run_cmd(f"mkdir -p {case_dir}/constant/pcm {case_dir}/system/pcm")
+    run_cmd(f"cp -r {case_dir}/constant/polyMesh {case_dir}/constant/pcm/polyMesh 2>/dev/null || true")
+    run_cmd(f"cp {case_dir}/system/fvSchemes {case_dir}/system/pcm/fvSchemes 2>/dev/null || true")
+    run_cmd(f"cp {case_dir}/system/fvSolution {case_dir}/system/pcm/fvSolution 2>/dev/null || true")
+
 def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     print(f"=== Model Features & Validation Verification Suite in {base_dir} ===")
@@ -308,6 +441,47 @@ phaseChange {
     pass_t6 = (res6.returncode != 0 and "requires constant Cp (hConst)" in out6)
     print(f"Test 6 Non-hConst Thermo FatalIOError Triggered: {pass_t6}")
 
+    # Test 7: Missing type or speciesModel key when species parameters present FatalIOError check
+    print("\n--- Test 7: Missing type/speciesModel with species keys FatalIOError Check ---")
+    c7_dir = os.path.join(base_dir, "case_missing_species_type")
+    setup_fluid_base_case(c7_dir)
+    with open(os.path.join(c7_dir, "constant/pcm/phaseChangeDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange {
+    active true;
+    liquid H2O;
+    vapor H2O;
+    C_evap 0.1;
+}
+""")
+    res7 = run_cmd(f"cd {c7_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=True)
+    out7 = res7.stdout + res7.stderr
+    pass_t7 = (res7.returncode != 0 and ("missing 'type' or 'speciesModel'" in out7 or "species phase change parameters" in out7))
+    print(f"Test 7 Missing Species Type FatalIOError Triggered: {pass_t7}")
+
+    # Test 8: Separate speciesModel and meltingModel keys selection check
+    print("\n--- Test 8: Separate speciesModel and meltingModel Keys Check ---")
+    c8_dir = os.path.join(base_dir, "case_separate_keys")
+    setup_fluid_base_case(c8_dir)
+    with open(os.path.join(c8_dir, "constant/pcm/phaseChangeDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange {
+    active true;
+    speciesModel none;
+    meltingModel enthalpyPorosity;
+    convection { suppress true; }
+    forward { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 163000.0; }
+}
+""")
+    res8 = run_cmd(f"cd {c8_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=True)
+    out8 = res8.stdout + res8.stderr
+    pass_t8 = ("Selecting fluid phase change model type none" in out8 and "using mode: enthalpyPorosity" in out8)
+    print(f"Test 8 Separate speciesModel & meltingModel Selection: {pass_t8}")
+
     print("\n=======================================================")
     print("      MODEL FEATURES & VALIDATION SUMMARY             ")
     print("=======================================================")
@@ -317,8 +491,10 @@ phaseChange {
     print(f"Test 4 (EP rhoEff*CpEff/(rho*Cp) == 1 check)   : {'PASS' if pass_t4 else 'FAIL'}")
     print(f"Test 5 (EP missing forward key FatalIOError)  : {'PASS' if pass_t5 else 'FAIL'}")
     print(f"Test 6 (EP non-hConst thermo FatalIOError)   : {'PASS' if pass_t6 else 'FAIL'}")
+    print(f"Test 7 (missing species type FatalIOError)    : {'PASS' if pass_t7 else 'FAIL'}")
+    print(f"Test 8 (speciesModel & meltingModel keys)     : {'PASS' if pass_t8 else 'FAIL'}")
 
-    all_pass = pass_t1 and pass_t2 and pass_t3 and pass_t4 and pass_t5 and pass_t6
+    all_pass = pass_t1 and pass_t2 and pass_t3 and pass_t4 and pass_t5 and pass_t6 and pass_t7 and pass_t8
     if all_pass:
         print("\nALL MODEL FEATURE & ERROR TESTS PASSED SUCCESSFULLY!")
     else:

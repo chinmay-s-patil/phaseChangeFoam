@@ -5,7 +5,10 @@ if (finalIter)
 
 if (oCorr == 0)
 {
-    #include "rhoEqn.H"
+    if (!frozenFlow)
+    {
+        #include "rhoEqn.H"
+    }
     phaseChange.correct();
     phaseChange.checkMassConservation();
 }
