@@ -458,8 +458,26 @@ phaseChange {
 """)
     res7 = run_cmd(f"cd {c7_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=True)
     out7 = res7.stdout + res7.stderr
-    pass_t7 = (res7.returncode != 0 and ("missing 'type' or 'speciesModel'" in out7 or "species phase change parameters" in out7))
-    print(f"Test 7 Missing Species Type FatalIOError Triggered: {pass_t7}")
+    pass_t7a = (res7.returncode != 0 and ("missing 'type' or 'speciesModel'" in out7 or "species phase change parameters" in out7))
+
+    # Test 7b: Missing type or speciesModel key when only Tsat and enableTsatP keys present FatalIOError check
+    c7b_dir = os.path.join(base_dir, "case_missing_species_tsat_type")
+    setup_fluid_base_case(c7b_dir)
+    with open(os.path.join(c7b_dir, "constant/pcm/phaseChangeDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange {
+    active true;
+    Tsat 373.15;
+    enableTsatP true;
+}
+""")
+    res7b = run_cmd(f"cd {c7b_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=True)
+    out7b = res7b.stdout + res7b.stderr
+    pass_t7b = (res7b.returncode != 0 and ("missing 'type' or 'speciesModel'" in out7b or "species phase change parameters" in out7b))
+    pass_t7 = pass_t7a and pass_t7b
+    print(f"Test 7 Missing Species Type (liquid/C_evap & Tsat/enableTsatP) FatalIOError Check: {pass_t7}")
 
     # Test 8: Separate speciesModel and meltingModel keys selection check
     print("\n--- Test 8: Separate speciesModel and meltingModel Keys Check ---")
@@ -482,6 +500,27 @@ phaseChange {
     pass_t8 = ("Selecting fluid phase change model type none" in out8 and "using mode: enthalpyPorosity" in out8)
     print(f"Test 8 Separate speciesModel & meltingModel Selection: {pass_t8}")
 
+    # Test 9: Fluid region PCM unequal CpSolid vs CpLiquid FatalError check on initial f=0 IC
+    print("\n--- Test 9: Fluid Region PCM unequal Cps/Cpl on f=0 IC Check ---")
+    c9_dir = os.path.join(base_dir, "case_fluid_unequal_cps_cpl")
+    setup_fluid_base_case(c9_dir)
+    with open(os.path.join(c9_dir, "constant/pcm/phaseChangeDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange {
+    type enthalpyPorosity;
+    active true;
+    convection { suppress true; }
+    forward { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 163000.0; }
+    thermophysical { mode custom; CpSolid 1980.0; CpLiquid 2500.0; kSolid 2.0; kLiquid 1.0; }
+}
+""")
+    res9 = run_cmd(f"cd {c9_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=True)
+    out9 = res9.stdout + res9.stderr
+    pass_t9 = (res9.returncode != 0 and ("requires equal solid/liquid heat capacities and densities" in out9 or "Model 'enthalpyPorosity' v1 requires Cp_solid == Cp_liquid" in out9))
+    print(f"Test 9 Fluid PCM Unequal Cps/Cpl FatalError Triggered: {pass_t9}")
+
     print("\n=======================================================")
     print("      MODEL FEATURES & VALIDATION SUMMARY             ")
     print("=======================================================")
@@ -493,8 +532,9 @@ phaseChange {
     print(f"Test 6 (EP non-hConst thermo FatalIOError)   : {'PASS' if pass_t6 else 'FAIL'}")
     print(f"Test 7 (missing species type FatalIOError)    : {'PASS' if pass_t7 else 'FAIL'}")
     print(f"Test 8 (speciesModel & meltingModel keys)     : {'PASS' if pass_t8 else 'FAIL'}")
+    print(f"Test 9 (fluid PCM unequal Cps/Cpl FatalError): {'PASS' if pass_t9 else 'FAIL'}")
 
-    all_pass = pass_t1 and pass_t2 and pass_t3 and pass_t4 and pass_t5 and pass_t6 and pass_t7 and pass_t8
+    all_pass = pass_t1 and pass_t2 and pass_t3 and pass_t4 and pass_t5 and pass_t6 and pass_t7 and pass_t8 and pass_t9
     if all_pass:
         print("\nALL MODEL FEATURE & ERROR TESTS PASSED SUCCESSFULLY!")
     else:

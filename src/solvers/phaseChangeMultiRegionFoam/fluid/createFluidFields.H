@@ -335,20 +335,41 @@ forAll(fluidRegions, i)
 
     if (pcmModelsFluid[i].active())
     {
-        tmp<volScalarField> trhoEff = pcmModelsFluid[i].rhoEff();
-        tmp<volScalarField> tCpEff = pcmModelsFluid[i].CpEff();
-        tmp<volScalarField> trhoThermo = thermoFluid[i].rho();
-        tmp<volScalarField> tCpThermo = thermoFluid[i].Cp();
+        const phaseChangeModel& pcm = pcmModelsFluid[i];
+        const scalar Cps = pcm.Cps();
+        const scalar Cpl = pcm.Cpl();
+        const scalar rhos = pcm.rhoSolid();
+        const scalar rhol = pcm.rhoLiquid();
 
-        const scalar maxDev = max(mag(trhoEff()*tCpEff()/(trhoThermo()*tCpThermo()) - 1.0)).value();
+        tmp<volScalarField> tCpThermo = thermoFluid[i].Cp();
+        tmp<volScalarField> trhoThermo = thermoFluid[i].rho();
+        const scalarField& cpCells = tCpThermo().primitiveField();
+        const scalarField& rhoCells = trhoThermo().primitiveField();
+
+        const scalar maxCpDevS = gMax(mag(cpCells - Cps))/(Cps + 1e-12);
+        const scalar maxCpDevL = gMax(mag(cpCells - Cpl))/(Cpl + 1e-12);
+        const scalar maxCpDevSL = mag(Cps - Cpl)/(Cps + 1e-12);
+
+        const scalar maxRhoDevS = gMax(mag(rhoCells - rhos))/(rhos + 1e-12);
+        const scalar maxRhoDevL = gMax(mag(rhoCells - rhol))/(rhol + 1e-12);
+        const scalar maxRhoDevSL = mag(rhos - rhol)/(rhos + 1e-12);
+
+        scalar maxDev = max(maxCpDevS, maxCpDevL);
+        maxDev = max(maxDev, maxCpDevSL);
+        maxDev = max(maxDev, maxRhoDevS);
+        maxDev = max(maxDev, maxRhoDevL);
+        maxDev = max(maxDev, maxRhoDevSL);
+
         if (maxDev > 1e-5)
         {
             FatalErrorInFunction
-                << "PCM model '" << pcmModelsFluid[i].type()
+                << "PCM model '" << pcm.type()
                 << "' in fluid region " << fluidRegions[i].name()
-                << " requires ratio rhoEff*CpEff/(rho*Cp) == 1 (found max deviation = "
-                << maxDev << ")."
-                << "\nFluid region PCM requires equal Cp_solid and Cp_liquid matching thermo Cp."
+                << " requires equal solid/liquid heat capacities and densities matching background thermophysical properties "
+                << "(Cp_solid == Cp_liquid == thermo Cp, and rho_solid == rho_liquid == thermo rho). "
+                << "Found max deviation = " << maxDev << ".\n"
+                << "Parameters: Cp_solid=" << Cps << ", Cp_liquid=" << Cpl
+                << ", rho_solid=" << rhos << ", rho_liquid=" << rhol << "."
                 << exit(FatalError);
         }
     }

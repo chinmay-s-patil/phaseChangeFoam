@@ -131,6 +131,8 @@ Foam::fluidPhaseChangeModel::New
                     subDict.found("C_evap") ||
                     subDict.found("C_cond") ||
                     subDict.found("T_sat") ||
+                    subDict.found("Tsat") ||
+                    subDict.found("enableTsatP") ||
                     subDict.found("rate")
                 );
 

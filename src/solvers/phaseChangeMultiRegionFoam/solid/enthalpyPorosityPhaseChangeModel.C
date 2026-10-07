@@ -263,12 +263,16 @@ void Foam::enthalpyPorosityPhaseChangeModel::readEPDict()
             }
 
             Cp_ = Cps;
+            Cps_ = Cps;
+            Cpl_ = Cpl;
             kSolid_  = tpDict.lookupOrDefault<scalar>("kSolid", thermoKVal);
             kLiquid_ = tpDict.lookupOrDefault<scalar>("kLiquid", thermoKVal);
         }
         else
         {
             Cp_ = thermoCpVal;
+            Cps_ = thermoCpVal;
+            Cpl_ = thermoCpVal;
             kSolid_  = thermoKVal;
             kLiquid_ = kSolid_;
         }
@@ -276,6 +280,8 @@ void Foam::enthalpyPorosityPhaseChangeModel::readEPDict()
     else
     {
         Cp_ = thermoCpVal;
+        Cps_ = thermoCpVal;
+        Cpl_ = thermoCpVal;
         kSolid_  = thermoKVal;
         kLiquid_ = kSolid_;
     }
@@ -286,8 +292,11 @@ void Foam::enthalpyPorosityPhaseChangeModel::readEPDict()
         const dictionary& denDict = pcDict.subDict("density");
         if (denDict.found("rhoSolid") && denDict.found("rhoLiquid"))
         {
-            scalar rhoS = denDict.lookupOrDefault<scalar>("rhoSolid", 1000.0);
-            scalar rhoL = denDict.lookupOrDefault<scalar>("rhoLiquid", 1000.0);
+            scalar thermoRhoVal = gAverage(thermo_.rho()());
+            scalar rhoS = denDict.lookupOrDefault<scalar>("rhoSolid", thermoRhoVal);
+            scalar rhoL = denDict.lookupOrDefault<scalar>("rhoLiquid", thermoRhoVal);
+            rhoSolid_ = rhoS;
+            rhoLiquid_ = rhoL;
             if (mag(rhoS - rhoL) > SMALL)
             {
                 FatalIOErrorInFunction(denDict)

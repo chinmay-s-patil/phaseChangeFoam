@@ -522,6 +522,11 @@ def main():
     dx_front_solid = abs(x_front_fluid - x_front_solid)
     dx_front_ana   = abs(x_front_fluid - X_ana)
 
+    # Note on Neumann analytical temperature comparison (2 K tolerance):
+    # The numerical enthalpy-porosity model employs a 10 K mushy transition window (Ts=300 K to Tl=310 K),
+    # whereas the classical 2-phase Neumann analytical solution assumes an infinitely sharp phase-change front at Tm=305 K.
+    # The resulting temperature profile smoothing in the mushy zone creates an inherent ~0.45 K mean temperature deviation.
+    # Do not tighten this tolerance blindly without accounting for mushy-zone smoothing effects.
     pass_t2 = (
         len(T_fluid) == 100 and len(T_solid) == 100 and len(T_ana) == 100
         and dT_fluid_solid < 0.01
@@ -534,13 +539,13 @@ def main():
     print(f"  Neumann Analytical Melt Front X (t=2000s): {X_ana*1000:.2f} mm (Lambda = {lam_ana:.6f})")
     print(f"  Fluid Melt Front Position (x)             : {x_front_fluid*1000:.2f} mm (Analytic diff: {dx_front_ana*1000:.2f} mm)")
     print(f"  Fluid vs Solid Region Temp Mean Diff      : {dT_fluid_solid:.6f} K (Limit < 0.01 K)")
-    print(f"  Fluid vs Neumann Analytic Temp Mean Diff  : {dT_fluid_ana:.4f} K (Limit < 2.00 K)")
+    print(f"  Fluid vs Neumann Analytic Temp Mean Diff  : {dT_fluid_ana:.4f} K (Limit < 2.00 K, mushy window 10K)")
     print(f"Test 2 Frozen-flow Stefan vs Neumann Analytic & Solid Physics Match: {'PASS' if pass_t2 else 'FAIL'}")
 
     # Test 3: Non-Zero Velocity Driver & Selective Darcy Damping (Cu = 1e12, U0 = 0.01 m/s)
     print("\n--- Test 3: Velocity Driver & Selective Darcy Drag Damping (Cu = 1e12, U0 = 0.01 m/s) ---")
     
-    # 3a: Solid region case (T = 280K, f = 0.0) initialized with U = 0.01 m/s -> expect U to damp to ~0.0 m/s
+    # 3a: Solid region case (T = 280K, f = 0.0) initialized with U = 0.01 m/s -> expect U to damp to ~0.0 m/s after 1 step
     c3_solid_dir = os.path.join(base_dir, "case_drag_solid")
     shutil.rmtree(c3_solid_dir, ignore_errors=True)
     setup_fluid_case(c3_solid_dir, frozen_flow=False, Cu=1e12, init_T=[280.0]*100, init_U=(0.01, 0.0, 0.0), end_time=0.001, delta_t=0.001, write_interval=0.001)
@@ -548,18 +553,26 @@ def main():
     U_solid = parse_openfoam_field(os.path.join(c3_solid_dir, "0.001/pcm/U"))
     max_U_solid = max(math.sqrt(v[0]**2 + v[1]**2 + v[2]**2) for v in U_solid) if U_solid else 1.0
 
-    # 3b: Liquid region case (T = 320K, f = 1.0) initialized with U = 0.01 m/s -> expect U to remain 0.01 m/s
+    # 3b: Liquid region case (T = 320K, f = 1.0) initialized with U = 0.01 m/s -> expect U to remain 0.01 m/s across multiple time steps (10 steps)
     c3_liquid_dir = os.path.join(base_dir, "case_drag_liquid")
     shutil.rmtree(c3_liquid_dir, ignore_errors=True)
-    setup_fluid_case(c3_liquid_dir, frozen_flow=False, Cu=1e12, init_T=[320.0]*100, init_U=(0.01, 0.0, 0.0), end_time=0.001, delta_t=0.001, write_interval=0.001)
+    setup_fluid_case(c3_liquid_dir, frozen_flow=False, Cu=1e12, init_T=[320.0]*100, init_U=(0.01, 0.0, 0.0), end_time=0.010, delta_t=0.001, write_interval=0.001)
     run_cmd(f"cd {c3_liquid_dir} && bash -c '{of_env}; {solver_bin}'")
-    U_liquid = parse_openfoam_field(os.path.join(c3_liquid_dir, "0.001/pcm/U"))
-    avg_u_liquid_err = sum(abs(v[0] - 0.01) for v in U_liquid) / len(U_liquid) if U_liquid else 1.0
+    U_liquid_step1 = parse_openfoam_field(os.path.join(c3_liquid_dir, "0.001/pcm/U"))
+    U_liquid_step10 = parse_openfoam_field(os.path.join(c3_liquid_dir, "0.01/pcm/U"))
+    avg_u_liquid_err_step1 = sum(abs(v[0] - 0.01) for v in U_liquid_step1) / len(U_liquid_step1) if U_liquid_step1 else 1.0
+    avg_u_liquid_err_step10 = sum(abs(v[0] - 0.01) for v in U_liquid_step10) / len(U_liquid_step10) if U_liquid_step10 else 1.0
 
-    pass_t3 = (len(U_solid) == 100 and len(U_liquid) == 100 and max_U_solid < 1e-8 and avg_u_liquid_err < 1e-4)
-    print(f"  Initial Velocity U0                      : 0.0100 m/s (1.0 cm/s)")
-    print(f"  Solid Region Velocity after 1 step       : {max_U_solid:.2e} m/s (Limit < 1e-8 m/s, DAMPED)")
-    print(f"  Liquid Region Velocity Error after 1 step: {avg_u_liquid_err:.2e} m/s (Limit < 1e-4 m/s, UN-DAMPED)")
+    pass_t3 = (
+        len(U_solid) == 100 and len(U_liquid_step1) == 100 and len(U_liquid_step10) == 100
+        and max_U_solid < 1e-8
+        and avg_u_liquid_err_step1 < 1e-4
+        and avg_u_liquid_err_step10 < 1e-4
+    )
+    print(f"  Initial Velocity U0                       : 0.0100 m/s (1.0 cm/s)")
+    print(f"  Solid Region Velocity after 1 step        : {max_U_solid:.2e} m/s (Limit < 1e-8 m/s, DAMPED)")
+    print(f"  Liquid Region Velocity Error (step 1)     : {avg_u_liquid_err_step1:.2e} m/s (Limit < 1e-4 m/s, UN-DAMPED)")
+    print(f"  Liquid Region Velocity Error (step 10)    : {avg_u_liquid_err_step10:.2e} m/s (Limit < 1e-4 m/s, UN-DAMPED, no drag leakage)")
     print(f"Test 3 Velocity Driver Selective Darcy Damping: {'PASS' if pass_t3 else 'FAIL'}")
 
     print("\n=======================================================")

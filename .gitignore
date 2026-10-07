@@ -21,6 +21,8 @@ __pycache__/
 singleCellOvershoot_run/
 verification/**/case*/
 verification/*/case*/
+verification/**/test_*/
+verification/*/test_*/
 
 ideas/
 # src/solvers/phaseChangeMultiRegionSimpleFoam/

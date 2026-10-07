@@ -331,6 +331,16 @@ void Foam::phaseChangeModel::readDict()
         return;
     }
 
+    scalar thermoCpVal = gAverage(thermo_.Cp()());
+    scalar thermoRhoVal = gAverage(thermo_.rho()());
+
+    rhoRef_ = thermoRhoVal;
+    rhoSolid_ = thermoRhoVal;
+    rhoLiquid_ = thermoRhoVal;
+
+    Cps_ = thermoCpVal;
+    Cpl_ = thermoCpVal;
+
     dir_ = directionNames.getOrDefault("direction", pcDict, direction::both);
 
     if (pcDict.found("forward") && pcDict.found("melting"))

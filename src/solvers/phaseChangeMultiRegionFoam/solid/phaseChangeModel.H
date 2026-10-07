@@ -236,6 +236,30 @@ public:
         return k_;
     }
 
+    //- Access solid heat capacity [J/(kg K)]
+    virtual scalar Cps() const
+    {
+        return Cps_;
+    }
+
+    //- Access liquid heat capacity [J/(kg K)]
+    virtual scalar Cpl() const
+    {
+        return Cpl_;
+    }
+
+    //- Access solid phase density [kg/m3]
+    virtual scalar rhoSolid() const
+    {
+        return rhoSolid_;
+    }
+
+    //- Access liquid phase density [kg/m3]
+    virtual scalar rhoLiquid() const
+    {
+        return rhoLiquid_;
+    }
+
     //- Access explicit latent heat source term
     virtual tmp<volScalarField> latentHeatSource() const
     {
