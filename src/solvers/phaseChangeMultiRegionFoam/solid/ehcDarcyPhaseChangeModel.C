@@ -118,7 +118,7 @@ Foam::tmp<Foam::volScalarField> Foam::ehcDarcyPhaseChangeModel::momentumSp() con
             mesh_.time().timeName(),
             mesh_,
             IOobject::NO_READ,
-            IOobject::NO_WRITE
+            IOobject::AUTO_WRITE
         ),
         mesh_,
         dimensionedScalar("zero", dimMass/dimVolume/dimTime, 0.0)
@@ -138,6 +138,11 @@ Foam::tmp<Foam::volScalarField> Foam::ehcDarcyPhaseChangeModel::momentumSp() con
         scalar a = alphaCells[celli];
         // Darcy mushy zone drag coefficient: Cu * (1 - alpha)^2 / (alpha^3 + q)
         coeffCells[celli] = Cu_ * sqr(1.0 - a) / (pow3(a) + q_);
+    }
+
+    if (mesh_.time().outputTime())
+    {
+        tCoeff.ref().write();
     }
 
     return tCoeff;

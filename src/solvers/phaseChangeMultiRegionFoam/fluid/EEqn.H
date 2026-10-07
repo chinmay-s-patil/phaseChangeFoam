@@ -17,11 +17,6 @@
       : turbulence.alphaEff();
     const volScalarField& alphaEff = talphaEff();
 
-    tmp<volScalarField> trhoEffCpRatio =
-        pcmModel.active()
-      ? tmp<volScalarField>(pcmModel.rhoEff()*pcmModel.CpEff()/CpThermo)
-      : tmp<volScalarField>(rho);
-
     fvScalarMatrix EEqn
     (
         fvm::ddt(rho, he) + fvm::div(phi, he)

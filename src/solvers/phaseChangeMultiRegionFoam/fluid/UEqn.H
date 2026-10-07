@@ -13,7 +13,8 @@
 
     if (pcmModel.active())
     {
-        UEqn += fvm::Sp(pcmModel.momentumSp(), U);
+        tmp<volScalarField> tsp = pcmModel.momentumSp();
+        UEqn += fvm::Sp(tsp, U);
     }
 
     UEqn.relax();

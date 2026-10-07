@@ -8,10 +8,11 @@ if (oCorr == 0)
     #include "rhoEqn.H"
     phaseChange.correct();
     phaseChange.checkMassConservation();
-    if (pcmModel.active())
-    {
-        pcmModel.correct();
-    }
+}
+
+if (pcmModel.active())
+{
+    pcmModel.correct();
 }
 
 if (frozenFlow)

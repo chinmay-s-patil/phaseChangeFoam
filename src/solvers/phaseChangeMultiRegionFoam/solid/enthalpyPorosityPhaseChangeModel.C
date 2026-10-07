@@ -495,7 +495,7 @@ Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::momentum
             mesh_.time().timeName(),
             mesh_,
             IOobject::NO_READ,
-            IOobject::NO_WRITE
+            IOobject::AUTO_WRITE
         ),
         mesh_,
         dimensionedScalar("zero", dimMass/dimVolume/dimTime, 0.0)
@@ -514,6 +514,11 @@ Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::momentum
     {
         scalar f = fCells[celli];
         coeffCells[celli] = Cu_ * sqr(1.0 - f) / (pow3(f) + q_);
+    }
+
+    if (mesh_.time().outputTime())
+    {
+        tCoeff.ref().write();
     }
 
     return tCoeff;

@@ -333,6 +333,26 @@ forAll(fluidRegions, i)
         )
     );
 
+    if (pcmModelsFluid[i].active())
+    {
+        tmp<volScalarField> trhoEff = pcmModelsFluid[i].rhoEff();
+        tmp<volScalarField> tCpEff = pcmModelsFluid[i].CpEff();
+        tmp<volScalarField> trhoThermo = thermoFluid[i].rho();
+        tmp<volScalarField> tCpThermo = thermoFluid[i].Cp();
+
+        const scalar maxDev = max(mag(trhoEff()*tCpEff()/(trhoThermo()*tCpThermo()) - 1.0)).value();
+        if (maxDev > 1e-5)
+        {
+            FatalErrorInFunction
+                << "PCM model '" << pcmModelsFluid[i].type()
+                << "' in fluid region " << fluidRegions[i].name()
+                << " requires ratio rhoEff*CpEff/(rho*Cp) == 1 (found max deviation = "
+                << maxDev << ")."
+                << "\nFluid region PCM requires equal Cp_solid and Cp_liquid matching thermo Cp."
+                << exit(FatalError);
+        }
+    }
+
     UEqFluid.set
     (
         i,
