@@ -75,7 +75,6 @@ private:
         word vaporName_;
         label liquidIndex_;
         label vaporIndex_;
-        label timeIndex_;
 
         dimensionedScalar C_evap_;
         dimensionedScalar C_cond_;
@@ -130,6 +129,30 @@ public:
             virtual bool active() const override
             {
                 return active_;
+            }
+
+            //- Return liquid specie name
+            const word& liquidName() const
+            {
+                return liquidName_;
+            }
+
+            //- Return vapor specie name
+            const word& vaporName() const
+            {
+                return vaporName_;
+            }
+
+            //- Return liquid specie index
+            label liquidIndex() const
+            {
+                return liquidIndex_;
+            }
+
+            //- Return vapor specie index
+            label vaporIndex() const
+            {
+                return vaporIndex_;
             }
 
             //- Return phase change mass rate field [kg/(m^3 s)]

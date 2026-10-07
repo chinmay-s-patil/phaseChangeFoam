@@ -521,6 +521,47 @@ phaseChange {
     pass_t9 = (res9.returncode != 0 and ("requires equal solid/liquid heat capacities and densities" in out9 or "Model 'enthalpyPorosity' v1 requires Cp_solid == Cp_liquid" in out9))
     print(f"Test 9 Fluid PCM Unequal Cps/Cpl FatalError Triggered: {pass_t9}")
 
+    # Test 10: inertSpecie matching liquid/vapor phase-change specie FatalError check
+    print("\n--- Test 10: inertSpecie Phase-Change Specie Collision FatalError Check ---")
+    c10_dir = os.path.join(base_dir, "case_inert_specie_collision")
+    setup_fluid_base_case(c10_dir)
+    with open(os.path.join(c10_dir, "constant/pcm/thermophysicalProperties"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object thermophysicalProperties; }
+thermoType { type heRhoThermo; mixture multiComponentMixture; transport const; thermo hConst; equationOfState perfectGas; specie specie; energy sensibleEnthalpy; }
+species ( H2O_l H2O_v air );
+inertSpecie H2O_v;
+H2O_l { specie { molWeight 18; } transport { mu 1e-3; Pr 7.0; } thermodynamics { Cp 4184; Hf 0; } }
+H2O_v { specie { molWeight 18; } transport { mu 1e-5; Pr 1.0; } thermodynamics { Cp 2000; Hf 0; } }
+air   { specie { molWeight 29; } transport { mu 1e-5; Pr 0.7; } thermodynamics { Cp 1000; Hf 0; } }
+""")
+    with open(os.path.join(c10_dir, "constant/pcm/phaseChangeDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange {
+    active true;
+    speciesModel Lee;
+    liquid H2O_l;
+    vapor H2O_v;
+    C_evap 0.1;
+    C_cond 0.1;
+    latentHeat 2.26e6;
+    Tsat 373.15;
+}
+""")
+    for s in ["H2O_l", "H2O_v", "air"]:
+        with open(os.path.join(c10_dir, f"0/pcm/{s}"), "w") as f:
+            f.write(f"""
+FoamFile {{ version 2.0; format ascii; class volScalarField; location "0/pcm"; object {s}; }}
+dimensions [0 0 0 0 0 0 0]; internalField uniform 0.33;
+boundaryField {{ ".*" {{ type zeroGradient; }} emptyFaces {{ type empty; }} }}
+""")
+    res10 = run_cmd(f"cd {c10_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=True)
+    out10 = res10.stdout + res10.stderr
+    pass_t10 = (res10.returncode != 0 and "must not be a phase-changing specie" in out10)
+    print(f"Test 10 inertSpecie Collision FatalError Triggered: {pass_t10}")
+
     print("\n=======================================================")
     print("      MODEL FEATURES & VALIDATION SUMMARY             ")
     print("=======================================================")
@@ -533,8 +574,9 @@ phaseChange {
     print(f"Test 7 (missing species type FatalIOError)    : {'PASS' if pass_t7 else 'FAIL'}")
     print(f"Test 8 (speciesModel & meltingModel keys)     : {'PASS' if pass_t8 else 'FAIL'}")
     print(f"Test 9 (fluid PCM unequal Cps/Cpl FatalError): {'PASS' if pass_t9 else 'FAIL'}")
+    print(f"Test 10 (inertSpecie phase-change collision) : {'PASS' if pass_t10 else 'FAIL'}")
 
-    all_pass = pass_t1 and pass_t2 and pass_t3 and pass_t4 and pass_t5 and pass_t6 and pass_t7 and pass_t8 and pass_t9
+    all_pass = pass_t1 and pass_t2 and pass_t3 and pass_t4 and pass_t5 and pass_t6 and pass_t7 and pass_t8 and pass_t9 and pass_t10
     if all_pass:
         print("\nALL MODEL FEATURE & ERROR TESTS PASSED SUCCESSFULLY!")
     else:

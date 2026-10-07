@@ -39,7 +39,6 @@ Foam::leeFluidPhaseChangeModel::leeFluidPhaseChangeModel
     vaporName_(dict_.getOrDefault<word>("vapor", "vapor")),
     liquidIndex_(thermo_.composition().species().find(liquidName_)),
     vaporIndex_(thermo_.composition().species().find(vaporName_)),
-    timeIndex_(-1),
     C_evap_
     (
         "C_evap",
@@ -137,8 +136,6 @@ Foam::leeFluidPhaseChangeModel::leeFluidPhaseChangeModel
         dimensionedScalar("zero", dimMass/dimVolume/dimTime, Zero)
     )
 {
-    active_ = true;
-
     if (active_)
     {
         if (liquidIndex_ == -1)
@@ -156,6 +153,21 @@ Foam::leeFluidPhaseChangeModel::leeFluidPhaseChangeModel
                 << "' not found in thermo composition. Available species are: "
                 << thermo_.composition().species()
                 << exit(FatalIOError);
+        }
+
+        if (thermo_.composition().Y().size() && thermo_.found("inertSpecie"))
+        {
+            const word inertSpecie(thermo_.get<word>("inertSpecie"));
+            const label inertIndex = thermo_.composition().species().find(inertSpecie);
+
+            if (inertIndex >= 0 && (inertIndex == liquidIndex_ || inertIndex == vaporIndex_))
+            {
+                FatalErrorInFunction
+                    << "inertSpecie '" << inertSpecie
+                    << "' must not be a phase-changing specie ("
+                    << liquidName_ << " or " << vaporName_ << ")."
+                    << exit(FatalError);
+            }
         }
     }
 }
@@ -252,6 +264,7 @@ void Foam::leeFluidPhaseChangeModel::correct()
                 }
             }
         }
+        Tsat_c = max(Tsat_c, scalar(1.0));
 
         const scalar T0 = T_old[cellI];
         const scalar rho0 = rho_old[cellI];
@@ -270,13 +283,13 @@ void Foam::leeFluidPhaseChangeModel::correct()
             Hs_l = thermo_.composition().Hs(liquidIndex_, p_old[cellI], T0);
         }
         const scalar deltaHs = Hs_v - Hs_l;
-        const scalar L_eff = L - deltaHs;
+        const scalar L_eff = max(L - deltaHs, scalar(0.1) * L);
 
         if (T0 > Tsat_c)
         {
             const scalar mDot_raw = C_evap * rho0 * Yl0 * max(T0 - Tsat_c, scalar(0)) / Tsat_c;
             const scalar massCap = (dt > 1e-12) ? (rho0 * Yl0 / dt) : mDot_raw;
-            const scalar thermalCap = (dt > 1e-12) ? (rho0 * Cp_c * max(T0 - Tsat_c, scalar(0)) / (L * dt)) : mDot_raw;
+            const scalar thermalCap = (dt > 1e-12) ? (rho0 * Cp_c * max(T0 - Tsat_c, scalar(0)) / (L_eff * dt)) : mDot_raw;
 
             mDotVal = min(mDot_raw, min(massCap, thermalCap));
             energySourceVal = - mDotVal * L_eff;
@@ -285,7 +298,7 @@ void Foam::leeFluidPhaseChangeModel::correct()
         {
             const scalar mDot_raw = C_cond * rho0 * Yv0 * max(Tsat_c - T0, scalar(0)) / Tsat_c;
             const scalar massCap = (dt > 1e-12) ? (rho0 * Yv0 / dt) : mDot_raw;
-            const scalar thermalCap = (dt > 1e-12) ? (rho0 * Cp_c * max(Tsat_c - T0, scalar(0)) / (L * dt)) : mDot_raw;
+            const scalar thermalCap = (dt > 1e-12) ? (rho0 * Cp_c * max(Tsat_c - T0, scalar(0)) / (L_eff * dt)) : mDot_raw;
 
             mDotVal = - min(mDot_raw, min(massCap, thermalCap));
             energySourceVal = - mDotVal * L_eff;

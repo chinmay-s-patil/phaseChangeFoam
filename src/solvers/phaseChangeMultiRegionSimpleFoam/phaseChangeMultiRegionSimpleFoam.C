@@ -32,6 +32,7 @@ Description
 #include "pressureControl.H"
 #include "phaseChangeModel.H"
 #include "fluidPhaseChangeModel.H"
+#include "leeFluidPhaseChangeModel.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 

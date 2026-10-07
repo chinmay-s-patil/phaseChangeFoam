@@ -83,13 +83,13 @@ To guarantee PIMPLE outer-corrector invariance across $nOuterCorrectors$, evalua
   $$\frac{1}{T_{sat}(p)} = \frac{1}{T_{sat,0}} - \frac{R_v}{L} \ln\left(\frac{p_0}{p_{ref}}\right), \quad R_v = \frac{R_{universal}}{W_v}$$
 
 * **Evaporation Rate ($T_0 > T_{sat}$)**:
-  $$\dot{m}_{evap} = \min\left( C_{evap} \rho_0 Y_{l,0} \frac{T_0 - T_{sat}}{T_{sat}},\, \frac{\rho_0 Y_{l,0}}{\Delta t},\, \frac{\rho_0 C_p (T_0 - T_{sat})}{L \Delta t} \right)$$
+  $$\dot{m}_{evap} = \min\left( C_{evap} \rho_0 Y_{l,0} \frac{T_0 - T_{sat}}{T_{sat}}, \frac{\rho_0 Y_{l,0}}{\Delta t}, \frac{\rho_0 C_p (T_0 - T_{sat})}{L_{eff} \Delta t} \right)$$
 
 * **Condensation Rate ($T_0 < T_{sat}$)**:
-  $$\dot{m}_{cond} = - \min\left( C_{cond} \rho_0 Y_{v,0} \frac{T_{sat} - T_0}{T_{sat}},\, \frac{\rho_0 Y_{v,0}}{\Delta t},\, \frac{\rho_0 C_p (T_{sat} - T_0)}{L \Delta t} \right)$$
+  $$\dot{m}_{cond} = - \min\left( C_{cond} \rho_0 Y_{v,0} \frac{T_{sat} - T_0}{T_{sat}}, \frac{\rho_0 Y_{v,0}}{\Delta t}, \frac{\rho_0 C_p (T_{sat} - T_0)}{L_{eff} \Delta t} \right)$$
 
 * **Energy Source Term**:
-  $$\text{energySource} = - \dot{m} \cdot L \quad [\text{W/m}^3]$$
+  $$\text{energySource} = - \dot{m} \cdot L_{eff} \quad [\text{W/m}^3]$$
 
 #### Lee Model Configuration Options
 ```foam
@@ -364,10 +364,10 @@ forAll(species, i)
       - fvm::laplacian(turbulence->muEff(), Yi)
     );
 
-    if (phaseChange->active())
+    if (phaseChange.active())
     {
-        // Add species source/sink term
-        YiEqn -= phaseChange->speciesSource(i);
+        // Subtract phaseChange.speciesSource(i) from LHS matrix (adds speciesSource to RHS)
+        YiEqn -= phaseChange.speciesSource(i);
     }
 
     YiEqn.solve();
@@ -377,14 +377,16 @@ forAll(species, i)
 fvScalarMatrix EEqn
 (
     fvm::ddt(rho, he)
-  + mvConvection->fvmDiv(phi, he)
-  + /.../
+  + fvm::div(phi, he)
+  - fvm::laplacian(alphaEff, he)
+  ==
+    rho*(U&g) + Qdot + fvOptions(rho, he)
 );
 
-if (phaseChange->active())
+if (phaseChange.active())
 {
-    // Subtract latent heat source term
-    EEqn -= phaseChange->energySource();
+    // Subtract phaseChange.energySource() from LHS matrix (adds energySource to RHS)
+    EEqn -= phaseChange.energySource();
 }
 EEqn.solve();
 ```
@@ -393,7 +395,7 @@ EEqn.solve();
 
 ### Solid Region C++ Integration
 
-In a solid region solver (e.g. [`phaseChangeMultiRegionFoam.C`](src/solvers/phaseChangeMultiRegionFoam/phaseChangeMultiRegionFoam.C)):
+In a solid region solver (e.g. [`solveSolid.H`](src/solvers/phaseChangeMultiRegionFoam/solid/solveSolid.H)):
 
 ```cpp
 #include "phaseChangeModel.H"
@@ -408,16 +410,31 @@ autoPtr<phaseChangeModel> phaseChange = phaseChangeModel::New
 // 2. Correct phase fraction, state machine, and thermophysical fields
 phaseChange->correct();
 
-// 3. Enthalpy / Energy Equation (solveSolid.H)
+// 3. Solid Energy Equation (solveSolid.H)
+tmp<volScalarField> tCpThermo = thermo.Cp();
+tmp<volScalarField> tCpEff = pcmModel.active() ? pcmModel.CpEff() : tmp<volScalarField>(thermo.Cp());
+tmp<volScalarField> trhoEff = pcmModel.active() ? pcmModel.rhoEff() : tmp<volScalarField>(thermo.rho());
+tmp<volScalarField> tkEff = pcmModel.active() ? pcmModel.k() : tmp<volScalarField>(thermo.kappa());
+
+// Thermal diffusivity alpha = k / Cp_thermo (compressible convention k/Cp)
+volScalarField alpha("alpha", tkEff() / tCpThermo());
+volScalarField rhoCpRatio("rhoCpRatio", trhoEff() * tCpEff() / tCpThermo());
+
 fvScalarMatrix hEqn
 (
-    fvm::ddt(rho, h)
-  - fvm::laplacian(thermo.alpha(), h)
+    betav*rhoCpRatio*fvm::ddt(h)
+  - fvm::laplacian(betav*alpha, h, "laplacian(alpha,h)")
  ==
-    phaseChange->latentHeatSource()
-  + fvm::Sp(phaseChange->latentHeatSp(), h)
-  - phaseChange->latentHeatSp() * h_k
+    fvOptions(trhoEff(), h)
 );
+
+if (pcmModel.active())
+{
+    // Linearized latent heat source
+    hEqn += pcmModel.latentHeatSource()
+          + fvm::Sp(pcmModel.latentHeatSp(), h)
+          - pcmModel.latentHeatSp() * h;
+}
 hEqn.solve();
 
 // 4. Implicit Momentum Damping (for EHCDarcy / Enthalpy-Porosity fluid mushy zone flows)
@@ -426,8 +443,11 @@ if (pcmModel.active())
     UEqn += fvm::Sp(pcmModel.momentumSp(), U);
 }
 
-// 5. Update state history at completed time-step boundaries
-pcmModel.updateHistory();
+// 5. Update state history at completed time-step boundaries (last outer corrector)
+if (pcmModel.active() && oCorr == nOuterCorr - 1)
+{
+    pcmModel.updateHistory();
+}
 ```
 
 ---

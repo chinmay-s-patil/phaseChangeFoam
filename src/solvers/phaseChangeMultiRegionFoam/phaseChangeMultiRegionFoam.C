@@ -32,6 +32,7 @@ Description
 #include "pressureControl.H"
 #include "phaseChangeModel.H"
 #include "fluidPhaseChangeModel.H"
+#include "leeFluidPhaseChangeModel.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -264,6 +265,21 @@ int main(int argc, char *argv[])
         }
 
         // Re-synchronize phase-change models with final converged T^n before committing history.
+        forAll(fluidRegions, i)
+        {
+            fluidPhaseChangeModel& phaseChange = fluidPhaseChangeModels[i];
+            phaseChangeModel& pcmModel = pcmModelsFluid[i];
+            if (phaseChange.active())
+            {
+                phaseChange.correct();
+            }
+            if (pcmModel.active())
+            {
+                pcmModel.correct();
+                pcmModel.updateHistory();
+            }
+        }
+
         forAll(solidRegions, i)
         {
             phaseChangeModel& pcModel = phaseChangeModels[i];

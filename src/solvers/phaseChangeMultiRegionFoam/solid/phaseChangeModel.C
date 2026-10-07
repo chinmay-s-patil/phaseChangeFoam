@@ -50,6 +50,7 @@ Foam::phaseChangeModel::phaseChangeModel
     rhoRef_(1000.0),
     rhoSolid_(1000.0),
     rhoLiquid_(1000.0),
+    allowNonConservativeDensity_(false),
     thermoMode_("thermo"),
     Cps_(1000.0),
     Cpl_(1000.0),

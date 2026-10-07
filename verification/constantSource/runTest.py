@@ -209,7 +209,7 @@ boundaryField { walls { type zeroGradient; } }
     with open(os.path.join(air_zero, "h"), "w") as f:
         f.write("""
 FoamFile { version 2.0; format ascii; class volScalarField; location "0/air"; object h; }
-dimensions [0 2 -2 0 0 0 0]; internalField uniform 300000;
+dimensions [0 2 -2 0 0 0 0]; internalField uniform 1850;
 boundaryField { walls { type zeroGradient; } }
 """)
 

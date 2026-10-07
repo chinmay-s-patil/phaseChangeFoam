@@ -28,7 +28,7 @@
         }
     }
 
-    if (pcmModel.active())
+    if (pcmModel.active() && finalIter)
     {
         pcmModel.updateHistory();
     }

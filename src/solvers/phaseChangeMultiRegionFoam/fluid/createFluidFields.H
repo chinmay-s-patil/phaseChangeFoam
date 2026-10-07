@@ -322,6 +322,29 @@ forAll(fluidRegions, i)
         )
     );
 
+    if (fluidPhaseChangeModels[i].active() && Foam::isA<Foam::leeFluidPhaseChangeModel>(fluidPhaseChangeModels[i]))
+    {
+        const Foam::leeFluidPhaseChangeModel& leeModel =
+            Foam::refCast<const Foam::leeFluidPhaseChangeModel>(fluidPhaseChangeModels[i]);
+
+        const Foam::basicMultiComponentMixture& composition = thermoFluid[i].composition();
+        if (composition.Y().size())
+        {
+            const Foam::word inertSpecie(thermoFluid[i].get<Foam::word>("inertSpecie"));
+            const Foam::label inertIndex = composition.species().find(inertSpecie);
+
+            if (inertIndex >= 0 && (inertIndex == leeModel.liquidIndex() || inertIndex == leeModel.vaporIndex()))
+            {
+                FatalErrorInFunction
+                    << "inertSpecie '" << inertSpecie
+                    << "' in fluid region " << fluidRegions[i].name()
+                    << " must not be a phase-changing specie ("
+                    << leeModel.liquidName() << " or " << leeModel.vaporName() << ")."
+                    << Foam::exit(Foam::FatalError);
+            }
+        }
+    }
+
     Info<< "    Adding PCM phase change model\n" << endl;
     pcmModelsFluid.set
     (
