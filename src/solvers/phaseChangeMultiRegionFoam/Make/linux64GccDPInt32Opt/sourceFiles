@@ -8,6 +8,7 @@ solid/solidRegionDiffNo.C \
 solid/phaseChangeModel.C \
 solid/nonePhaseChangeModel.C \
 solid/ehcPhaseChangeModel.C \
+solid/ehcDarcyPhaseChangeModel.C \
 solid/enthalpyPorosityPhaseChangeModel.C \
 phaseChangeMultiRegionFoam.C \
 

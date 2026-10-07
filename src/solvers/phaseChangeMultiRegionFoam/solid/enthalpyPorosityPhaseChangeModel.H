@@ -9,7 +9,7 @@
 #ifndef enthalpyPorosityPhaseChangeModel_H
 #define enthalpyPorosityPhaseChangeModel_H
 
-#include "phaseChangeModel.H"
+#include "ehcDarcyPhaseChangeModel.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -20,24 +20,14 @@ namespace Foam
             Class enthalpyPorosityPhaseChangeModel Declaration
 
  Description
-    Enthalpy-Porosity model for general phase-change simulations with exact
-    Newton/secant linearization, stateful hysteresis, path-integral thermophysics,
-    and Darcy momentum damping force for fluid regions.
+    Enthalpy-Porosity model alias deriving from EHCDarcy for backward
+    compatibility in case dictionaries.
 \*---------------------------------------------------------------------------*/
 
 class enthalpyPorosityPhaseChangeModel
 :
-    public phaseChangeModel
+    public ehcDarcyPhaseChangeModel
 {
-private:
-
-    // Parameters - Darcy & Buoyancy
-    scalar beta_; // Thermal expansion coefficient [1/K]
-    scalar Cu_;   // Darcy penalty coefficient [kg/(m3 s)]
-    scalar q_;    // Smoothing constant
-
-    void readPorosityDict();
-
 public:
 
     //- Runtime type information
@@ -47,16 +37,14 @@ public:
     enthalpyPorosityPhaseChangeModel
     (
         const fvMesh& mesh,
-        const solidThermo& thermo
-    );
+        const basicThermo& thermo
+    )
+    :
+        ehcDarcyPhaseChangeModel(mesh, thermo)
+    {}
 
     // Destructor
     virtual ~enthalpyPorosityPhaseChangeModel() = default;
-
-
-    // Member Functions
-
-    virtual tmp<volVectorField> momentumSource() const override;
 };
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //

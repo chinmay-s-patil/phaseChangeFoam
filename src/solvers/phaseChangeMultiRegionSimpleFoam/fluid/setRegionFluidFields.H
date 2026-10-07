@@ -1,5 +1,25 @@
-    rhoThermo& thermo = thermoFluid[i];
+    CombustionModel<rhoReactionThermo>& reaction = reactionFluid[i];
+
+    rhoReactionThermo& thermo = reaction.thermo();
     thermo.validate(args.executable(), "h", "e");
+
+    basicMultiComponentMixture& composition = thermo.composition();
+    PtrList<volScalarField>& Y = composition.Y();
+
+    label inertIndex = -1;
+    if (Y.size())
+    {
+        const word inertSpecie(thermo.get<word>("inertSpecie"));
+        inertIndex = composition.species().find(inertSpecie);
+        if (inertIndex < 0)
+        {
+            FatalIOErrorIn(args.executable().c_str(), thermo)
+                << "Inert specie " << inertSpecie
+                << " not found in available species "
+                << flatOutput(composition.species())
+                << exit(FatalIOError);
+        }
+    }
 
     volScalarField& rho = rhoFluid[i];
     volVectorField& U = UFluid[i];
@@ -15,7 +35,15 @@
     const volScalarField& gh = ghFluid[i];
     const surfaceScalarField& ghf = ghfFluid[i];
 
+    multivariateSurfaceInterpolationScheme<scalar>::fieldTable& fields =
+        fieldsFluid[i];
+
+    volScalarField& Qdot = QdotFluid[i];
+
     radiation::radiationModel& rad = radiation[i];
+
+    fluidPhaseChangeModel& phaseChange = fluidPhaseChangeModels[i];
+    phaseChangeModel& pcmModel = pcmModelsFluid[i];
 
     IOMRFZoneList& MRF = MRFfluid[i];
     fv::options& fvOptions = fluidFvOptions[i];
@@ -33,3 +61,4 @@
 
     const label pRefCell = pRefCellFluid[i];
     const scalar pRefValue = pRefValueFluid[i];
+

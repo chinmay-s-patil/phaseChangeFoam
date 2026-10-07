@@ -1,14 +1,22 @@
+#include "fluidPhaseChangeModel.H"
+
 // Initialise fluid field pointer lists
-PtrList<rhoThermo> thermoFluid(fluidRegions.size());
+PtrList<rhoReactionThermo> thermoFluid(fluidRegions.size());
 PtrList<volScalarField> rhoFluid(fluidRegions.size());
 PtrList<volVectorField> UFluid(fluidRegions.size());
 PtrList<surfaceScalarField> phiFluid(fluidRegions.size());
+PtrList<fluidPhaseChangeModel> fluidPhaseChangeModels(fluidRegions.size());
+PtrList<phaseChangeModel> pcmModelsFluid(fluidRegions.size());
 PtrList<uniformDimensionedScalarField> hRefFluid(fluidRegions.size());
 PtrList<volScalarField> ghFluid(fluidRegions.size());
 PtrList<surfaceScalarField> ghfFluid(fluidRegions.size());
 PtrList<compressible::turbulenceModel> turbulence(fluidRegions.size());
+PtrList<CombustionModel<rhoReactionThermo>> reactionFluid(fluidRegions.size());
 PtrList<volScalarField> p_rghFluid(fluidRegions.size());
 PtrList<radiation::radiationModel> radiation(fluidRegions.size());
+PtrList<multivariateSurfaceInterpolationScheme<scalar>::fieldTable>
+    fieldsFluid(fluidRegions.size());
+PtrList<volScalarField> QdotFluid(fluidRegions.size());
 
 List<scalar> initialMassFluid(fluidRegions.size());
 List<label> pRefCellFluid(fluidRegions.size(), -1);
@@ -36,7 +44,7 @@ forAll(fluidRegions, i)
     thermoFluid.set
     (
         i,
-        rhoThermo::New(fluidRegions[i]).ptr()
+        rhoReactionThermo::New(fluidRegions[i]).ptr()
     );
 
     Info<< "    Adding to rhoFluid\n" << endl;
@@ -154,6 +162,17 @@ forAll(fluidRegions, i)
         ).ptr()
     );
 
+    Info<< "    Adding to reactionFluid\n" << endl;
+    reactionFluid.set
+    (
+        i,
+        CombustionModel<rhoReactionThermo>::New
+        (
+            thermoFluid[i],
+            turbulence[i]
+        )
+    );
+
     p_rghFluid.set
     (
         i,
@@ -183,6 +202,37 @@ forAll(fluidRegions, i)
     );
 
     initialMassFluid[i] = fvc::domainIntegrate(rhoFluid[i]).value();
+
+    Info<< "    Adding to fieldsFluid\n" << endl;
+    fieldsFluid.set
+    (
+        i,
+        new multivariateSurfaceInterpolationScheme<scalar>::fieldTable
+    );
+    forAll(thermoFluid[i].composition().Y(), j)
+    {
+        fieldsFluid[i].add(thermoFluid[i].composition().Y()[j]);
+    }
+    fieldsFluid[i].add(thermoFluid[i].he());
+
+    Info<< "    Adding to QdotFluid\n" << endl;
+    QdotFluid.set
+    (
+        i,
+        new volScalarField
+        (
+            IOobject
+            (
+                "Qdot",
+                runTime.timeName(),
+                fluidRegions[i],
+                IOobject::READ_IF_PRESENT,
+                IOobject::AUTO_WRITE
+            ),
+            fluidRegions[i],
+            dimensionedScalar(dimEnergy/dimVolume/dimTime, Zero)
+        )
+    );
 
     const dictionary& simpleDict =
         fluidRegions[i].solutionDict().subDict("SIMPLE");
@@ -224,6 +274,30 @@ forAll(fluidRegions, i)
         new fv::options(fluidRegions[i])
     );
 
+    Info<< "    Adding fluid phase change model\n" << endl;
+    fluidPhaseChangeModels.set
+    (
+        i,
+        fluidPhaseChangeModel::New
+        (
+            fluidRegions[i],
+            thermoFluid[i],
+            UFluid[i],
+            phiFluid[i]
+        )
+    );
+
+    Info<< "    Adding PCM phase change model\n" << endl;
+    pcmModelsFluid.set
+    (
+        i,
+        phaseChangeModel::New
+        (
+            fluidRegions[i],
+            thermoFluid[i]
+        )
+    );
+
     UEqFluid.set
     (
         i,
@@ -232,3 +306,4 @@ forAll(fluidRegions, i)
 
     turbulence[i].validate();
 }
+

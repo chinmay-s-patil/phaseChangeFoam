@@ -8,6 +8,7 @@ SOURCE = \
 ../phaseChangeMultiRegionFoam/solid/phaseChangeModel.C \
 ../phaseChangeMultiRegionFoam/solid/nonePhaseChangeModel.C \
 ../phaseChangeMultiRegionFoam/solid/ehcPhaseChangeModel.C \
+../phaseChangeMultiRegionFoam/solid/ehcDarcyPhaseChangeModel.C \
 ../phaseChangeMultiRegionFoam/solid/enthalpyPorosityPhaseChangeModel.C \
 phaseChangeMultiRegionSimpleFoam.C \
 

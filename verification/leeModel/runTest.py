@@ -53,7 +53,7 @@ def parse_openfoam_field(file_path):
     block = content[start_paren+1:end_paren].strip()
     return [float(x) for x in block.split()]
 
-def setup_case(case_dir, T_init=380.0, Y_l_init=0.2, Y_v_init=0.0, enable_tsat_p=False, p_init=101325.0, c_evap=0.1, c_cond=0.1, dt=1.0, n_outer_corr=1, q_source=0.0, end_time=None):
+def setup_case(case_dir, T_init=380.0, Y_l_init=0.2, Y_v_init=0.0, enable_tsat_p=False, p_init=101325.0, c_evap=0.1, c_cond=0.1, dt=1.0, n_outer_corr=1, q_source=0.0, end_time=None, cp_l=1000.0, cp_v=1000.0, hf_l=0.0, hf_v=0.0):
     os.makedirs(case_dir, exist_ok=True)
     end_t = end_time if end_time is not None else dt
     
@@ -136,10 +136,10 @@ regions ( fluid (air) solid () porousFluid () porousSolid () );
     os.makedirs(air_const, exist_ok=True)
 
     with open(os.path.join(air_const, "thermophysicalProperties"), "w") as f:
-        f.write("""
-FoamFile { version 2.0; format ascii; class dictionary; location "constant/air"; object thermophysicalProperties; }
+        f.write(f"""
+FoamFile {{ version 2.0; format ascii; class dictionary; location "constant/air"; object thermophysicalProperties; }}
 thermoType
-{
+{{
     type            heRhoThermo;
     mixture         multiComponentMixture;
     transport       const;
@@ -147,7 +147,7 @@ thermoType
     equationOfState perfectGas;
     specie          specie;
     energy          sensibleEnthalpy;
-}
+}}
 dpdt            no;
 
 species
@@ -160,25 +160,25 @@ species
 inertSpecie air;
 
 air
-{
-    specie { molWeight 28.96; }
-    thermodynamics { Cp 1000; Hf 0; }
-    transport { mu 1.8e-5; Pr 0.7; }
-}
+{{
+    specie {{ molWeight 28.96; }}
+    thermodynamics {{ Cp 1000; Hf 0; }}
+    transport {{ mu 1.8e-5; Pr 0.7; }}
+}}
 
 H2O_l
-{
-    specie { molWeight 18.015; }
-    thermodynamics { Cp 1000; Hf 0; }
-    transport { mu 1.8e-5; Pr 0.7; }
-}
+{{
+    specie {{ molWeight 18.015; }}
+    thermodynamics {{ Cp {cp_l}; Hf {hf_l}; }}
+    transport {{ mu 1.8e-5; Pr 0.7; }}
+}}
 
 H2O_v
-{
-    specie { molWeight 18.015; }
-    thermodynamics { Cp 1000; Hf 0; }
-    transport { mu 1.8e-5; Pr 0.7; }
-}
+{{
+    specie {{ molWeight 18.015; }}
+    thermodynamics {{ Cp {cp_v}; Hf {hf_v}; }}
+    transport {{ mu 1.8e-5; Pr 0.7; }}
+}}
 """)
 
     enable_tsat_p_str = "true" if enable_tsat_p else "false"
@@ -713,6 +713,86 @@ phaseChange
     assert rel_T_err_8b < 1e-4, f"FAIL: Final temperature ({T_final8b:.4f} K) differs from analytical superheated T ({T_final_anal_8b:.4f} K) by > 1e-4!"
     assert rel_err_8b < 1e-4, f"FAIL: Energy balance relative error ({rel_err_8b:.6%}) > 1e-4!"
     print("PASS: Heated Pot Liquid Exhaustion & Superheating Verification Passed!")
+
+    # Test 9: Closed Adiabatic Unequal-Cp Absolute Enthalpy Conservation Verification
+    print("\n--- Test 9: Closed Adiabatic Unequal-Cp Absolute Enthalpy Conservation Verification ---")
+    c9_dir = os.path.join(base_dir, "case_unequal_cp_enthalpy_conservation")
+    if os.path.exists(c9_dir):
+        shutil.rmtree(c9_dir)
+
+    C_evap9 = 0.01
+    dt9 = 0.1
+    T_init9 = 380.0
+    Yl_init9 = 0.20
+    Yv_init9 = 0.0
+    Yair_init9 = 0.80
+    L9 = 2.26e6
+
+    Cp_air = 1000.0
+    Cp_l = 4184.0   # Liquid Cp (water)
+    Cp_v = 2030.0   # Vapor Cp (steam) - distinctly unequal from Cp_l!
+    Hf_l = 0.0
+    Hf_v = L9       # Vapor formation enthalpy encodes latent heat L
+
+    T_std = 298.15
+
+    setup_case(
+        c9_dir,
+        T_init=T_init9,
+        Y_l_init=Yl_init9,
+        Y_v_init=Yv_init9,
+        c_evap=C_evap9,
+        dt=dt9,
+        cp_l=Cp_l,
+        cp_v=Cp_v,
+        hf_l=Hf_l,
+        hf_v=Hf_v
+    )
+
+    run_cmd(f"cd {c9_dir} && bash -c '{of_env}; {solver_bin}'", cwd=c9_dir)
+
+    T_final9 = parse_openfoam_field(os.path.join(c9_dir, f"{dt9}/air/T"))[0]
+    Yl_final9 = parse_openfoam_field(os.path.join(c9_dir, f"{dt9}/air/H2O_l"))[0]
+    Yv_final9 = parse_openfoam_field(os.path.join(c9_dir, f"{dt9}/air/H2O_v"))[0]
+    Yair_final9 = parse_openfoam_field(os.path.join(c9_dir, f"{dt9}/air/air"))[0]
+
+    W_air = 28.96
+    W_H2O = 18.015
+    R_univ = 8314.463
+    W_mix0 = 1.0 / (Yair_init9 / W_air + Yl_init9 / W_H2O + Yv_init9 / W_H2O)
+    R_mix0 = R_univ / W_mix0
+    rho9_0 = 101325.0 / (R_mix0 * T_init9)
+
+    rho9_1 = parse_openfoam_field(os.path.join(c9_dir, f"{dt9}/air/rho"))[0]
+
+    # Calculate absolute enthalpy per unit mass at initial state t=0:
+    # h_abs = sum_i Y_i * [ Cp_i * (T - T_std) + Hf_i ]
+    h_abs_init = (
+        Yair_init9 * (Cp_air * (T_init9 - T_std)) +
+        Yl_init9   * (Cp_l   * (T_init9 - T_std) + Hf_l) +
+        Yv_init9   * (Cp_v   * (T_init9 - T_std) + Hf_v)
+    )
+    E_abs_init = rho9_0 * h_abs_init
+
+    # Calculate absolute enthalpy per unit mass at final state t=dt:
+    h_abs_final = (
+        Yair_final9 * (Cp_air * (T_final9 - T_std)) +
+        Yl_final9   * (Cp_l   * (T_final9 - T_std) + Hf_l) +
+        Yv_final9   * (Cp_v   * (T_final9 - T_std) + Hf_v)
+    )
+    E_abs_final = rho9_1 * h_abs_final
+
+    err_E9 = abs(E_abs_final - E_abs_init) / E_abs_init
+
+    print(f"Initial T:              {T_init9:.4f} K")
+    print(f"Final T:                {T_final9:.4f} K")
+    print(f"Evaporated Yv:          {Yv_final9:.8e}")
+    print(f"Initial E_abs:          {E_abs_init:.6f} J/m^3")
+    print(f"Final E_abs:            {E_abs_final:.6f} J/m^3")
+    print(f"Enthalpy Rel Error:     {err_E9:.6e}")
+
+    assert err_E9 < 1e-4, f"FAIL: Closed adiabatic unequal-Cp absolute enthalpy conservation error ({err_E9:.6e}) > 1e-4!"
+    print("PASS: Closed Adiabatic Unequal-Cp Absolute Enthalpy Conservation Passed!")
 
     print("\n=========================================================================")
     print("      LEE FLUID PHASE CHANGE MODEL QUANTITATIVE VERIFICATION PASS        ")

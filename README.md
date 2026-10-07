@@ -166,18 +166,26 @@ Solid-liquid phase change model utilizing path-integral Effective Heat Capacity 
 
 ---
 
-### 2. Enthalpy-Porosity Model (`enthalpyPorosity`)
+### 2. EHC-Darcy Model (`EHCDarcy` / `enthalpyPorosity`)
 
-Class: [`enthalpyPorosityPhaseChangeModel`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/solid/enthalpyPorosityPhaseChangeModel.H)
+Class: [`ehcDarcyPhaseChangeModel`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/solid/ehcDarcyPhaseChangeModel.H) / [`enthalpyPorosityPhaseChangeModel`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/solid/enthalpyPorosityPhaseChangeModel.H)
 
-Extends the solid phase change model for fluid mushy zones by adding Darcy momentum damping force to penalize velocity in solidifying/melting regions.
+Extends the EHC phase change model for fluid regions by adding an implicit Darcy momentum damping force (Voller–Prakash formulation) to penalize velocity in solidifying/melting mushy zones.
 
-#### Damping Force Formulation:
-$$\vec{S}_{u,drag} = - C_u \frac{(1 - \alpha)^2}{\alpha^3 + q} \vec{U} \quad \left[\frac{\text{N}}{\text{m}^3}\right]$$
+#### Implicit Damping Force Formulation:
+Instead of explicit drag forces which become numerically unstable at large Darcy coefficients $C_u$, `EHCDarcy` provides an implicit scalar diagonal coefficient `momentumSp()` ($\text{kg}/(\text{m}^3\,\text{s})$):
+
+$$C_{drag} = C_u \frac{(1 - \alpha)^2}{\alpha^3 + q} \ge 0 \quad \left[\frac{\text{kg}}{\text{m}^3\,\text{s}}\right]$$
+
+Added implicitly in `UEqn.H`:
+```cpp
+UEqn += fvm::Sp(pcmModel.momentumSp(), U);
+```
 
 Where:
 * $C_u$ (or `A_cu`, `Cu`): Mushy zone Darcy constant ($\text{kg}/(\text{m}^3\,\text{s})$), default `1e5`.
 * $q$ (or `eps`): Division tolerance to prevent division by zero, default `0.001`.
+* `enthalpyPorosity`: Retained as a direct alias for `EHCDarcy` for full backward compatibility.
 
 ---
 
@@ -213,7 +221,7 @@ phaseChange
     // =========================================================================
     // 1. Solid / PCM Phase Change Model & Direction Controls
     // =========================================================================
-    type            EHC;        // Selection mode: EHC, enthalpyPorosity, none
+    type            EHCDarcy;   // Selection mode: EHCDarcy, EHC, enthalpyPorosity, none
     direction       both;       // Options: both, forward (melting only), reverse (freezing only)
 
     // Forward / Melting Phase Transition
@@ -408,14 +416,14 @@ fvScalarMatrix hEqn
 );
 hEqn.solve();
 
-// 4. Momentum Damping Source (for Enthalpy-Porosity fluid mushy zone flows)
-if (phaseChange->active())
+// 4. Implicit Momentum Damping (for EHCDarcy / Enthalpy-Porosity fluid mushy zone flows)
+if (pcmModel.active())
 {
-    UEqn -= phaseChange->momentumSource();
+    UEqn += fvm::Sp(pcmModel.momentumSp(), U);
 }
 
 // 5. Update state history at completed time-step boundaries
-phaseChange->updateHistory();
+pcmModel.updateHistory();
 ```
 
 ---
@@ -430,9 +438,11 @@ phaseChange->updateHistory();
 > **2. Boiling vs. Sub-Boiling Evaporation**  
 > $T_{sat}(p)$ evaluates against **total cell pressure** $p$. Phase change occurs when cell temperature exceeds $T_{sat}(p)$. Sub-boiling evaporation driven by partial vapor pressure $p_{v,sat}(T)$ requires species diffusion boundary modeling rather than total-pressure Lee kinetics.
 
-> [!CAUTION]
-> **3. Specie Formation Enthalpy ($H_f$) Double Counting**  
-> The energy source term $\text{energySource} = - \dot{m} \cdot L$ assumes sensible enthalpy thermo (`sensibleEnthalpy`). If specie thermodynamic properties encode phase latent heat within formation enthalpy $H_f$ (where $H_{f,v} - H_{f,l} = L$), adding explicit $- \dot{m} \cdot L$ will double-count latent heat.
+> [!NOTE]
+> **3. Enthalpy Reference & Unequal $C_p$ Species Phase Change**  
+> In sensible enthalpy thermodynamics (`sensibleEnthalpy`), the species sensible enthalpy difference $h_{s,v}(T) - h_{s,l}(T) = (C_{p,v} - C_{p,l})(T - T_{std})$ shifts the mixture enthalpy during phase change whenever $C_{p,v} \ne C_{p,l}$ and $T \ne T_{std}$. The volumetric Lee model automatically computes the local cell species sensible enthalpy offset $\Delta h_s = h_{s,v}(T) - h_{s,l}(T)$ to evaluate the exact energy source:
+> $$\text{energySource} = - \dot{m} \cdot \left[ L - (h_{s,v}(T) - h_{s,l}(T)) \right]$$
+> This guarantees 100% exact absolute enthalpy conservation across arbitrary species heat capacities $C_{p,v} \ne C_{p,l}$ and reference temperatures.
 
 > [!NOTE]
 > **4. First-Order $\mathcal{O}(\Delta t)$ Boiling Plateau Temperature Offset**  

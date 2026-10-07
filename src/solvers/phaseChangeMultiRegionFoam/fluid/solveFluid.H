@@ -14,6 +14,10 @@ else
         #include "rhoEqn.H"
         phaseChange.correct();
         phaseChange.checkMassConservation();
+        if (pcmModel.active())
+        {
+            pcmModel.correct();
+        }
     }
 
     #include "UEqn.H"
@@ -34,6 +38,11 @@ else
 
         rho = thermo.rho();
     }
+}
+
+if (pcmModel.active())
+{
+    pcmModel.updateHistory();
 }
 
 if (finalIter)

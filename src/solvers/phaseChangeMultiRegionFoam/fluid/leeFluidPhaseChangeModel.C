@@ -262,6 +262,16 @@ void Foam::leeFluidPhaseChangeModel::correct()
         scalar mDotVal = 0.0;
         scalar energySourceVal = 0.0;
 
+        scalar Hs_v = 0.0;
+        scalar Hs_l = 0.0;
+        if (vaporIndex_ != -1 && liquidIndex_ != -1)
+        {
+            Hs_v = thermo_.composition().Hs(vaporIndex_, p_old[cellI], T0);
+            Hs_l = thermo_.composition().Hs(liquidIndex_, p_old[cellI], T0);
+        }
+        const scalar deltaHs = Hs_v - Hs_l;
+        const scalar L_eff = L - deltaHs;
+
         if (T0 > Tsat_c)
         {
             const scalar mDot_raw = C_evap * rho0 * Yl0 * max(T0 - Tsat_c, scalar(0)) / Tsat_c;
@@ -269,7 +279,7 @@ void Foam::leeFluidPhaseChangeModel::correct()
             const scalar thermalCap = (dt > 1e-12) ? (rho0 * Cp_c * max(T0 - Tsat_c, scalar(0)) / (L * dt)) : mDot_raw;
 
             mDotVal = min(mDot_raw, min(massCap, thermalCap));
-            energySourceVal = - mDotVal * L;
+            energySourceVal = - mDotVal * L_eff;
         }
         else if (T0 < Tsat_c)
         {
@@ -278,7 +288,7 @@ void Foam::leeFluidPhaseChangeModel::correct()
             const scalar thermalCap = (dt > 1e-12) ? (rho0 * Cp_c * max(Tsat_c - T0, scalar(0)) / (L * dt)) : mDot_raw;
 
             mDotVal = - min(mDot_raw, min(massCap, thermalCap));
-            energySourceVal = - mDotVal * L;
+            energySourceVal = - mDotVal * L_eff;
         }
 
         mDot_[cellI] = mDotVal;

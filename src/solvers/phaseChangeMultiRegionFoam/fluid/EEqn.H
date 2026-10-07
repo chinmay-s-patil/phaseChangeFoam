@@ -28,6 +28,13 @@
         EEqn -= phaseChange.energySource();
     }
 
+    if (pcmModel.active())
+    {
+        EEqn += pcmModel.latentHeatSource()
+              + fvm::Sp(pcmModel.latentHeatSp(), he)
+              - pcmModel.latentHeatSp() * he;
+    }
+
     EEqn.relax();
 
     fvOptions.constrain(EEqn);

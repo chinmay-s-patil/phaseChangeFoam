@@ -10,7 +10,7 @@
 #define phaseChangeModel_H
 
 #include "fvCFD.H"
-#include "solidThermo.H"
+#include "basicThermo.H"
 #include "autoPtr.H"
 #include "runTimeSelectionTables.H"
 
@@ -26,7 +26,7 @@ namespace Foam
     Unified base class for general multi-region phase-change thermal models
     (solidification/melting, alloys, phase-change materials, ice-water
     transition, and thermal storage) with exact Newton linearization,
-    stateful hysteresis, path-integral thermophysics, and fluid momentum source.
+    stateful hysteresis, path-integral thermophysics, and fluid momentum damping.
 \*---------------------------------------------------------------------------*/
 
 class phaseChangeModel
@@ -47,7 +47,7 @@ protected:
 
     // Protected data
     const fvMesh& mesh_;
-    const solidThermo& thermo_;
+    const basicThermo& thermo_;
 
     bool active_;
 
@@ -148,7 +148,7 @@ public:
         dictionary,
         (
             const fvMesh& mesh,
-            const solidThermo& thermo
+            const basicThermo& thermo
         ),
         (mesh, thermo)
     );
@@ -157,13 +157,13 @@ public:
     phaseChangeModel
     (
         const fvMesh& mesh,
-        const solidThermo& thermo,
+        const basicThermo& thermo,
         bool suppressConvection = true
     );
     static autoPtr<phaseChangeModel> New
     (
         const fvMesh& mesh,
-        const solidThermo& thermo
+        const basicThermo& thermo
     );
 
     // Destructor
@@ -244,14 +244,15 @@ public:
         return Sp_;
     }
 
-    //- Access momentum source term (default: zero, override in models with Darcy damping)
-    virtual tmp<volVectorField> momentumSource() const
+    //- Access implicit Darcy momentum damping coefficient [kg/(m^3 s)]
+    //  Added implicitly via fvm::Sp(phaseChange.momentumSp(), U)
+    virtual tmp<volScalarField> momentumSp() const
     {
-        return tmp<volVectorField>::New
+        return tmp<volScalarField>::New
         (
-            IOobject("momentumSource", mesh_.time().timeName(), mesh_),
+            IOobject("momentumSp", mesh_.time().timeName(), mesh_),
             mesh_,
-            dimensionedVector("zero", dimForce/dimVolume, Zero)
+            dimensionedScalar("zero", dimMass/dimVolume/dimTime, 0.0)
         );
     }
 };

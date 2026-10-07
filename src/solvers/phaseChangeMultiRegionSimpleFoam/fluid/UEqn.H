@@ -11,7 +11,13 @@
         fvOptions(rho, U)
     );
 
+    if (pcmModel.active())
+    {
+        UEqn += fvm::Sp(pcmModel.momentumSp(), U);
+    }
+
     UEqn.relax();
+
 
     fvOptions.constrain(UEqn);
 

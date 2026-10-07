@@ -10,7 +10,15 @@
             p_rgh.storePrevIter();
             rho.storePrevIter();
 
+            phaseChange.correct();
+            phaseChange.checkMassConservation();
+            if (pcmModel.active())
+            {
+                pcmModel.correct();
+            }
+
             #include "UEqn.H"
+            #include "YEqn.H"
             #include "EEqn.H"
             if (!coupled)
             {
@@ -19,3 +27,9 @@
             }
         }
     }
+
+    if (pcmModel.active())
+    {
+        pcmModel.updateHistory();
+    }
+

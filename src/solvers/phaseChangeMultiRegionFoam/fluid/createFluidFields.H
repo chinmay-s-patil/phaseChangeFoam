@@ -6,6 +6,7 @@ PtrList<volScalarField> rhoFluid(fluidRegions.size());
 PtrList<volVectorField> UFluid(fluidRegions.size());
 PtrList<surfaceScalarField> phiFluid(fluidRegions.size());
 PtrList<fluidPhaseChangeModel> fluidPhaseChangeModels(fluidRegions.size());
+PtrList<phaseChangeModel> pcmModelsFluid(fluidRegions.size());
 PtrList<uniformDimensionedScalarField> hRefFluid(fluidRegions.size());
 PtrList<volScalarField> ghFluid(fluidRegions.size());
 PtrList<surfaceScalarField> ghfFluid(fluidRegions.size());
@@ -308,6 +309,17 @@ forAll(fluidRegions, i)
             thermoFluid[i],
             UFluid[i],
             phiFluid[i]
+        )
+    );
+
+    Info<< "    Adding PCM phase change model\n" << endl;
+    pcmModelsFluid.set
+    (
+        i,
+        phaseChangeModel::New
+        (
+            fluidRegions[i],
+            thermoFluid[i]
         )
     );
 

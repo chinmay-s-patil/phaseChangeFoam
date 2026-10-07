@@ -6,8 +6,8 @@
      \\/     M anipulation  |
 \*---------------------------------------------------------------------------*/
 
-#ifndef ehcPhaseChangeModel_H
-#define ehcPhaseChangeModel_H
+#ifndef ehcDarcyPhaseChangeModel_H
+#define ehcDarcyPhaseChangeModel_H
 
 #include "phaseChangeModel.H"
 
@@ -17,32 +17,45 @@ namespace Foam
 {
 
 /*---------------------------------------------------------------------------*\
-                     Class ehcPhaseChangeModel Declaration
+                     Class ehcDarcyPhaseChangeModel Declaration
 
  Description
-    Effective Heat Capacity (EHC) model with exact Newton/secant latent heat
-    linearisation, stateful hysteresis, and path-integral thermophysics
-    for solid phase-change heat transfer.
+    EHCDarcy model combining path-integral Effective Heat Capacity (EHC) for
+    energy phase change with implicit Darcy momentum damping force for fluid regions.
 \*---------------------------------------------------------------------------*/
 
-class ehcPhaseChangeModel
+class ehcDarcyPhaseChangeModel
 :
     public phaseChangeModel
 {
+private:
+
+    // Parameters - Darcy & Buoyancy
+    scalar beta_; // Thermal expansion coefficient [1/K]
+    scalar Cu_;   // Darcy penalty coefficient [kg/(m3 s)]
+    scalar q_;    // Smoothing constant
+
+    void readPorosityDict();
+
 public:
 
     //- Runtime type information
-    TypeName("EHC");
+    TypeName("EHCDarcy");
 
     // Constructors
-    ehcPhaseChangeModel
+    ehcDarcyPhaseChangeModel
     (
         const fvMesh& mesh,
         const basicThermo& thermo
     );
 
     // Destructor
-    virtual ~ehcPhaseChangeModel() = default;
+    virtual ~ehcDarcyPhaseChangeModel() = default;
+
+    // Member Functions
+
+    //- Access implicit Darcy momentum damping coefficient [kg/(m^3 s)]
+    virtual tmp<volScalarField> momentumSp() const override;
 };
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //

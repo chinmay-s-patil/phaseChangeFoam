@@ -32,7 +32,13 @@
             fvm::laplacian(rhorAUf, p_rgh) == fvc::div(phiHbyA)
         );
 
+        if (phaseChange.active())
+        {
+            p_rghEqn -= phaseChange.massSource();
+        }
+
         p_rghEqn.setReference(pRefCell, getRefCellValue(p_rgh, pRefCell));
+
 
         p_rghEqn.solve();
 

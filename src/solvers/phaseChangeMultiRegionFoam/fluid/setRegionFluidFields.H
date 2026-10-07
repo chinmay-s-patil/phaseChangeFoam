@@ -45,6 +45,7 @@
     radiation::radiationModel& rad = radiation[i];
 
     fluidPhaseChangeModel& phaseChange = fluidPhaseChangeModels[i];
+    phaseChangeModel& pcmModel = pcmModelsFluid[i];
 
     IOMRFZoneList& MRF = MRFfluid[i];
     fv::options& fvOptions = fluidFvOptions[i];

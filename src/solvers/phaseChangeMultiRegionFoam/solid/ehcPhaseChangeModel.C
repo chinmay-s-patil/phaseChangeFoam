@@ -23,7 +23,7 @@ namespace Foam
 Foam::ehcPhaseChangeModel::ehcPhaseChangeModel
 (
     const fvMesh& mesh,
-    const solidThermo& thermo
+    const basicThermo& thermo
 )
 :
     phaseChangeModel(mesh, thermo, true)

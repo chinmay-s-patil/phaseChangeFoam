@@ -13,10 +13,24 @@
      ==
         rho*(U&g)
       + rad.Sh(thermo, he)
+      + Qdot
       + fvOptions(rho, he)
     );
 
+    if (phaseChange.active())
+    {
+        EEqn -= phaseChange.energySource();
+    }
+
+    if (pcmModel.active())
+    {
+        EEqn += pcmModel.latentHeatSource()
+              + fvm::Sp(pcmModel.latentHeatSp(), he)
+              - pcmModel.latentHeatSp() * he;
+    }
+
     EEqn.relax();
+
 
     fvOptions.constrain(EEqn);
 

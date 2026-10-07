@@ -45,7 +45,7 @@ public:
     nonePhaseChangeModel
     (
         const fvMesh& mesh,
-        const solidThermo& thermo
+        const basicThermo& thermo
     );
 
     // Destructor

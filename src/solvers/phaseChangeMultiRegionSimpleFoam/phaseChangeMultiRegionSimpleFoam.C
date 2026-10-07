@@ -158,6 +158,21 @@ int main(int argc, char *argv[])
         }
 
         // Re-synchronize phase-change models
+        forAll(fluidRegions, i)
+        {
+            fluidPhaseChangeModel& phaseChange = fluidPhaseChangeModels[i];
+            phaseChangeModel& pcmModel = pcmModelsFluid[i];
+            if (phaseChange.active())
+            {
+                phaseChange.correct();
+            }
+            if (pcmModel.active())
+            {
+                pcmModel.correct();
+                pcmModel.updateHistory();
+            }
+        }
+
         forAll(solidRegions, i)
         {
             phaseChangeModel& pcModel = phaseChangeModels[i];
@@ -167,6 +182,7 @@ int main(int argc, char *argv[])
                 pcModel.updateHistory();
             }
         }
+
 
         runTime.write();
 

@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
         << "    // -------------------------------------------------------------------------\n"
         << "    // 1. Solid Phase-Change Model & Direction Controls\n"
         << "    // -------------------------------------------------------------------------\n"
-        << "    phaseChangeMode EHC;        // Options: EHC (Effective Heat Capacity), enthalpyPorosity, none\n"
+        << "    phaseChangeMode EHCDarcy;   // Options: EHCDarcy (EHC + implicit Darcy drag), EHC (energy-only), enthalpyPorosity (alias), none\n"
         << "    direction       both;       // Options: both, forward (melting only), reverse (freezing only)\n\n\n"
         << "    // -------------------------------------------------------------------------\n"
         << "    // 2. Forward / Melting Phase-Change Properties\n"

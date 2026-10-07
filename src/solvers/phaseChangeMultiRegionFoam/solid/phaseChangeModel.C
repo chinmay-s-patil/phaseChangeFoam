@@ -30,7 +30,7 @@ namespace Foam
 Foam::phaseChangeModel::phaseChangeModel
 (
     const fvMesh& mesh,
-    const solidThermo& thermo,
+    const basicThermo& thermo,
     bool suppressConvection
 )
 :
@@ -295,7 +295,34 @@ void Foam::phaseChangeModel::readDict()
     }
 
     const dictionary& pcDict = phaseChangeDict.subDict("phaseChange");
-    checkAllowedKeys(pcDict, {"active", "phaseChangeMode", "type", "direction", "melting", "freezing", "forward", "reverse", "hysteresis", "density", "thermophysical", "thermo", "convection", "porosity", "buoyancy"});
+    checkAllowedKeys(pcDict, {"active", "phaseChangeMode", "type", "direction", "melting", "freezing", "forward", "reverse", "hysteresis", "density", "thermophysical", "thermo", "convection", "porosity", "buoyancy", "liquid", "vapor", "C_evap", "C_cond", "latentHeat", "Tsat", "enableTsatP", "pRef", "speciesName", "massSource", "energySource", "speciesSource"});
+
+    word modeName = "none";
+    if (pcDict.found("phaseChangeMode"))
+    {
+        modeName = pcDict.get<word>("phaseChangeMode");
+    }
+    else if (pcDict.found("type"))
+    {
+        modeName = pcDict.get<word>("type");
+    }
+
+    auto toLowerStr = [](const word& w)
+    {
+        std::string s(w);
+        for (char& c : s)
+        {
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        return s;
+    };
+
+    word modeLower = toLowerStr(modeName);
+    if (modeLower != "ehc" && modeLower != "ehcdarcy" && modeLower != "enthalpyporosity")
+    {
+        active_ = false;
+        return;
+    }
 
     active_ = pcDict.lookupOrDefault<bool>("active", true);
 
@@ -511,7 +538,6 @@ void Foam::phaseChangeModel::readDict()
 
 void Foam::phaseChangeModel::readConvectionDict(const dictionary& pcDict)
 {
-    bool defaultSuppress = suppressConvection_;
     if (pcDict.found("convection"))
     {
         const dictionary& convDict = pcDict.subDict("convection");
@@ -520,12 +546,12 @@ void Foam::phaseChangeModel::readConvectionDict(const dictionary& pcDict)
             convDict.getOrDefault<bool>("suppress", suppressConvection_);
     }
 
-    if (defaultSuppress && !suppressConvection_)
+    if (!suppressConvection_ && !mesh_.foundObject<volVectorField>("U"))
     {
         FatalIOErrorInFunction(pcDict)
             << "phaseChange.convection.suppress = false requested for region "
-            << mesh_.name() << ", but this model is configured for solid/conduction-only "
-            << "regions. Set suppress true or use enthalpyPorosity mode."
+            << mesh_.name() << ", but this region does not solve velocity field U. "
+            << "Set suppress true or use EHCDarcy mode on a fluid region."
             << exit(FatalIOError);
     }
 }
@@ -797,7 +823,7 @@ void Foam::phaseChangeModel::correct()
 {
     if (!active_) return;
 
-    const_cast<solidThermo&>(thermo_).correct();
+    const_cast<basicThermo&>(thermo_).correct();
 
     const volScalarField& T = thermo_.T();
     const volScalarField& T_old = thermo_.T().oldTime();
@@ -1018,7 +1044,7 @@ void Foam::phaseChangeModel::updateHistory()
 Foam::autoPtr<Foam::phaseChangeModel> Foam::phaseChangeModel::New
 (
     const fvMesh& mesh,
-    const solidThermo& thermo
+    const basicThermo& thermo
 )
 {
     IOobject dictIO
@@ -1043,51 +1069,55 @@ Foam::autoPtr<Foam::phaseChangeModel> Foam::phaseChangeModel::New
 
             if (pcActive)
             {
-                word modeName = pcDict.lookupOrDefault<word>("type", pcDict.lookupOrDefault<word>("phaseChangeMode", "ehc"));
-
-                Info<< "    Phase change ACTIVE for region " << mesh.name()
-                    << " using mode: " << modeName << endl;
-
-                auto cstrIter = dictionaryConstructorTablePtr_->cfind(modeName);
-
-                if (!cstrIter.good())
+                word modeName = "none";
+                if (pcDict.found("phaseChangeMode"))
                 {
-                    auto toLowerStr = [](const word& w)
+                    modeName = pcDict.get<word>("phaseChangeMode");
+                }
+                else if (pcDict.found("type"))
+                {
+                    word typeName = pcDict.get<word>("type");
+                    auto cstrTest = dictionaryConstructorTablePtr_->cfind(typeName);
+                    if (cstrTest.good())
                     {
-                        std::string s(w);
-                        for (char& c : s)
+                        modeName = typeName;
+                    }
+                    else
+                    {
+                        auto toLowerStr = [](const word& w)
                         {
-                            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                        }
-                        return s;
-                    };
+                            std::string s(w);
+                            for (char& c : s)
+                            {
+                                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                            }
+                            return s;
+                        };
 
-                    for (auto iter = dictionaryConstructorTablePtr_->cbegin(); iter != dictionaryConstructorTablePtr_->cend(); ++iter)
-                    {
-                        if (toLowerStr(iter.key()) == toLowerStr(modeName))
+                        for (auto iter = dictionaryConstructorTablePtr_->cbegin(); iter != dictionaryConstructorTablePtr_->cend(); ++iter)
                         {
-                            cstrIter = iter;
-                            break;
+                            if (toLowerStr(iter.key()) == toLowerStr(typeName))
+                            {
+                                modeName = iter.key();
+                                break;
+                            }
                         }
                     }
                 }
 
-                if (!cstrIter.good())
-                {
-                    FatalErrorInFunction
-                        << "Unknown phaseChange mode " << modeName
-                        << " for region " << mesh.name() << nl << nl
-                        << "Valid options are: "
-                        << dictionaryConstructorTablePtr_->toc()
-                        << exit(FatalError);
-                }
+                auto cstrIter = dictionaryConstructorTablePtr_->cfind(modeName);
 
-                return autoPtr<phaseChangeModel>(cstrIter()(mesh, thermo));
+                if (cstrIter.good() && modeName != "none")
+                {
+                    Info<< "    PCM Phase change ACTIVE for region " << mesh.name()
+                        << " using mode: " << modeName << endl;
+                    return autoPtr<phaseChangeModel>(cstrIter()(mesh, thermo));
+                }
             }
         }
     }
 
-    Info<< "    Phase change INACTIVE for region " << mesh.name() << endl;
+    Info<< "    PCM Phase change INACTIVE for region " << mesh.name() << endl;
 
     auto cstrIter = dictionaryConstructorTablePtr_->cfind("none");
     if (cstrIter.good())

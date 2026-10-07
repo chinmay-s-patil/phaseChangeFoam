@@ -22,7 +22,7 @@ namespace Foam
 Foam::nonePhaseChangeModel::nonePhaseChangeModel
 (
     const fvMesh& mesh,
-    const solidThermo& thermo
+    const basicThermo& thermo
 )
 :
     phaseChangeModel(mesh, thermo),
