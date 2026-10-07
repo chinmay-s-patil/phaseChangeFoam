@@ -13,19 +13,18 @@
 
     tmp<volScalarField> talphaEff =
         pcmModel.active()
-      ? tmp<volScalarField>(volScalarField("alphaEffPCM", pcmModel.k()/CpThermo + turbulence.alphat()))
+      ? tmp<volScalarField>(pcmModel.k()/CpThermo + turbulence.alphat())
       : turbulence.alphaEff();
     const volScalarField& alphaEff = talphaEff();
 
     tmp<volScalarField> trhoEffCpRatio =
         pcmModel.active()
-      ? tmp<volScalarField>(volScalarField("rhoEffCpRatioPCM", pcmModel.rhoEff()*pcmModel.CpEff()/CpThermo))
+      ? tmp<volScalarField>(pcmModel.rhoEff()*pcmModel.CpEff()/CpThermo)
       : tmp<volScalarField>(rho);
-    const volScalarField& rhoEffCpRatio = trhoEffCpRatio();
 
     fvScalarMatrix EEqn
     (
-        fvm::ddt(rhoEffCpRatio, he) + fvm::div(phi, he)
+        fvm::ddt(rho, he) + fvm::div(phi, he)
       + fvc::ddt(rho, K) + fvc::div(phi, K)
       + (
             he.name() == "e"

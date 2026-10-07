@@ -97,11 +97,26 @@ Foam::fluidPhaseChangeModel::New
                     subDict.readIfPresent("phaseChangeMode", modelType);
                 }
 
+                auto toLowerStr = [](const word& w)
+                {
+                    std::string s(w);
+                    for (char& c : s)
+                    {
+                        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                    }
+                    return s;
+                };
+
+                std::string modeLower = toLowerStr(modelType);
+                if (modeLower == "ehc" || modeLower == "ehcdarcy" || modeLower == "enthalpyporosity")
+                {
+                    modelType = "none";
+                }
+
                 if (modelType == "none" || modelType == "off")
                 {
-                    FatalIOErrorInFunction(subDict)
-                        << "active is true but no model type given"
-                        << exit(FatalIOError);
+                    // No fluid species phase change model
+                    modelType = "none";
                 }
             }
         }

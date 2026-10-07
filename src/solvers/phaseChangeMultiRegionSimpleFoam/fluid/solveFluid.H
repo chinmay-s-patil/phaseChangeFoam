@@ -1,6 +1,13 @@
 //  Pressure-velocity SIMPLE corrector
 
     {
+        phaseChange.correct();
+        phaseChange.checkMassConservation();
+        if (pcmModel.active())
+        {
+            pcmModel.correct();
+        }
+
         if (frozenFlow)
         {
             #include "EEqn.H"
@@ -9,13 +16,6 @@
         {
             p_rgh.storePrevIter();
             rho.storePrevIter();
-
-            phaseChange.correct();
-            phaseChange.checkMassConservation();
-            if (pcmModel.active())
-            {
-                pcmModel.correct();
-            }
 
             #include "UEqn.H"
             #include "YEqn.H"

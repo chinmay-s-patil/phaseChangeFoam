@@ -3,23 +3,23 @@ if (finalIter)
     mesh.data().setFinalIteration(true);
 }
 
+if (oCorr == 0)
+{
+    #include "rhoEqn.H"
+    phaseChange.correct();
+    phaseChange.checkMassConservation();
+    if (pcmModel.active())
+    {
+        pcmModel.correct();
+    }
+}
+
 if (frozenFlow)
 {
     #include "EEqn.H"
 }
 else
 {
-    if (oCorr == 0)
-    {
-        #include "rhoEqn.H"
-        phaseChange.correct();
-        phaseChange.checkMassConservation();
-        if (pcmModel.active())
-        {
-            pcmModel.correct();
-        }
-    }
-
     #include "UEqn.H"
     #include "YEqn.H"
     #include "EEqn.H"

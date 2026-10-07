@@ -64,6 +64,7 @@ forAll(fluidRegions, i)
             thermoFluid[i].rho()
         )
     );
+    rhoFluid[i].oldTime();
 
     Info<< "    Adding to UFluid\n" << endl;
     UFluid.set
@@ -210,10 +211,18 @@ forAll(fluidRegions, i)
         i,
         new volScalarField
         (
-            "K",
+            IOobject
+            (
+                "K",
+                runTime.timeName(),
+                fluidRegions[i],
+                IOobject::NO_READ,
+                IOobject::NO_WRITE
+            ),
             0.5*magSqr(UFluid[i])
         )
     );
+    KFluid[i].oldTime();
 
     Info<< "    Adding to dpdtFluid\n" << endl;
     dpdtFluid.set
@@ -231,6 +240,7 @@ forAll(fluidRegions, i)
             dimensionedScalar(thermoFluid[i].p().dimensions()/dimTime, Zero)
         )
     );
+    dpdtFluid[i].oldTime();
 
     Info<< "    Adding to fieldsFluid\n" << endl;
     fieldsFluid.set

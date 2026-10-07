@@ -6,7 +6,7 @@
 
     tmp<volScalarField> talphaEff =
         pcmModel.active()
-      ? tmp<volScalarField>(volScalarField("alphaEffPCM", pcmModel.k()/CpThermo + turb.alphat()))
+      ? tmp<volScalarField>(pcmModel.k()/CpThermo + turb.alphat())
       : turb.alphaEff();
     const volScalarField& alphaEff = talphaEff();
 

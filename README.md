@@ -29,9 +29,9 @@
 
 The suite provides primary multi-region solvers and companion utility binaries:
 
-* **[`phaseChangeMultiRegionFoam`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/phaseChangeMultiRegionFoam.C)**: Transient solver for multi-region conjugate heat transfer with species fluid phase change (Lee model) and solid region phase change (EHC / Enthalpy-Porosity).
-* **[`phaseChangeMultiRegionSimpleFoam`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionSimpleFoam)**: Steady-state solver for multi-region conjugate heat transfer and phase change.
-* **[`writePCDict`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/utilities/writePCDict/writePCDict.C)**: Utility to automatically generate fully documented template `phaseChangeDict` files for case setup.
+* **[`phaseChangeMultiRegionFoam`](src/solvers/phaseChangeMultiRegionFoam/phaseChangeMultiRegionFoam.C)**: Transient solver for multi-region conjugate heat transfer with species fluid phase change (Lee model) and solid region phase change (EHC / Enthalpy-Porosity).
+* **[`phaseChangeMultiRegionSimpleFoam`](src/solvers/phaseChangeMultiRegionSimpleFoam)**: Steady-state solver for multi-region conjugate heat transfer and phase change.
+* **[`writePCDict`](src/utilities/writePCDict/writePCDict.C)**: Utility to automatically generate fully documented template `phaseChangeDict` files for case setup.
 
 ---
 
@@ -60,8 +60,8 @@ The framework relies on runtime selection tables for both fluid and solid region
                                                                           (alias: enthalpyPorosity)
 ```
 
-* **Fluid Models** derive from [`fluidPhaseChangeModel`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/fluid/fluidPhaseChangeModel.H) and feed mass sources to continuity/pressure (`pEqn`), species mass fraction sources to `YEqn`, and latent heat sources to energy equations (`EEqn`).
-* **Solid/PCM Models** derive from [`phaseChangeModel`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/solid/phaseChangeModel.H) and supply path-integrated heat capacities $C_{p,eff}$, exact Newton secant linearisation $S_p$, latent energy sources $S_u$, effective thermal conductivities $k_{eff}$, densities $\rho_{eff}$, and Darcy momentum drag forces $S_{u,drag}$.
+* **Fluid Models** derive from [`fluidPhaseChangeModel`](src/solvers/phaseChangeMultiRegionFoam/fluid/fluidPhaseChangeModel.H) and feed mass sources to continuity/pressure (`pEqn`), species mass fraction sources to `YEqn`, and latent heat sources to energy equations (`EEqn`).
+* **Solid/PCM Models** derive from [`phaseChangeModel`](src/solvers/phaseChangeMultiRegionFoam/solid/phaseChangeModel.H) and supply path-integrated heat capacities $C_{p,eff}$, exact Newton secant linearisation $S_p$, latent energy sources $S_u$, effective thermal conductivities $k_{eff}$, densities $\rho_{eff}$, and Darcy momentum drag forces $S_{u,drag}$.
 
 
 ---
@@ -72,7 +72,7 @@ Activated in fluid regions via `constant/<region>/phaseChangeDict`.
 
 ### 1. Lee Model (`Lee`)
 
-Class: [`leeFluidPhaseChangeModel`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/fluid/leeFluidPhaseChangeModel.H)
+Class: [`leeFluidPhaseChangeModel`](src/solvers/phaseChangeMultiRegionFoam/fluid/leeFluidPhaseChangeModel.H)
 
 The volumetric Lee model calculates species mass transfer rate $\dot{m}$ ($\text{kg}/(\text{m}^3\,\text{s})$) between liquid and vapor species based on local temperature relative to saturation temperature $T_{sat}$.
 
@@ -112,7 +112,7 @@ phaseChange
 
 ### 2. Constant Source Model (`constantSource`)
 
-Class: [`constantSourceFluidPhaseChangeModel`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/fluid/constantSourceFluidPhaseChangeModel.H)
+Class: [`constantSourceFluidPhaseChangeModel`](src/solvers/phaseChangeMultiRegionFoam/fluid/constantSourceFluidPhaseChangeModel.H)
 
 Verification model providing user-specified constant volumetric sources for plumbing testing.
 
@@ -132,7 +132,7 @@ phaseChange
 
 ### 3. Inactive Model (`none`)
 
-Class: [`noneFluidPhaseChangeModel`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/fluid/noneFluidPhaseChangeModel.H)
+Class: [`noneFluidPhaseChangeModel`](src/solvers/phaseChangeMultiRegionFoam/fluid/noneFluidPhaseChangeModel.H)
 
 Returns zero sources for mass, species, and energy equations.
 
@@ -152,7 +152,7 @@ Activated in solid/PCM regions via `constant/<region>/phaseChangeDict`.
 
 ### 1. Effective Heat Capacity Model (`EHC`)
 
-Class: [`ehcPhaseChangeModel`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/solid/ehcPhaseChangeModel.H)
+Class: [`ehcPhaseChangeModel`](src/solvers/phaseChangeMultiRegionFoam/solid/ehcPhaseChangeModel.H)
 
 Solid-liquid phase change model utilizing path-integral Effective Heat Capacity ($C_{p,eff}$) with exact Newton/secant linearisation of latent heat, stateful hysteresis tracking, and path-integral thermophysical property evaluation.
 
@@ -170,7 +170,7 @@ Solid-liquid phase change model utilizing path-integral Effective Heat Capacity 
 
 ### 2. Enthalpy-Porosity Model (`enthalpyPorosity`) & EHC-Darcy (`EHCDarcy`)
 
-Classes: [`enthalpyPorosityPhaseChangeModel`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/solid/enthalpyPorosityPhaseChangeModel.H), [`ehcDarcyPhaseChangeModel`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/solid/ehcDarcyPhaseChangeModel.H)
+Classes: [`enthalpyPorosityPhaseChangeModel`](src/solvers/phaseChangeMultiRegionFoam/solid/enthalpyPorosityPhaseChangeModel.H), [`ehcDarcyPhaseChangeModel`](src/solvers/phaseChangeMultiRegionFoam/solid/ehcDarcyPhaseChangeModel.H)
 
 * **`enthalpyPorosity`**: Standalone Voller–Prakash source-based enthalpy method for fluid PCM regions. Latent heat is transported via explicit volumetric source term $S_u = L \left[ \frac{\partial(\rho f)}{\partial t} + \nabla \cdot (\phi f) \right]$ and updated post-energy-solve via Newton liquid fraction iterations $f \leftarrow f + \lambda \frac{T - T_f}{L/C_p + (T_l - T_s)}$.
 * **`EHCDarcy`**: Effective Heat Capacity method ($C_{p,eff}$) coupled with implicit Darcy momentum damping.
@@ -195,7 +195,7 @@ Where:
 
 ### 3. Inactive Solid Model (`none`)
 
-Class: [`nonePhaseChangeModel`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/solid/nonePhaseChangeModel.H)
+Class: [`nonePhaseChangeModel`](src/solvers/phaseChangeMultiRegionFoam/solid/nonePhaseChangeModel.H)
 
 Disables solid phase change calculations for pure conduction or single-phase solid regions.
 
@@ -329,7 +329,7 @@ phaseChange
 
 ### Fluid Region C++ Integration
 
-In a fluid region solver (e.g. [`solveFluid.H`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/fluid/solveFluid.H)):
+In a fluid region solver (e.g. [`solveFluid.H`](src/solvers/phaseChangeMultiRegionFoam/fluid/solveFluid.H)):
 
 ```cpp
 #include "fluidPhaseChangeModel.H"
@@ -393,7 +393,7 @@ EEqn.solve();
 
 ### Solid Region C++ Integration
 
-In a solid region solver (e.g. [`phaseChangeMultiRegionFoam.C`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/phaseChangeMultiRegionFoam.C)):
+In a solid region solver (e.g. [`phaseChangeMultiRegionFoam.C`](src/solvers/phaseChangeMultiRegionFoam/phaseChangeMultiRegionFoam.C)):
 
 ```cpp
 #include "phaseChangeModel.H"
@@ -471,11 +471,11 @@ writePCDict
 
 ### Tutorial Cases
 
-Located in [`tutorials/`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/tutorials):
+Located in [`tutorials/`](tutorials):
 
-* **[`waterHeaterBoiling`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/tutorials/waterHeaterBoiling)**: Multi-region boiling & conjugate heat transfer with fluid Lee phase change.
-* **[`pcm_ehc_savE_OM37`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/tutorials/pcm_ehc_savE_OM37)**: Thermal energy storage PCM melting/freezing using `EHC`.
-* **[`pcm_ep_savE_HS36`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/tutorials/pcm_ep_savE_HS36)**: Solidification/melting with fluid flow and Darcy momentum drag using `enthalpyPorosity`.
+* **[`waterHeaterBoiling`](tutorials/waterHeaterBoiling)**: Multi-region boiling & conjugate heat transfer with fluid Lee phase change.
+* **[`pcm_ehc_savE_OM37`](tutorials/pcm_ehc_savE_OM37)**: Thermal energy storage PCM melting/freezing using `EHC`.
+* **[`pcm_ep_savE_HS36`](tutorials/pcm_ep_savE_HS36)**: Solidification/melting with fluid flow and Darcy momentum drag using `enthalpyPorosity`.
 
 ### Automated Verification Suite
 
