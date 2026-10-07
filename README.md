@@ -168,16 +168,17 @@ Solid-liquid phase change model utilizing path-integral Effective Heat Capacity 
 
 ---
 
-### 2. EHC-Darcy Model (`EHCDarcy` / `enthalpyPorosity`)
+### 2. Enthalpy-Porosity Model (`enthalpyPorosity`) & EHC-Darcy (`EHCDarcy`)
 
-Class: [`ehcDarcyPhaseChangeModel`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/solid/ehcDarcyPhaseChangeModel.H) / [`enthalpyPorosityPhaseChangeModel`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/solid/enthalpyPorosityPhaseChangeModel.H)
+Classes: [`enthalpyPorosityPhaseChangeModel`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/solid/enthalpyPorosityPhaseChangeModel.H), [`ehcDarcyPhaseChangeModel`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/solid/ehcDarcyPhaseChangeModel.H)
 
-Extends the EHC phase change model for fluid regions by adding an implicit Darcy momentum damping force (Voller–Prakash formulation) to penalize velocity in solidifying/melting mushy zones.
+* **`enthalpyPorosity`**: Standalone Voller–Prakash source-based enthalpy method for fluid PCM regions. Latent heat is transported via explicit volumetric source term $S_u = L \left[ \frac{\partial(\rho f)}{\partial t} + \nabla \cdot (\phi f) \right]$ and updated post-energy-solve via Newton liquid fraction iterations $f \leftarrow f + \lambda \frac{T - T_f}{L/C_p + (T_l - T_s)}$.
+* **`EHCDarcy`**: Effective Heat Capacity method ($C_{p,eff}$) coupled with implicit Darcy momentum damping.
 
-#### Implicit Damping Force Formulation:
-Instead of explicit drag forces which become numerically unstable at large Darcy coefficients $C_u$, `EHCDarcy` provides an implicit scalar diagonal coefficient `momentumSp()` ($\text{kg}/(\text{m}^3\,\text{s})$):
+#### Implicit Damping Force & Numerical Considerations:
+Instead of explicit drag forces which become numerically unstable at large Darcy coefficients $C_u$, both models provide an implicit scalar diagonal coefficient `momentumSp()` ($\text{kg}/(\text{m}^3\,\text{s})$):
 
-$$C_{drag} = C_u \frac{(1 - \alpha)^2}{\alpha^3 + q} \ge 0 \quad \left[\frac{\text{kg}}{\text{m}^3\,\text{s}}\right]$$
+$$C_{drag} = C_u \frac{(1 - f)^2}{f^3 + q} \ge 0 \quad \left[\frac{\text{kg}}{\text{m}^3\,\text{s}}\right]$$
 
 Added implicitly in `UEqn.H`:
 ```cpp
@@ -187,7 +188,8 @@ UEqn += fvm::Sp(pcmModel.momentumSp(), U);
 Where:
 * $C_u$ (or `A_cu`, `Cu`): Mushy zone Darcy constant ($\text{kg}/(\text{m}^3\,\text{s})$), default `1e5`.
 * $q$ (or `eps`): Division tolerance to prevent division by zero, default `0.001`.
-* `enthalpyPorosity`: Retained as a direct alias for `EHCDarcy` for full backward compatibility.
+* **Darcy Lag**: In fluid region outer iterations, `UEqn.H` is assembled before `EEqn.H`, so momentum drag uses the phase fraction $f$ from the end of the previous outer corrector. Using $nOuterCorrectors \ge 2$ resolves this outer iteration lag for sharp melting fronts.
+* **`fvSchemes` Requirement**: `enthalpyPorosity` evaluates latent heat advection $\nabla \cdot (\phi f)$ using `fvc::div(phi, phaseFraction)`. `system/<region>/fvSchemes` must contain `div(phi,phaseFraction)` under `divSchemes` (e.g. `div(phi,phaseFraction) Gauss upwind;`).
 
 ---
 
@@ -449,6 +451,11 @@ pcmModel.updateHistory();
 > [!NOTE]
 > **4. First-Order $\mathcal{O}(\Delta t)$ Boiling Plateau Temperature Offset**  
 > Under large $C_{evap} \Delta t$ and constant volumetric heating $Q$, numerical thermal capping clamps the evaporation rate to $\dot{m} = \frac{\rho C_p \delta}{L \Delta t}$. At steady state ($\dot{m} L = Q$), the plateau temperature lands at $T_{plateau} = T_{sat} + \frac{Q \Delta t}{\rho C_p}$. Halving $\Delta t$ systematically halves this numerical offset.
+
+> [!IMPORTANT]
+> **5. Darcy Drag Assembly Lag & `fvSchemes` Requirements in Enthalpy-Porosity Mode (`enthalpyPorosity`)**  
+> - **Darcy Lag**: In fluid regions, `UEqn.H` is assembled before `EEqn.H`. Consequently, momentum drag uses the phase fraction $f$ from the end of the previous outer corrector step. For sharp melting fronts, using $nOuterCorrectors \ge 2$ ensures outer-iteration convergence and eliminates this 1-outer-corrector lag.  
+> - **`fvSchemes` Requirement**: Source-based latent heat advection evaluates $\nabla \cdot (\phi f)$ using `fvc::div(phi, phaseFraction)`. Case setups must include `div(phi,phaseFraction)` in `system/<region>/fvSchemes` under `divSchemes` (e.g. `div(phi,phaseFraction) Gauss upwind;`).
 
 ---
 

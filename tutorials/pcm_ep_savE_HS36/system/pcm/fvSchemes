@@ -28,6 +28,7 @@ gradSchemes
 divSchemes
 {
     default         none;
+    div(phi,phaseFraction) Gauss linear;
 }
 
 laplacianSchemes

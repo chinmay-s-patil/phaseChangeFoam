@@ -106,14 +106,32 @@ void Foam::enthalpyPorosityPhaseChangeModel::readEPDict()
     }
 
     IOdictionary phaseChangeDict(dictIO);
-    if (!phaseChangeDict.found("phaseChange"))
-    {
-        return;
-    }
-
     const dictionary& pcDict = phaseChangeDict.subDict("phaseChange");
 
-    // v1 Restriction: reject hysteresis or direction restrictions
+    // 1. Allowed keys check to catch typos
+    for (const word& key : pcDict.toc())
+    {
+        if
+        (
+            key != "type"
+         && key != "active"
+         && key != "forward"
+         && key != "porosity"
+         && key != "lambda"
+         && key != "thermophysical"
+         && key != "density"
+         && key != "direction"
+         && key != "convection"
+        )
+        {
+            FatalIOErrorInFunction(pcDict)
+                << "Unknown key '" << key << "' in phaseChange dictionary for model 'enthalpyPorosity'.\n"
+                << "Allowed keys are: type, active, forward, porosity, lambda, thermophysical, density, direction, convection."
+                << exit(FatalIOError);
+        }
+    }
+
+    // 2. v1 Restriction: reject hysteresis or direction restrictions
     if (pcDict.found("hysteresis"))
     {
         FatalIOErrorInFunction(pcDict)
@@ -130,7 +148,7 @@ void Foam::enthalpyPorosityPhaseChangeModel::readEPDict()
 
     if (pcDict.found("direction"))
     {
-        word dirStr = pcDict.get<word>("direction");
+        word dirStr = pcDict.lookupOrDefault<word>("direction", "both");
         if (dirStr != "both")
         {
             FatalIOErrorInFunction(pcDict)
@@ -139,35 +157,94 @@ void Foam::enthalpyPorosityPhaseChangeModel::readEPDict()
         }
     }
 
-    // Read forward window parameters
-    if (pcDict.found("forward"))
+    // 3. Read & validate required forward window parameters
+    if (!pcDict.found("forward"))
     {
-        const dictionary& fwdDict = pcDict.subDict("forward");
-        Ts_ = fwdDict.get<scalar>("T_lowerBound");
-        Tl_ = fwdDict.get<scalar>("T_upperBound");
-        L_  = fwdDict.get<scalar>("latentHeat");
+        FatalIOErrorInFunction(pcDict)
+            << "Missing required 'forward' subdictionary in phaseChange dictionary for model 'enthalpyPorosity'."
+            << exit(FatalIOError);
     }
 
-    // Read porosity parameters
+    const dictionary& fwdDict = pcDict.subDict("forward");
+    Ts_ = fwdDict.lookupOrDefault<scalar>("T_lowerBound", 300.0);
+    Tl_ = fwdDict.lookupOrDefault<scalar>("T_upperBound", 310.0);
+    L_  = fwdDict.lookupOrDefault<scalar>("latentHeat", 1.0e5);
+
+    if (Tl_ < Ts_)
+    {
+        FatalIOErrorInFunction(fwdDict)
+            << "Invalid temperature window: T_upperBound (liquidus=" << Tl_
+            << " K) must be >= T_lowerBound (solidus=" << Ts_ << " K)."
+            << exit(FatalIOError);
+    }
+
+    if (L_ < 0.0)
+    {
+        FatalIOErrorInFunction(fwdDict)
+            << "Latent heat (latentHeat=" << L_ << " J/kg) cannot be negative."
+            << exit(FatalIOError);
+    }
+
+    // 4. Read porosity parameters
     if (pcDict.found("porosity"))
     {
         const dictionary& porDict = pcDict.subDict("porosity");
-        Cu_ = porDict.getOrDefault<scalar>("Cu", porDict.lookupOrDefault<scalar>("A_cu", 1.0e5));
-        q_  = porDict.getOrDefault<scalar>("q", porDict.lookupOrDefault<scalar>("eps", 0.001));
+        Cu_ = porDict.lookupOrDefault<scalar>("Cu", porDict.lookupOrDefault<scalar>("A_cu", 1.0e5));
+        q_  = porDict.lookupOrDefault<scalar>("q", porDict.lookupOrDefault<scalar>("eps", 0.001));
     }
 
-    // Read relaxation factor lambda
-    lambda_ = pcDict.getOrDefault<scalar>("lambda", 1.0);
+    // 5. Read & validate relaxation factor lambda
+    lambda_ = pcDict.lookupOrDefault<scalar>("lambda", 1.0);
+    if (lambda_ <= 0.0 || lambda_ > 1.0)
+    {
+        FatalIOErrorInFunction(pcDict)
+            << "Relaxation factor 'lambda' (" << lambda_ << ") must be in range (0, 1]."
+            << exit(FatalIOError);
+    }
 
-    // Read thermophysical parameters & validate single Cp and single rho
+    // 6. Parallel-safe helper to evaluate background thermo properties across processors
+    auto getThermoCp = [&]() -> scalar
+    {
+        tmp<volScalarField> tCp = thermo_.Cp();
+        const scalarField& cpCells = tCp().primitiveField();
+        scalar sumCp = 0.0;
+        forAll(cpCells, celli)
+        {
+            sumCp += cpCells[celli];
+        }
+        label count = cpCells.size();
+        reduce(sumCp, sumOp<scalar>());
+        reduce(count, sumOp<label>());
+        return (count > 0 ? sumCp / count : 1000.0);
+    };
+
+    auto getThermoKappa = [&]() -> scalar
+    {
+        tmp<volScalarField> tK = thermo_.kappa();
+        const scalarField& kCells = tK().primitiveField();
+        scalar sumK = 0.0;
+        forAll(kCells, celli)
+        {
+            sumK += kCells[celli];
+        }
+        label count = kCells.size();
+        reduce(sumK, sumOp<scalar>());
+        reduce(count, sumOp<label>());
+        return (count > 0 ? sumK / count : 1.0);
+    };
+
+    scalar thermoCpVal = getThermoCp();
+    scalar thermoKVal  = getThermoKappa();
+
+    // 7. Read thermophysical parameters & validate single Cp and single rho
     if (pcDict.found("thermophysical"))
     {
         const dictionary& tpDict = pcDict.subDict("thermophysical");
-        word mode = tpDict.getOrDefault<word>("mode", "thermo");
+        word mode = tpDict.lookupOrDefault<word>("mode", "thermo");
         if (mode == "custom")
         {
-            scalar Cps = tpDict.get<scalar>("CpSolid");
-            scalar Cpl = tpDict.get<scalar>("CpLiquid");
+            scalar Cps = tpDict.lookupOrDefault<scalar>("CpSolid", thermoCpVal);
+            scalar Cpl = tpDict.lookupOrDefault<scalar>("CpLiquid", thermoCpVal);
             if (mag(Cps - Cpl) > SMALL)
             {
                 FatalIOErrorInFunction(tpDict)
@@ -175,32 +252,42 @@ void Foam::enthalpyPorosityPhaseChangeModel::readEPDict()
                     << Cps << ", CpLiquid=" << Cpl << ")."
                     << exit(FatalIOError);
             }
+
+            if (mag(Cps - thermoCpVal) / (thermoCpVal + SMALL) > 1e-3)
+            {
+                FatalIOErrorInFunction(tpDict)
+                    << "Custom Cp (" << Cps << " J/(kg K)) disagrees with background thermo Cp ("
+                    << thermoCpVal << " J/(kg K)).\n"
+                    << "Enthalpy-porosity method requires thermo dict Cp to match custom Cp for energy equation consistency."
+                    << exit(FatalIOError);
+            }
+
             Cp_ = Cps;
-            kSolid_  = tpDict.get<scalar>("kSolid");
-            kLiquid_ = tpDict.get<scalar>("kLiquid");
+            kSolid_  = tpDict.lookupOrDefault<scalar>("kSolid", thermoKVal);
+            kLiquid_ = tpDict.lookupOrDefault<scalar>("kLiquid", thermoKVal);
         }
         else
         {
-            Cp_ = thermo_.Cp()()[0];
-            kSolid_  = thermo_.kappa()()[0];
+            Cp_ = thermoCpVal;
+            kSolid_  = thermoKVal;
             kLiquid_ = kSolid_;
         }
     }
     else
     {
-        Cp_ = thermo_.Cp()()[0];
-        kSolid_  = thermo_.kappa()()[0];
+        Cp_ = thermoCpVal;
+        kSolid_  = thermoKVal;
         kLiquid_ = kSolid_;
     }
 
-    // Validate density
+    // 8. Validate density
     if (pcDict.found("density"))
     {
         const dictionary& denDict = pcDict.subDict("density");
         if (denDict.found("rhoSolid") && denDict.found("rhoLiquid"))
         {
-            scalar rhoS = denDict.get<scalar>("rhoSolid");
-            scalar rhoL = denDict.get<scalar>("rhoLiquid");
+            scalar rhoS = denDict.lookupOrDefault<scalar>("rhoSolid", 1000.0);
+            scalar rhoL = denDict.lookupOrDefault<scalar>("rhoLiquid", 1000.0);
             if (mag(rhoS - rhoL) > SMALL)
             {
                 FatalIOErrorInFunction(denDict)
@@ -210,6 +297,8 @@ void Foam::enthalpyPorosityPhaseChangeModel::readEPDict()
             }
         }
     }
+
+
 }
 
 
@@ -220,6 +309,13 @@ void Foam::enthalpyPorosityPhaseChangeModel::correct()
         return;
     }
 
+    // Sync base phaseChangeModel::Cp_ and phaseChangeModel::rho_ fields with thermo
+    phaseChangeModel::Cp_.primitiveFieldRef() = thermo_.Cp()().primitiveField();
+    phaseChangeModel::Cp_.correctBoundaryConditions();
+
+    phaseChangeModel::rho_.primitiveFieldRef() = thermo_.rho()().primitiveField();
+    phaseChangeModel::rho_.correctBoundaryConditions();
+
     // Update k field
     scalarField& kCells = k_.primitiveFieldRef();
     const scalarField& fCells = phaseFraction_.primitiveField();
@@ -228,6 +324,34 @@ void Foam::enthalpyPorosityPhaseChangeModel::correct()
         kCells[i] = fCells[i]*kLiquid_ + (1.0 - fCells[i])*kSolid_;
     }
     k_.correctBoundaryConditions();
+
+    // Runtime assertion: ratio (rhoEff * CpEff) / (thermo.rho * thermo.Cp) == 1 within round-off
+    tmp<volScalarField> trhoEff = rhoEff();
+    tmp<volScalarField> tCpEff = CpEff();
+    tmp<volScalarField> trhoThermo = thermo_.rho();
+    tmp<volScalarField> tCpThermo = thermo_.Cp();
+
+    const scalar maxDev = max(mag(trhoEff()*tCpEff()/(trhoThermo()*tCpThermo()) - 1.0)).value();
+    if (maxDev > 1e-5)
+    {
+        FatalErrorInFunction
+            << "Ratio rhoEff*CpEff/(rho*Cp) = " << maxDev + 1.0
+            << " deviates from 1 for model 'enthalpyPorosity'. "
+            << "Max deviation: " << maxDev
+            << exit(FatalError);
+    }
+}
+
+
+Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::rhoEff() const
+{
+    return thermo_.rho();
+}
+
+
+Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::CpEff() const
+{
+    return thermo_.Cp();
 }
 
 
@@ -252,12 +376,25 @@ Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::latentHe
         return tSu;
     }
 
-    const auto& rho = mesh_.lookupObject<volScalarField>("rho");
-    const auto& phi = mesh_.lookupObject<surfaceScalarField>("phi");
+    tmp<volScalarField> trho = thermo_.rho();
+    const volScalarField& rho = trho();
+    const surfaceScalarField* phiPtr = mesh_.findObject<surfaceScalarField>("phi");
 
-    tSu.ref() = L_ * (fvc::ddt(rho, phaseFraction_) + fvc::div(phi, phaseFraction_, "div(phi,phaseFraction)"));
+
+    dimensionedScalar Ldim("L", dimEnergy/dimMass, L_);
+
+    if (phiPtr)
+    {
+        tSu.ref() = Ldim * (fvc::ddt(rho, phaseFraction_) + fvc::div(*phiPtr, phaseFraction_, "div(phi,phaseFraction)"));
+    }
+    else
+    {
+        tSu.ref() = Ldim * fvc::ddt(rho, phaseFraction_);
+    }
+
     return tSu;
 }
+
 
 
 Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::latentHeatSp() const

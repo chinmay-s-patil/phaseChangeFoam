@@ -77,6 +77,12 @@ public:
     //- Access implicit Darcy momentum damping coefficient [kg/(m^3 s)]
     virtual tmp<volScalarField> momentumSp() const override;
 
+    //- Access density field for energy equation (returns background thermo.rho() for EP)
+    virtual tmp<volScalarField> rhoEff() const override;
+
+    //- Access effective heat capacity field (returns background thermo.Cp() for EP)
+    virtual tmp<volScalarField> CpEff() const override;
+
     //- Access thermal conductivity field k(f) = f*kl + (1-f)*ks
     virtual tmp<volScalarField> k() const override;
 

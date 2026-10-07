@@ -66,7 +66,10 @@ writeControl runTime; writeInterval 2; purgeWrite 0; writeFormat ascii; writePre
 FoamFile { version 2.0; format ascii; class dictionary; location "system"; object fvSchemes; }
 ddtSchemes { default Euler; }
 gradSchemes { default Gauss linear; }
-divSchemes { default none; }
+divSchemes {
+    default none;
+    div(phi,phaseFraction) Gauss linear;
+}
 laplacianSchemes { default Gauss linear corrected; }
 interpolationSchemes { default linear; }
 snGradSchemes { default corrected; }
@@ -127,7 +130,7 @@ active true;
 phaseChange {
     active true;
     phaseChangeMode EHC;
-    melting { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 163000.0; }
+    forward { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 163000.0; }
 }
 """)
         else:
@@ -135,9 +138,10 @@ phaseChange {
 FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
 active true;
 phaseChange {
+    type enthalpyPorosity;
     active true;
-    phaseChangeMode enthalpyPorosity;
-    melting { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 163000.0; }
+    convection { suppress true; }
+    forward { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 163000.0; }
 }
 """)
 

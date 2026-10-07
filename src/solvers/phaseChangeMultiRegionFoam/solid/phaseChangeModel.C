@@ -295,7 +295,7 @@ void Foam::phaseChangeModel::readDict()
     }
 
     const dictionary& pcDict = phaseChangeDict.subDict("phaseChange");
-    checkAllowedKeys(pcDict, {"active", "phaseChangeMode", "type", "direction", "melting", "freezing", "forward", "reverse", "hysteresis", "density", "thermophysical", "thermo", "convection", "porosity", "buoyancy", "liquid", "vapor", "C_evap", "C_cond", "latentHeat", "Tsat", "enableTsatP", "pRef", "speciesName", "massSource", "energySource", "speciesSource"});
+    checkAllowedKeys(pcDict, {"active", "phaseChangeMode", "type", "direction", "melting", "freezing", "forward", "reverse", "hysteresis", "density", "thermophysical", "thermo", "convection", "porosity", "buoyancy", "liquid", "vapor", "C_evap", "C_cond", "latentHeat", "Tsat", "enableTsatP", "pRef", "speciesName", "massSource", "energySource", "speciesSource", "lambda"});
 
     word modeName = "none";
     if (pcDict.found("phaseChangeMode"))

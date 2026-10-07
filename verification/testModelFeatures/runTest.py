@@ -230,14 +230,36 @@ phaseChange {
     pass_t3 = (len(a_nonhys) > 0)
     print(f"Test 3 Non-Hysteresis Execution: {pass_t3}")
 
+    # Test 4: EnthalpyPorosity rhoEff*CpEff/(rho*Cp) ratio validation
+    print("\n--- Test 4: EnthalpyPorosity rhoEff*CpEff/(rho*Cp) == 1 Check ---")
+    c4_dir = os.path.join(base_dir, "case_ep_ratio")
+    setup_base_case(c4_dir)
+    with open(os.path.join(c4_dir, "constant/pcm/phaseChangeDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange {
+    type enthalpyPorosity;
+    active true;
+    convection { suppress true; }
+    forward { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 163000.0; }
+    lambda 1.0;
+}
+""")
+    res4 = run_cmd(f"cd {c4_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=True)
+    out4 = res4.stdout + res4.stderr
+    pass_t4 = (res4.returncode == 0 and "Ratio rhoEff*CpEff/(rho*Cp)" not in out4)
+    print(f"Test 4 EP ratio validation: {pass_t4}")
+
     print("\n=======================================================")
     print("      MODEL FEATURES & VALIDATION SUMMARY             ")
     print("=======================================================")
     print(f"Test 1 (convection.suppress false FatalError) : {'PASS' if pass_t1 else 'FAIL'}")
     print(f"Test 2 (legacy liquidFraction disk restore)    : {'PASS' if pass_t2 else 'FAIL'}")
     print(f"Test 3 (hysteresis active false execution)     : {'PASS' if pass_t3 else 'FAIL'}")
+    print(f"Test 4 (EP rhoEff*CpEff/(rho*Cp) == 1 check)   : {'PASS' if pass_t4 else 'FAIL'}")
 
-    all_pass = pass_t1 and pass_t2 and pass_t3
+    all_pass = pass_t1 and pass_t2 and pass_t3 and pass_t4
     if all_pass:
         print("\nALL MODEL FEATURE & ERROR TESTS PASSED SUCCESSFULLY!")
     else:
