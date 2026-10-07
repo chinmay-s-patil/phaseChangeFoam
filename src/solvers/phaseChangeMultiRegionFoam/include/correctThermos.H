@@ -9,6 +9,7 @@ forAll(fluidRegions, i)
     phaseChangeModel& pcmModel = pcmModelsFluid[i];
     if (pcmModel.active())
     {
+        pcmModel.correct();
         pcmModel.postEnergySolve(he);
         thermo.correct();
     }
@@ -25,9 +26,11 @@ forAll(solidRegions, i)
     phaseChangeModel& pcModel = phaseChangeModels[i];
     if (pcModel.active())
     {
+        pcModel.correct();
         pcModel.postEnergySolve(h);
         thermo.correct();
     }
 }
+
 
 

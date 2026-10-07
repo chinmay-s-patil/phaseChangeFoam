@@ -251,7 +251,7 @@ phaseChange
     hysteresis
     {
         active              false;  // Enable stateful hysteresis tracking
-        reversalTolerance   1e-6;   // Temperature reversal deadband tolerance [K]
+        reversalTolerance   1e-3;   // Temperature reversal deadband tolerance [K] (default: 1e-3 K)
     }
 
     // Phase Density Model
@@ -318,13 +318,16 @@ phaseChange
 | `forward.T_upperBound` | Liquidus / upper bound temperature | `scalar` [K] | `310.0` |
 | `forward.latentHeat` | Latent heat of transition $L$ | `scalar` [J/kg] | `1.0e5` |
 | `hysteresis.active` | Enables path-dependent thermal hysteresis | `bool` | `false` |
-| `hysteresis.reversalTolerance` | Deadband tolerance for temperature direction reversal | `scalar` [K] | `1e-6` |
+| `hysteresis.reversalTolerance` | Deadband tolerance for temperature direction reversal | `scalar` [K] | `1e-3` |
 | `density.model` | Phase density interpolation mode (`thermo`, `linear`) | `word` | `thermo` |
 | `thermophysical.mode` | Thermophysical mode (`thermo`, `custom`) | `word` | `thermo` |
 | `porosity.Cu` | Darcy drag coefficient $C_u$ | `scalar` [kg/(m³ s)] | `1.0e5` |
 | `porosity.q` | Division prevention tolerance $q$ | `scalar` | `0.001` |
 | `C_evap` / `C_cond` | Lee evaporation and condensation rate coefficients | `scalar` [1/s] | `0.1` |
 | `enableTsatP` | Clausius-Clapeyron pressure-dependent $T_{sat}(p)$ toggle | `bool` | `false` |
+| `PIMPLE.nNonLinearCorrectors` | Max non-linear inner iterations per step (`system/<region>/fvSolution`) | `int` | `25` |
+| `PIMPLE.nonLinearTolerance` | Max temperature change iteration convergence tolerance $\max\Delta T$ | `scalar` [K] | `1e-4` |
+| `PIMPLE.nonLinearToleranceAlpha` | Max phase fraction iteration convergence tolerance $\max\Delta\alpha$ | `scalar` | `1e-4` |
 
 ---
 

@@ -118,7 +118,7 @@ dimensions [0 1 -2 0 0 0 0]; value (0 0 0);
         f.write("""
 FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object thermophysicalProperties; }
 thermoType { type heSolidThermo; mixture pureMixture; transport constIso; thermo hConst; equationOfState rhoConst; specie specie; energy sensibleEnthalpy; }
-mixture { specie { molWeight 100; } transport { kappa 0.50; } thermodynamics { Cp 2000; Hf 0; } equationOfState { rho 1000; } }
+mixture { specie { molWeight 100; } transport { kappa 2.00; } thermodynamics { Cp 2000; Hf 0; } equationOfState { rho 1000; } }
 """)
     with open("constant/pcm/phaseChangeDict", "w") as f:
         f.write("""
@@ -260,7 +260,7 @@ phaseChange
             f.write(f"""
 FoamFile {{ version 2.0; format ascii; class dictionary; location "constant/{region}"; object thermophysicalProperties; }}
 thermoType {{ type heSolidThermo; mixture pureMixture; transport constIso; thermo hConst; equationOfState rhoConst; specie specie; energy sensibleEnthalpy; }}
-mixture {{ specie {{ molWeight 100; }} transport {{ kappa 0.50; }} thermodynamics {{ Cp 2000; Hf 0; }} equationOfState {{ rho 1000; }} }}
+mixture {{ specie {{ molWeight 100; }} transport {{ kappa 2.00; }} thermodynamics {{ Cp 2000; Hf 0; }} equationOfState {{ rho 1000; }} }}
 """)
         with open(f"constant/{region}/phaseChangeDict", "w") as f:
             f.write(phaseChangeDictContent.replace("REGION", region))
@@ -397,7 +397,7 @@ def main():
 
     res2 = run_cmd(f"cd {case2_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=True)
     output_text = res2.stdout + res2.stderr
-    pass_t2 = ("Phase change is active in a multi-region coupled domain, but nOuterCorrectors = 1 < 2" in output_text)
+    pass_t2 = ("Phase change is active in a fluid, coupled, or multi-region domain, but nOuterCorrectors = 1 < 2" in output_text)
 
     print(f"nOuterCorr = 1 FatalError Triggered: {pass_t2}")
     print(f"Test 2 Status: {'PASSED' if pass_t2 else 'FAILED'}")
@@ -448,15 +448,66 @@ writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii; write
     pass_t3 = pass_t3_disk and pass_t3_solution
     print(f"Test 3 Status: {'PASSED' if pass_t3 else 'FAILED'}")
 
+    # Test 4: Coupled Energy Balance Verification (Adiabatic boundaries)
+    print("\n--- Test 4: Coupled EHC Energy Balance Verification (Adiabatic Boundaries) ---")
+    case4_dir = os.path.join(base_dir, "case_coupled_energy_balance")
+    os.makedirs(case4_dir, exist_ok=True)
+    setup_coupled_case(case4_dir, nOuterCorr=10, endTime=1000, writeInterval=1000)
+
+    # Set adiabatic zeroGradient boundary conditions on outer walls for zero net flux
+    with open(os.path.join(case4_dir, "0/pcm/T"), "w") as f:
+        f.write("FoamFile { version 2.0; format ascii; class volScalarField; location \"0/pcm\"; object T; }\ndimensions [0 0 0 1 0 0 0]; internalField uniform 350.0;\nboundaryField { pcm_cold { type zeroGradient; } pcm_to_solid2 { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 350.0; Tnbr T; kappaMethod lookup; kappa kEff; } emptyFaces { type empty; } }\n")
+    with open(os.path.join(case4_dir, "0/pcm/h"), "w") as f:
+        f.write("FoamFile { version 2.0; format ascii; class volScalarField; location \"0/pcm\"; object h; }\ndimensions [0 2 -2 0 0 0 0]; internalField uniform 700000;\nboundaryField { pcm_cold { type zeroGradient; } pcm_to_solid2 { type calculated; value uniform 700000; } emptyFaces { type empty; } }\n")
+
+    with open(os.path.join(case4_dir, "0/solid2/T"), "w") as f:
+        f.write("FoamFile { version 2.0; format ascii; class volScalarField; location \"0/solid2\"; object T; }\ndimensions [0 0 0 1 0 0 0]; internalField uniform 280.0;\nboundaryField { solid2_hot { type zeroGradient; } solid2_to_pcm { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 280.0; Tnbr T; kappaMethod lookup; kappa kEff; } emptyFaces { type empty; } }\n")
+    with open(os.path.join(case4_dir, "0/solid2/h"), "w") as f:
+        f.write("FoamFile { version 2.0; format ascii; class volScalarField; location \"0/solid2\"; object h; }\ndimensions [0 2 -2 0 0 0 0]; internalField uniform 560000;\nboundaryField { solid2_hot { type zeroGradient; } solid2_to_pcm { type calculated; value uniform 560000; } emptyFaces { type empty; } }\n")
+
+    res4 = run_cmd(f"cd {case4_dir} && bash -c '{of_env}; {solver_bin}'")
+
+    T_pcm_c4 = parse_openfoam_field(os.path.join(case4_dir, "1000/pcm/T"), num_cells=50)
+    a_pcm_c4 = parse_openfoam_field(os.path.join(case4_dir, "1000/pcm/phaseFraction"), num_cells=50)
+    T_s2_c4 = parse_openfoam_field(os.path.join(case4_dir, "1000/solid2/T"), num_cells=50)
+    a_s2_c4 = parse_openfoam_field(os.path.join(case4_dir, "1000/solid2/phaseFraction"), num_cells=50)
+
+    # Calculate initial and final total energy (J)
+    # Vol = 1e-7 m^3 per cell, rho = 1000, Cp = 2000, L = 100000
+    # E_pcm_0 = 50 * 1e-7 * 1000 * (2000*350 + 100000) = 4000.0 J
+    # E_solid2_0 = 50 * 1e-7 * 1000 * (2000*280 + 0) = 2800.0 J
+    # Total E_0 = 6800.0 J
+    E0_total = 6800.0
+    cell_vol = 1e-7
+    rho = 1000.0
+    Cp = 2000.0
+    L = 100000.0
+
+    if T_pcm_c4 and a_pcm_c4 and T_s2_c4 and a_s2_c4:
+        E_pcm_final = sum(rho * cell_vol * (Cp * T_i + L * a_i) for T_i, a_i in zip(T_pcm_c4, a_pcm_c4))
+        E_s2_final = sum(rho * cell_vol * (Cp * T_j + L * a_j) for T_j, a_j in zip(T_s2_c4, a_s2_c4))
+        E_final_total = E_pcm_final + E_s2_final
+        rel_energy_err = abs(E_final_total - E0_total) / E0_total
+        print(f"Initial Total Energy : {E0_total:.6f} J")
+        print(f"Final Total Energy   : {E_final_total:.6f} J")
+        print(f"Coupled Energy Error : {rel_energy_err:.4e}")
+        pass_t4 = rel_energy_err < 1e-3
+    else:
+        pass_t4 = False
+        print("Failed to read fields for coupled energy balance test.")
+
+    print(f"Test 4 Status: {'PASSED' if pass_t4 else 'FAILED'}")
+
     print("\n=======================================================")
     print("      COUPLED MULTI-REGION VERIFICATION RESULTS        ")
     print("=======================================================")
     print(f"Test 1 (nOuterCorr = 10 Convergence): {'PASSED' if pass_t1 else 'FAILED'}")
     print(f"Test 2 (nOuterCorr = 1 FatalError)  : {'PASSED' if pass_t2 else 'FAILED'}")
     print(f"Test 3 (Coupled Write & Restart)    : {'PASSED' if pass_t3 else 'FAILED'}")
+    print(f"Test 4 (Coupled EHC Energy Balance) : {'PASSED' if pass_t4 else 'FAILED'}")
     print("-------------------------------------------------------")
 
-    if pass_t1 and pass_t2 and pass_t3:
+    if pass_t1 and pass_t2 and pass_t3 and pass_t4:
         print("\nALL COUPLED MULTI-REGION VERIFICATION TESTS PASSED SUCCESSFULLY!")
     else:
         print("\nCOUPLED TEST FAILED!")
@@ -464,4 +515,5 @@ writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii; write
 
 if __name__ == "__main__":
     main()
+
 

@@ -165,6 +165,8 @@ int main(int argc, char *argv[])
             phaseChangeModel& pcmModel = pcmModelsFluid[i];
             if (phaseChange.active())
             {
+                // Note: phaseChange.correct() for fluidPhaseChangeModel (e.g. Lee model) re-evaluates mDot using
+                // final converged thermo state prior to runTime.write(), ensuring mDot is written consistently to disk.
                 phaseChange.correct();
             }
             if (pcmModel.active())

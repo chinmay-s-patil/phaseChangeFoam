@@ -1,8 +1,8 @@
 /*---------------------------------------------------------------------------*\
   =========                 |
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
-   \\    /   O peration     | Website:  https://openfoam.org
-    \\  /    A nd           | Copyright (C) OpenFOAM Foundation
+   \\    /   O peration     | Website:  www.openfoam.com
+    \\  /    A nd           | Copyright (C) OpenCFD Ltd.
      \\/     M anipulation  |
 -------------------------------------------------------------------------------
 \*---------------------------------------------------------------------------*/
