@@ -27,10 +27,10 @@ Foam::ehcDarcyPhaseChangeModel::ehcDarcyPhaseChangeModel
 )
 :
     phaseChangeModel(mesh, thermo, false),
-    beta_(0.0),
     Cu_(1.0e5),
     q_(0.001)
 {
+
     readPorosityDict();
 
     // Validate patch types
@@ -102,24 +102,10 @@ void Foam::ehcDarcyPhaseChangeModel::readPorosityDict()
                 Cu_ = porDict.getOrDefault<scalar>("Cu", porDict.lookupOrDefault<scalar>("A_cu", 1.0e5));
                 q_  = porDict.getOrDefault<scalar>("q", porDict.lookupOrDefault<scalar>("eps", 0.001));
             }
-
-            if (pcDict.found("buoyancy"))
-            {
-                const dictionary& buoyDict = pcDict.subDict("buoyancy");
-                for (const word& k : buoyDict.toc())
-                {
-                    if (k != "beta")
-                    {
-                        FatalIOErrorInFunction(buoyDict)
-                            << "Unknown key '" << k << "' in buoyancy dict."
-                            << exit(FatalIOError);
-                    }
-                }
-                beta_ = buoyDict.lookupOrDefault<scalar>("beta", 0.0);
-            }
         }
     }
 }
+
 
 
 Foam::tmp<Foam::volScalarField> Foam::ehcDarcyPhaseChangeModel::momentumSp() const

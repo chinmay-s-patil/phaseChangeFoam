@@ -28,6 +28,15 @@ Foam::ehcPhaseChangeModel::ehcPhaseChangeModel
 :
     phaseChangeModel(mesh, thermo, true)
 {
+    if (mesh.foundObject<volVectorField>("U") && !suppressConvection_)
+    {
+        FatalErrorInFunction
+            << "Model 'EHC' (ehcPhaseChangeModel) does not include momentum Darcy drag."
+            << "\nConvection cannot be enabled on a fluid region with EHC."
+            << "\nUse model 'EHCDarcy' or 'enthalpyPorosity', or set 'convection { suppress true; }'."
+            << exit(FatalError);
+    }
+
 
     // Validate that all non-constraint patches are 'calculated'
     auto checkCalculatedPatches = [&](const volScalarField& f)

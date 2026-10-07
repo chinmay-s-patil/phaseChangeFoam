@@ -54,13 +54,15 @@ The framework relies on runtime selection tables for both fluid and solid region
     +--------------------+--------------------+                   +--------------------+--------------------+
     |                    |                    |                   |                    |                    |
     v                    v                    v                   v                    v                    v
-+-------+        +----------------+       +------+            +-------+        +------------------+     +------+
-|  Lee  |        | constantSource |       | none |            |  EHC  |        | enthalpyPorosity |     | none |
-+-------+        +----------------+       +------+            +-------+        +------------------+     +------+
++-------+        +----------------+       +------+            +-------+          +----------+           +------+
+|  Lee  |        | constantSource |       | none |            |  EHC  |          | EHCDarcy |           | none |
++-------+        +----------------+       +------+            +-------+          +----------+           +------+
+                                                                          (alias: enthalpyPorosity)
 ```
 
 * **Fluid Models** derive from [`fluidPhaseChangeModel`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/fluid/fluidPhaseChangeModel.H) and feed mass sources to continuity/pressure (`pEqn`), species mass fraction sources to `YEqn`, and latent heat sources to energy equations (`EEqn`).
 * **Solid/PCM Models** derive from [`phaseChangeModel`](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/src/solvers/phaseChangeMultiRegionFoam/solid/phaseChangeModel.H) and supply path-integrated heat capacities $C_{p,eff}$, exact Newton secant linearisation $S_p$, latent energy sources $S_u$, effective thermal conductivities $k_{eff}$, densities $\rho_{eff}$, and Darcy momentum drag forces $S_{u,drag}$.
+
 
 ---
 

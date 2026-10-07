@@ -76,11 +76,14 @@
             if (pcModel.active())
             {
                 pcModel.correct();
+                pcModel.postEnergySolve(h);
+                thermo.correct();
             }
             else
             {
                 thermo.correct();
             }
+
 
             maxDeltaT = max(mag(thermo.T() - Tprev)).value();
             Tprev = thermo.T();

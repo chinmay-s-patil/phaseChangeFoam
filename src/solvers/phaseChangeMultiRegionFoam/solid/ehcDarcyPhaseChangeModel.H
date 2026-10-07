@@ -30,10 +30,10 @@ class ehcDarcyPhaseChangeModel
 {
 private:
 
-    // Parameters - Darcy & Buoyancy
-    scalar beta_; // Thermal expansion coefficient [1/K]
+    // Parameters - Darcy
     scalar Cu_;   // Darcy penalty coefficient [kg/(m3 s)]
     scalar q_;    // Smoothing constant
+
 
     void readPorosityDict();
 

@@ -184,6 +184,10 @@ public:
     //- Update trajectory history at completed timestep boundaries
     virtual void updateHistory();
 
+    //- Hook called after energy equation solution to update phase fraction and enthalpy
+    virtual void postEnergySolve(volScalarField& he) {}
+
+
     //- Whether this model suppresses fluid convection
     virtual bool suppressConvection() const
     {

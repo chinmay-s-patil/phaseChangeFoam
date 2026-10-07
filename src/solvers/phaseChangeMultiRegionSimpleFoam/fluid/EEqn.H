@@ -1,6 +1,15 @@
 {
     volScalarField& he = thermo.he();
 
+    tmp<volScalarField> tCpThermo = thermo.Cp();
+    const volScalarField& CpThermo = tCpThermo();
+
+    tmp<volScalarField> talphaEff =
+        pcmModel.active()
+      ? tmp<volScalarField>(volScalarField("alphaEffPCM", pcmModel.k()/CpThermo + turb.alphat()))
+      : turb.alphaEff();
+    const volScalarField& alphaEff = talphaEff();
+
     fvScalarMatrix EEqn
     (
         fvm::div(phi, he)
@@ -9,13 +18,15 @@
           ? fvc::div(phi, volScalarField("Ekp", 0.5*magSqr(U) + p/rho))
           : fvc::div(phi, volScalarField("K", 0.5*magSqr(U)))
         )
-      - fvm::laplacian(turb.alphaEff(), he)
+      - fvm::laplacian(alphaEff, he)
      ==
         rho*(U&g)
       + rad.Sh(thermo, he)
       + Qdot
       + fvOptions(rho, he)
     );
+
+
 
     if (phaseChange.active())
     {
