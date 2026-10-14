@@ -88,6 +88,9 @@ public:
 
     //- Post-energy-solve Newton liquid fraction update and enthalpy adjustment
     virtual void postEnergySolve(volScalarField& he) override;
+
+    //- Re-apply effective thermal conductivity override to thermo database
+    virtual void applyKappaToThermo() override;
 };
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //

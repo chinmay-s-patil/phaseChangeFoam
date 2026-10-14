@@ -498,6 +498,114 @@ writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii; write
 
     print(f"Test 4 Status: {'PASSED' if pass_t4 else 'FAILED'}")
 
+    # Test 5: Coupled Interface with k_s != k_l in PCM (Verifying Interface Flux Uses k_eff)
+    print("\n--- Test 5: Coupled Interface with k_s != k_l in PCM (Verifying Interface Flux Uses k_eff) ---")
+    case5_dir = os.path.join(base_dir, "case_coupled_keff_flux")
+    os.makedirs(case5_dir, exist_ok=True)
+    setup_coupled_case(case5_dir, nOuterCorr=4, endTime=100, writeInterval=100)
+
+    # PCM with enthalpyPorosity mode: kSolid = 1.0, kLiquid = 4.0, while background transport kappa = 1.0
+    with open(os.path.join(case5_dir, "constant/pcm/thermophysicalProperties"), "w") as f:
+        f.write("""FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object thermophysicalProperties; }
+thermoType { type heSolidThermo; mixture pureMixture; transport constIso; thermo hConst; equationOfState rhoConst; specie specie; energy sensibleEnthalpy; }
+mixture { specie { molWeight 100; } transport { kappa 1.00; } thermodynamics { Cp 100; Hf 0; } equationOfState { rho 100; } }
+""")
+
+    with open(os.path.join(case5_dir, "constant/pcm/phaseChangeDict"), "w") as f:
+        f.write("""FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange
+{
+    active true;
+    type enthalpyPorosity;
+    forward { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 10000.0; }
+    density { model constant; rhoRef 100.0; }
+    thermophysical { mode custom; CpSolid 100.0; CpLiquid 100.0; kSolid 1.0; kLiquid 4.0; }
+}
+""")
+
+    with open(os.path.join(case5_dir, "constant/solid2/thermophysicalProperties"), "w") as f:
+        f.write("""FoamFile { version 2.0; format ascii; class dictionary; location "constant/solid2"; object thermophysicalProperties; }
+thermoType { type heSolidThermo; mixture pureMixture; transport constIso; thermo hConst; equationOfState rhoConst; specie specie; energy sensibleEnthalpy; }
+mixture { specie { molWeight 100; } transport { kappa 1.00; } thermodynamics { Cp 100; Hf 0; } equationOfState { rho 100; } }
+""")
+
+    with open(os.path.join(case5_dir, "constant/solid2/phaseChangeDict"), "w") as f:
+        f.write("""FoamFile { version 2.0; format ascii; class dictionary; location "constant/solid2"; object phaseChangeDict; }
+active false;
+""")
+
+    with open(os.path.join(case5_dir, "system/controlDict"), "w") as f:
+        f.write("""FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
+application phaseChangeMultiRegionFoam;
+startFrom startTime; startTime 0; stopAt endTime; endTime 100; deltaT 1;
+writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii; writePrecision 12;
+""")
+
+    # Initial and boundary conditions: PCM cold side = 350 K (fully liquid, k_eff = 4.0), solid2 hot side = 250 K (k = 1.0)
+    # Coupled interface uses kappaMethod solidThermo to query thermo.kappa()
+    with open(os.path.join(case5_dir, "0/pcm/T"), "w") as f:
+        f.write("""FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object T; }
+dimensions [0 0 0 1 0 0 0]; internalField uniform 350.0;
+boundaryField {
+    pcm_cold { type fixedValue; value uniform 350.0; }
+    pcm_to_solid2 { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 350.0; Tnbr T; kappaMethod solidThermo; }
+    emptyFaces { type empty; }
+}
+""")
+    with open(os.path.join(case5_dir, "0/pcm/h"), "w") as f:
+        f.write("""FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object h; }
+dimensions [0 2 -2 0 0 0 0]; internalField uniform 35000;
+boundaryField {
+    pcm_cold { type fixedValue; value uniform 35000; }
+    pcm_to_solid2 { type calculated; value uniform 35000; }
+    emptyFaces { type empty; }
+}
+""")
+
+    with open(os.path.join(case5_dir, "0/solid2/T"), "w") as f:
+        f.write("""FoamFile { version 2.0; format ascii; class volScalarField; location "0/solid2"; object T; }
+dimensions [0 0 0 1 0 0 0]; internalField uniform 250.0;
+boundaryField {
+    solid2_hot { type fixedValue; value uniform 250.0; }
+    solid2_to_pcm { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 250.0; Tnbr T; kappaMethod solidThermo; }
+    emptyFaces { type empty; }
+}
+""")
+    with open(os.path.join(case5_dir, "0/solid2/h"), "w") as f:
+        f.write("""FoamFile { version 2.0; format ascii; class volScalarField; location "0/solid2"; object h; }
+dimensions [0 2 -2 0 0 0 0]; internalField uniform 25000;
+boundaryField {
+    solid2_hot { type fixedValue; value uniform 25000; }
+    solid2_to_pcm { type calculated; value uniform 25000; }
+    emptyFaces { type empty; }
+}
+""")
+
+    res5 = run_cmd(f"cd {case5_dir} && bash -c '{of_env}; {solver_bin}'")
+
+    T_s2_c5 = parse_openfoam_field(os.path.join(case5_dir, "100/solid2/T"), num_cells=50)
+    T_pcm_c5 = parse_openfoam_field(os.path.join(case5_dir, "100/pcm/T"), num_cells=50)
+
+    T_s2_interface_cell = T_s2_c5[0] if T_s2_c5 else 0.0
+    T_pcm_interface_cell = T_pcm_c5[-1] if T_pcm_c5 else 0.0
+
+    # Interface flux: q = k_solid2 * (T_s2_cell - 250.0) / (0.05 - 0.0005)
+    # Expected: q_expected = 1600.0 W/m^2 (vs 1000.0 W/m^2 if kappa override was erased)
+    q_flux_sim = 1.0 * (T_s2_interface_cell - 250.0) / (0.05 - 0.0005)
+    q_flux_expected = 1600.0
+    flux_err = abs(q_flux_sim - q_flux_expected) / q_flux_expected
+
+    print(f"PCM Interface Cell T    : {T_pcm_interface_cell:.3f} K")
+    print(f"Solid2 Interface Cell T : {T_s2_interface_cell:.3f} K (Analytical: ~329.2 K; with erased override: ~299.5 K)")
+    print(f"Computed Interface Flux : {q_flux_sim:.2f} W/m^2 (Expected: 1600.00 W/m^2; with erased override: 1000.00 W/m^2)")
+    print(f"Flux Relative Error     : {flux_err:.4e}")
+
+    # Pass if flux error < 2% and interface cell temperature is within 1.5 K of 329.2 K
+    # (Erased override would give flux error ~37.5% and T ~ 299.5 K)
+    pass_t5 = (flux_err < 0.02) and (abs(T_s2_interface_cell - 329.2) < 1.5)
+    print(f"Test 5 Status: {'PASSED' if pass_t5 else 'FAILED'}")
+
     print("\n=======================================================")
     print("      COUPLED MULTI-REGION VERIFICATION RESULTS        ")
     print("=======================================================")
@@ -505,9 +613,10 @@ writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii; write
     print(f"Test 2 (nOuterCorr = 1 FatalError)  : {'PASSED' if pass_t2 else 'FAILED'}")
     print(f"Test 3 (Coupled Write & Restart)    : {'PASSED' if pass_t3 else 'FAILED'}")
     print(f"Test 4 (Coupled EHC Energy Balance) : {'PASSED' if pass_t4 else 'FAILED'}")
+    print(f"Test 5 (Coupled k_eff Interface Flux): {'PASSED' if pass_t5 else 'FAILED'}")
     print("-------------------------------------------------------")
 
-    if pass_t1 and pass_t2 and pass_t3 and pass_t4:
+    if pass_t1 and pass_t2 and pass_t3 and pass_t4 and pass_t5:
         print("\nALL COUPLED MULTI-REGION VERIFICATION TESTS PASSED SUCCESSFULLY!")
     else:
         print("\nCOUPLED TEST FAILED!")

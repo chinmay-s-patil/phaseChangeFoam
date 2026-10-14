@@ -69,6 +69,7 @@
         {
             pcmModel.postEnergySolve(he);
             thermo.correct();
+            pcmModel.applyKappaToThermo();
         }
         rad.correct();
 

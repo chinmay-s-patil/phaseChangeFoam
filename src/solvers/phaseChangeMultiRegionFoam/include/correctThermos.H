@@ -12,6 +12,7 @@ forAll(fluidRegions, i)
         pcmModel.correct();
         pcmModel.postEnergySolve(he);
         thermo.correct();
+        pcmModel.applyKappaToThermo();
     }
     rad.correct();
 }
@@ -29,6 +30,7 @@ forAll(solidRegions, i)
         pcModel.correct();
         pcModel.postEnergySolve(h);
         thermo.correct();
+        pcModel.applyKappaToThermo();
     }
 }
 

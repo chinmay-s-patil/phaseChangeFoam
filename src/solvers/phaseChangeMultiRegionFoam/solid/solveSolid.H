@@ -91,6 +91,7 @@
                 pcModel.correct();
                 pcModel.postEnergySolve(h);
                 thermo.correct();
+                pcModel.applyKappaToThermo();
             }
             else
             {

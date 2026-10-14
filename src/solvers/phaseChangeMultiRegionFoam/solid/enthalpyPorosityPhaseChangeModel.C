@@ -403,18 +403,7 @@ void Foam::enthalpyPorosityPhaseChangeModel::correct()
         kCells[i] = fCells[i]*kLiquid_ + (1.0 - fCells[i])*kSolid_;
     }
     k_.correctBoundaryConditions();
-    if (mesh_.foundObject<volScalarField>("kappa"))
-    {
-        volScalarField& thermoKappa = const_cast<volScalarField&>(mesh_.lookupObject<volScalarField>("kappa"));
-        thermoKappa.primitiveFieldRef() = k_.primitiveField();
-        thermoKappa.boundaryFieldRef() = k_.boundaryField();
-    }
-    if (mesh_.foundObject<volScalarField>("Kappa"))
-    {
-        volScalarField& thermoKappa = const_cast<volScalarField&>(mesh_.lookupObject<volScalarField>("Kappa"));
-        thermoKappa.primitiveFieldRef() = k_.primitiveField();
-        thermoKappa.boundaryFieldRef() = k_.boundaryField();
-    }
+    applyKappaToThermo();
 
     #ifdef FULLDEBUG
     // Debug assertion under FULLDEBUG
@@ -614,6 +603,37 @@ void Foam::enthalpyPorosityPhaseChangeModel::postEnergySolve(volScalarField& he)
         {
             state[i] = 1.0;
         }
+    }
+
+    // Update effective thermal conductivity k_ from updated liquid fraction
+    scalarField& kCells = k_.primitiveFieldRef();
+    forAll(kCells, i)
+    {
+        kCells[i] = f[i]*kLiquid_ + (1.0 - f[i])*kSolid_;
+    }
+    k_.correctBoundaryConditions();
+    applyKappaToThermo();
+}
+
+
+void Foam::enthalpyPorosityPhaseChangeModel::applyKappaToThermo()
+{
+    if (!active_)
+    {
+        return;
+    }
+
+    if (mesh_.foundObject<volScalarField>("kappa"))
+    {
+        volScalarField& thermoKappa = const_cast<volScalarField&>(mesh_.lookupObject<volScalarField>("kappa"));
+        thermoKappa.primitiveFieldRef() = k_.primitiveField();
+        thermoKappa.boundaryFieldRef() = k_.boundaryField();
+    }
+    if (mesh_.foundObject<volScalarField>("Kappa"))
+    {
+        volScalarField& thermoKappa = const_cast<volScalarField&>(mesh_.lookupObject<volScalarField>("Kappa"));
+        thermoKappa.primitiveFieldRef() = k_.primitiveField();
+        thermoKappa.boundaryFieldRef() = k_.boundaryField();
     }
 }
 

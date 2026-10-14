@@ -1136,6 +1136,20 @@ void Foam::phaseChangeModel::correct()
     rho_.correctBoundaryConditions();
     Cp_.correctBoundaryConditions();
     k_.correctBoundaryConditions();
+    applyKappaToThermo();
+    Su_.correctBoundaryConditions();
+    Sp_.correctBoundaryConditions();
+    T_reversal_.correctBoundaryConditions();
+}
+
+
+void Foam::phaseChangeModel::applyKappaToThermo()
+{
+    if (!active_)
+    {
+        return;
+    }
+
     if (thermoMode_ == "custom")
     {
         if (mesh_.foundObject<volScalarField>("kappa"))
@@ -1151,9 +1165,6 @@ void Foam::phaseChangeModel::correct()
             thermoKappa.boundaryFieldRef() = k_.boundaryField();
         }
     }
-    Su_.correctBoundaryConditions();
-    Sp_.correctBoundaryConditions();
-    T_reversal_.correctBoundaryConditions();
 }
 
 

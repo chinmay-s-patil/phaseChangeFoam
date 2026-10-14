@@ -52,6 +52,7 @@
                 pcModel.correct();
                 pcModel.postEnergySolve(h);
                 thermo.correct();
+                pcModel.applyKappaToThermo();
             }
 
             Info<< "Min/max T:" << min(thermo.T()).value() << ' '

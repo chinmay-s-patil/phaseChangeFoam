@@ -188,6 +188,9 @@ public:
     //- Hook called after energy equation solution to update phase fraction and enthalpy
     virtual void postEnergySolve(volScalarField& he) {}
 
+    //- Re-apply effective thermal conductivity override to thermo database
+    virtual void applyKappaToThermo();
+
 
     //- Whether this model suppresses fluid convection
     virtual bool suppressConvection() const
