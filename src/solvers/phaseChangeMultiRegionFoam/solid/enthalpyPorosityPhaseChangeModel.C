@@ -403,6 +403,18 @@ void Foam::enthalpyPorosityPhaseChangeModel::correct()
         kCells[i] = fCells[i]*kLiquid_ + (1.0 - fCells[i])*kSolid_;
     }
     k_.correctBoundaryConditions();
+    if (mesh_.foundObject<volScalarField>("kappa"))
+    {
+        volScalarField& thermoKappa = const_cast<volScalarField&>(mesh_.lookupObject<volScalarField>("kappa"));
+        thermoKappa.primitiveFieldRef() = k_.primitiveField();
+        thermoKappa.boundaryFieldRef() = k_.boundaryField();
+    }
+    if (mesh_.foundObject<volScalarField>("Kappa"))
+    {
+        volScalarField& thermoKappa = const_cast<volScalarField&>(mesh_.lookupObject<volScalarField>("Kappa"));
+        thermoKappa.primitiveFieldRef() = k_.primitiveField();
+        thermoKappa.boundaryFieldRef() = k_.boundaryField();
+    }
 
     #ifdef FULLDEBUG
     // Debug assertion under FULLDEBUG
@@ -567,6 +579,12 @@ void Foam::enthalpyPorosityPhaseChangeModel::postEnergySolve(volScalarField& he)
     // Update boundary conditions of f from patch T (do not apply enthalpy correction on boundaries)
     forAll(phaseFraction_.boundaryFieldRef(), patchi)
     {
+        const polyPatch& pp = mesh_.boundaryMesh()[patchi];
+        if (polyPatch::constraintType(pp.type()))
+        {
+            continue;
+        }
+
         fvPatchScalarField& pf = phaseFraction_.boundaryFieldRef()[patchi];
         const fvPatchScalarField& pT = thermo_.T().boundaryField()[patchi];
         forAll(pf, facei)

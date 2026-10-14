@@ -53,7 +53,7 @@ if (adjustTimeStep)
         const phaseChangeModel& pcModel = phaseChangeModels[i];
         if (pcModel.active())
         {
-            scalar maxDAlpha = max(mag(pcModel.phaseFraction() - pcModel.phaseFractionOld())).value();
+            scalar maxDAlpha = gMax(mag(pcModel.phaseFraction().primitiveField() - pcModel.phaseFractionOld().primitiveField()));
             maxAlphaRate = max(maxAlphaRate, maxDAlpha / (runTime.deltaTValue() + SMALL));
         }
     }
@@ -62,7 +62,7 @@ if (adjustTimeStep)
         const phaseChangeModel& pcmModel = pcmModelsFluid[i];
         if (pcmModel.active())
         {
-            scalar maxDAlpha = max(mag(pcmModel.phaseFraction() - pcmModel.phaseFractionOld())).value();
+            scalar maxDAlpha = gMax(mag(pcmModel.phaseFraction().primitiveField() - pcmModel.phaseFractionOld().primitiveField()));
             maxAlphaRate = max(maxAlphaRate, maxDAlpha / (runTime.deltaTValue() + SMALL));
         }
     }

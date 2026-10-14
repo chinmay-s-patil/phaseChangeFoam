@@ -23,7 +23,7 @@
             if (!coupled)
             {
                 #include "pEqn.H"
-                turb.correct();
+                turbulence.correct();
             }
         }
     }

@@ -22,14 +22,28 @@ int main(int argc, char *argv[])
 {
     argList::addNote
     (
-        "Generate a constant/phaseChange/phaseChangeDict file for phaseChangeFoam simulations."
+        "Generate a constant/<region>/phaseChangeDict file for phaseChangeFoam simulations."
+    );
+
+    argList::addOption
+    (
+        "region",
+        "name",
+        "Specify the mesh region name (default: phaseChange)"
     );
 
     argList args(argc, argv);
 
     fileName casePath = args.path();
-    fileName dictDir = casePath / "constant" / "phaseChange";
+    word regionName = "phaseChange";
+    if (args.readIfPresent("region", regionName))
+    {
+        Info<< "Using region: " << regionName << endl;
+    }
+
+    fileName dictDir = casePath / "constant" / regionName;
     fileName dictPath = dictDir / "phaseChangeDict";
+    string locationStr = "constant/" + regionName;
 
     Info<< "Writing phaseChangeDict to " << dictPath << endl;
 
@@ -56,7 +70,7 @@ int main(int argc, char *argv[])
         << "    version     2.0;\n"
         << "    format      ascii;\n"
         << "    class       dictionary;\n"
-        << "    location    \"constant/phaseChange\";\n"
+        << "    location    \"" << locationStr.c_str() << "\";\n"
         << "    object      phaseChangeDict;\n"
         << "}\n"
         << "// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //\n\n"

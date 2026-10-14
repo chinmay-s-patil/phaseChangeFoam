@@ -1,5 +1,8 @@
     const dictionary& simple = fluidRegions[i].solutionDict().subDict("SIMPLE");
 
+    const int nCorr =
+        simple.getOrDefault<int>("nCorrectors", 1);
+
     const int nNonOrthCorr =
         simple.getOrDefault<int>("nNonOrthogonalCorrectors", 0);
 

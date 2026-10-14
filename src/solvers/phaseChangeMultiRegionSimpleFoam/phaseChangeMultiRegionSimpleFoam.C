@@ -70,7 +70,7 @@ int main(int argc, char *argv[])
 
             Info<< "\nSolving for fluid region "
                 << fluidRegions[i].name() << endl;
-            #include "readFluidMultiRegionPIMPLEControls.H"
+            #include "readFluidMultiRegionSIMPLEControls.H"
             #include "setRegionFluidFields.H"
             #include "solveFluid.H"
         }
@@ -79,7 +79,7 @@ int main(int argc, char *argv[])
         {
             fvMesh& mesh = solidRegions[i];
 
-            #include "readSolidMultiRegionPIMPLEControls.H"
+            #include "readSolidMultiRegionSIMPLEControls.H"
             #include "setRegionSolidFields.H"
             #include "solveSolid.H"
         }
@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
             {
                 fvMesh& mesh = fluidRegions[i];
 
-                #include "readFluidMultiRegionPIMPLEControls.H"
+                #include "readFluidMultiRegionSIMPLEControls.H"
                 #include "setRegionFluidFields.H"
                 if (!frozenFlow)
                 {
@@ -124,7 +124,7 @@ int main(int argc, char *argv[])
 
                     Info<< "\nSolving for fluid region "
                         << fluidRegions[i].name() << endl;
-                    #include "readFluidMultiRegionPIMPLEControls.H"
+                    #include "readFluidMultiRegionSIMPLEControls.H"
                     #include "setRegionFluidFields.H"
                     frozenFlow = true;
                     #include "solveFluid.H"
@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
 
                     Info<< "\nSolving for solid region "
                         << solidRegions[i].name() << endl;
-                    #include "readSolidMultiRegionPIMPLEControls.H"
+                    #include "readSolidMultiRegionSIMPLEControls.H"
                     #include "setRegionSolidFields.H"
                     #include "solveSolid.H"
                 }

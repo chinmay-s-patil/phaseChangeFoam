@@ -10,7 +10,7 @@ PtrList<phaseChangeModel> pcmModelsFluid(fluidRegions.size());
 PtrList<uniformDimensionedScalarField> hRefFluid(fluidRegions.size());
 PtrList<volScalarField> ghFluid(fluidRegions.size());
 PtrList<surfaceScalarField> ghfFluid(fluidRegions.size());
-PtrList<compressible::turbulenceModel> turbulence(fluidRegions.size());
+PtrList<compressible::turbulenceModel> turbulenceFluid(fluidRegions.size());
 PtrList<CombustionModel<rhoReactionThermo>> reactionFluid(fluidRegions.size());
 PtrList<volScalarField> p_rghFluid(fluidRegions.size());
 PtrList<radiation::radiationModel> radiation(fluidRegions.size());
@@ -23,8 +23,8 @@ List<label> pRefCellFluid(fluidRegions.size(), -1);
 List<scalar> pRefValueFluid(fluidRegions.size(), Zero);
 List<bool> frozenFlowFluid(fluidRegions.size(), false);
 
-PtrList<dimensionedScalar> rhoMax(fluidRegions.size());
-PtrList<dimensionedScalar> rhoMin(fluidRegions.size());
+PtrList<dimensionedScalar> rhoMaxFluid(fluidRegions.size());
+PtrList<dimensionedScalar> rhoMinFluid(fluidRegions.size());
 
 PtrList<IOMRFZoneList> MRFfluid(fluidRegions.size());
 PtrList<fv::options> fluidFvOptions(fluidRegions.size());
@@ -150,7 +150,7 @@ forAll(fluidRegions, i)
     );
 
     Info<< "    Adding to turbulence\n" << endl;
-    turbulence.set
+    turbulenceFluid.set
     (
         i,
         compressible::turbulenceModel::New
@@ -169,7 +169,7 @@ forAll(fluidRegions, i)
         CombustionModel<rhoReactionThermo>::New
         (
             thermoFluid[i],
-            turbulence[i]
+            turbulenceFluid[i]
         )
     );
 
@@ -248,13 +248,13 @@ forAll(fluidRegions, i)
 
     simpleDict.readIfPresent("frozenFlow", frozenFlowFluid[i]);
 
-    rhoMax.set
+    rhoMaxFluid.set
     (
         i,
         new dimensionedScalar("rhoMax", dimDensity, GREAT, simpleDict)
     );
 
-    rhoMin.set
+    rhoMinFluid.set
     (
         i,
         new dimensionedScalar("rhoMin", dimDensity, Zero, simpleDict)
@@ -368,6 +368,6 @@ forAll(fluidRegions, i)
         new fvVectorMatrix(UFluid[i], dimForce)
     );
 
-    turbulence[i].validate();
+    turbulenceFluid[i].validate();
 }
 

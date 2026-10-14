@@ -1,1 +1,1 @@
-../../solid/solidRegionDiffNo.C
+../../phaseChangeMultiRegionFoam/solid/solidRegionDiffNo.C

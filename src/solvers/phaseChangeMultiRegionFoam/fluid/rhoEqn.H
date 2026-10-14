@@ -16,6 +16,11 @@
         fvOptions(rho)
     );
 
+    if (phaseChange.active())
+    {
+        rhoEqn -= phaseChange.massSource();
+    }
+
     fvOptions.constrain(rhoEqn);
     rhoEqn.solve();
     fvOptions.correct(rho);

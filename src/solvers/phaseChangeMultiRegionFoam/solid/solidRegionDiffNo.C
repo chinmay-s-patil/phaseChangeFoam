@@ -45,9 +45,9 @@ Foam::scalar Foam::solidRegionDiffNo
        /fvc::interpolate(Cprho)
     );
 
-    const scalar DiNum = max(kapparhoCpbyDelta).value()*runTime.deltaTValue();
+    const scalar DiNum = gMax(kapparhoCpbyDelta)*runTime.deltaTValue();
     const scalar meanDiNum =
-        average(kapparhoCpbyDelta).value()*runTime.deltaTValue();
+        gAverage(kapparhoCpbyDelta)*runTime.deltaTValue();
 
     Info<< "Region: " << mesh.name() << " Diffusion Number mean: " << meanDiNum
         << " max: " << DiNum << endl;

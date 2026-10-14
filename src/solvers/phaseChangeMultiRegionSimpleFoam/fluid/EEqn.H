@@ -6,8 +6,8 @@
 
     tmp<volScalarField> talphaEff =
         pcmModel.active()
-      ? tmp<volScalarField>(pcmModel.k()/CpThermo + turb.alphat())
-      : turb.alphaEff();
+      ? tmp<volScalarField>(pcmModel.k()/CpThermo + turbulence.alphat())
+      : turbulence.alphaEff();
     const volScalarField& alphaEff = talphaEff();
 
     fvScalarMatrix EEqn
@@ -56,6 +56,11 @@
         fvOptions.correct(he);
 
         thermo.correct();
+        if (pcmModel.active())
+        {
+            pcmModel.postEnergySolve(he);
+            thermo.correct();
+        }
         rad.correct();
 
         Info<< "Min/max T:" << min(thermo.T()).value() << ' '

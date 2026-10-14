@@ -1,4 +1,6 @@
 EXE_INC = \
+    -Ifluid \
+    -Isolid \
     -I../phaseChangeMultiRegionFoam \
     -I../phaseChangeMultiRegionFoam/fluid \
     -I../phaseChangeMultiRegionFoam/solid \

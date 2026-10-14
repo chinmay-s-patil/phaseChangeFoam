@@ -6,6 +6,7 @@
 
     tmp<volScalarField> tkEff = pcModel.active() ? pcModel.k() : tmp<volScalarField>(thermo.kappa());
     tmp<volScalarField> tCpThermo = thermo.Cp();
+    tmp<volScalarField> trhoEff = pcModel.active() ? pcModel.rhoEff() : tmp<volScalarField>(thermo.rho());
     volScalarField alphaEff("alphaEff", tkEff() / tCpThermo());
 
     for (int nonOrth=0; nonOrth<=nNonOrthCorr; ++nonOrth)
@@ -18,7 +19,7 @@
               : -fvm::laplacian(betav*taniAlpha(), h, "laplacian(alpha,h)")
             )
           ==
-            fvOptions(rho, h)
+            fvOptions(trhoEff(), h)
         );
 
         if (pcModel.active())
@@ -35,6 +36,7 @@
         if (coupled)
         {
             fvMatrixAssemblyPtr->addFvMatrix(hEqn);
+            break;
         }
         else
         {

@@ -34,10 +34,14 @@
 
         if (phaseChange.active())
         {
-            p_rghEqn -= phaseChange.massSource();
+            p_rghEqn += phaseChange.massSource();
         }
 
-        p_rghEqn.setReference(pRefCell, getRefCellValue(p_rgh, pRefCell));
+        p_rghEqn.setReference
+        (
+            pRefCell,
+            compressible ? getRefCellValue(p_rgh, pRefCell) : pRefValue
+        );
 
 
         p_rghEqn.solve();
@@ -60,7 +64,7 @@
 
     p = p_rgh + rho*gh;
 
-    #include "continuityErrs.H"
+    #include "compressibleContinuityErrors.H"
 
     // For closed-volume cases adjust the pressure level
     // to obey overall mass continuity
@@ -84,8 +88,8 @@
     }
 
     rho = thermo.rho();
-    rho = max(rho, rhoMin[i]);
-    rho = min(rho, rhoMax[i]);
+    rho = max(rho, rhoMin);
+    rho = min(rho, rhoMax);
     rho.relax();
 
     Info<< "Min/max rho:" << min(rho).value() << ' '

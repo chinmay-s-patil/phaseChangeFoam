@@ -112,13 +112,16 @@ if (coupled && !fvMatrixAssemblyPtr)
     const bool anyPhaseChangeActive = anySolidPhaseChangeActive || anyFluidPhaseChangeActive;
     const bool isMultiRegion = (fluidRegions.size() + solidRegions.size()) > 1;
 
-    if (anyPhaseChangeActive && (anyFluidPhaseChangeActive || coupled || isMultiRegion) && nOuterCorr < 2)
+    if (pimplePtr && pimplePtr->dictName() == "PIMPLE")
     {
-        FatalErrorInFunction
-            << "Phase change is active in a fluid, coupled, or multi-region domain, but nOuterCorrectors = "
-            << nOuterCorr << " < 2.\n"
-            << "Fluid, coupled, and multi-region phase change require nOuterCorrectors >= 2 "
-            << "to non-linearly iterate and converge latent heat release and temperature within each time step."
-            << exit(FatalError);
+        if (anyPhaseChangeActive && (anyFluidPhaseChangeActive || coupled || isMultiRegion) && nOuterCorr < 2)
+        {
+            FatalErrorInFunction
+                << "Phase change is active in a fluid, coupled, or multi-region domain, but nOuterCorrectors = "
+                << nOuterCorr << " < 2.\n"
+                << "Fluid, coupled, and multi-region phase change require nOuterCorrectors >= 2 "
+                << "to non-linearly iterate and converge latent heat release and temperature within each time step."
+                << exit(FatalError);
+        }
     }
 }
