@@ -4,7 +4,7 @@
 Case 1 (Heating Jump)          : PASSED (err = 0.006593 K)
 Case 2 (Cooling Jump)          : PASSED (err = 0.006593 K)
 Case 3 (Partial Melt)          : PASSED (err = 0.000000 K)
-Case 4 (Realistic L)           : PASSED (err = 0.280703 K)
+Case 4 (Realistic L)           : PASSED (err = 0.000007 K)
 Case 5 (Mushy Start & Melt)    : PASSED (err = 0.000000 K)
 Case 6 (Cooling Reversal)      : PASSED (err = 0.000000 K)
 Case 7 (Heating Reversal)      : PASSED (err = 0.000000 K)

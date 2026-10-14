@@ -66,7 +66,7 @@ def calc_h_sens(T, traj, Cps, Cpl, Tlm=300.0, Tum=310.0, Tlf=295.0, Tuf=305.0):
         else:
             return h_l
 
-def setup_single_cell_case(case_dir, T0, Q_source, L_heat, T_lm=300.0, T_um=310.0, T_lf=295.0, T_uf=305.0, alpha0=None, traj0=None, Cps=2000.0, Cpl=2000.0, rhoS=1000.0, rhoL=1000.0, direction="both", hysteresis=True):
+def setup_single_cell_case(case_dir, T0, Q_source, L_heat, T_lm=300.0, T_um=310.0, T_lf=295.0, T_uf=305.0, alpha0=None, traj0=None, Cps=2000.0, Cpl=2000.0, rhoS=1000.0, rhoL=1000.0, direction="both", hysteresis=True, nNonLinearCorrectors=50):
     os.makedirs(case_dir, exist_ok=True)
     os.chdir(case_dir)
     run_cmd("rm -rf [1-9]* 0.* constant/phaseChange/polyMesh constant/polyMesh")
@@ -102,10 +102,10 @@ snGradSchemes { default corrected; }
 """)
 
     with open("system/fvSolution", "w") as f:
-        f.write("""
-FoamFile { version 2.0; format ascii; class dictionary; location "system"; object fvSolution; }
-PIMPLE { nNonOrthogonalCorrectors 0; nNonLinearCorrectors 50; nonLinearTolerance 1e-6; }
-solvers { "h.*" { solver PCG; preconditioner DIC; tolerance 1e-12; relTol 0; } }
+        f.write(f"""
+FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object fvSolution; }}
+PIMPLE {{ nNonOrthogonalCorrectors 0; nNonLinearCorrectors {nNonLinearCorrectors}; nonLinearTolerance 1e-6; }}
+solvers {{ "h.*" {{ solver PCG; preconditioner DIC; tolerance 1e-12; relTol 0; }} }}
 """)
 
     with open("system/fvOptions", "w") as f:
@@ -290,6 +290,9 @@ def main():
     all_passed = True
 
     # --- Case 1: Single-Step Heating Overshoot ---
+    # Note on tolerance: with nNonLinearCorrectors=50, the non-linear corrector loop reaches the iteration
+    # ceiling before nonLinearTolerance (1e-6 K) is fully reached (residual maxDeltaT ~ 0.0013 K per iter),
+    # leading to a small residual truncation error of ~0.0066 K. With >=100 iterations, it converges to <1e-5 K.
     print("\n--- Case 1: Heating Jump Overshoot (T0 = 280 K -> 350 K in 1 step) ---")
     case1_dir = os.path.join(base_dir, "case1_heating")
     T1, a1, log1 = setup_single_cell_case(case1_dir, T0=280.0, Q_source=2400000.0, L_heat=100000.0)
@@ -304,6 +307,8 @@ def main():
         all_passed = False
 
     # --- Case 2: Single-Step Cooling Overshoot ---
+    # Note on tolerance: similarly, the ~0.0066 K error with 50 iterations is governed by the non-linear
+    # loop iteration ceiling before reaching nonLinearTolerance=1e-6 (residual maxDeltaT ~ 0.0013 K).
     print("\n--- Case 2: Cooling Jump Overshoot (T0 = 350 K -> 290 K in 1 step) ---")
     case2_dir = os.path.join(base_dir, "case2_cooling")
     T2, a2, log2 = setup_single_cell_case(case2_dir, T0=350.0, Q_source=-2200000.0, L_heat=100000.0)
@@ -335,12 +340,13 @@ def main():
     # --- Case 4: Realistic Latent Heat (L = 163 kJ/kg) ---
     print("\n--- Case 4: Realistic Latent Heat (L = 163 kJ/kg, T0 = 280 K -> 350 K) ---")
     case4_dir = os.path.join(base_dir, "case4_realisticL")
-    T4, a4, log4 = setup_single_cell_case(case4_dir, T0=280.0, Q_source=3030000.0, L_heat=163000.0)
+    # L=163 kJ/kg requires ~140 iterations to converge to nonLinearTolerance=1e-6 in a single 100s step
+    T4, a4, log4 = setup_single_cell_case(case4_dir, T0=280.0, Q_source=3030000.0, L_heat=163000.0, nNonLinearCorrectors=150)
     err4 = abs(T4 - 350.0)
     print(f"Simulated T = {T4:.6f} K, alphaL = {a4:.6f}")
     print(f"Exact T     = 350.000000 K, alphaL = 1.000000")
     print(f"Temperature Error = {err4:.6f} K")
-    if err4 < 0.30 and abs(a4 - 1.0) < 0.001:
+    if err4 < 0.01 and abs(a4 - 1.0) < 0.001:
         print("STATUS: CASE 4 PASSED!")
     else:
         print("STATUS: CASE 4 FAILED!")
@@ -842,7 +848,7 @@ heatSource
         f"Case 1 (Heating Jump)          : {'PASSED' if err1 < 0.01 and abs(a1 - 1.0) < 0.001 else 'FAILED'} (err = {err1:.6f} K)",
         f"Case 2 (Cooling Jump)          : {'PASSED' if err2 < 0.01 and abs(a2 - 0.0) < 0.001 else 'FAILED'} (err = {err2:.6f} K)",
         f"Case 3 (Partial Melt)          : {'PASSED' if err3 < 0.01 and err_a3 < 0.001 else 'FAILED'} (err = {err3:.6f} K)",
-        f"Case 4 (Realistic L)           : {'PASSED' if err4 < 0.30 and abs(a4 - 1.0) < 0.001 else 'FAILED'} (err = {err4:.6f} K)",
+        f"Case 4 (Realistic L)           : {'PASSED' if err4 < 0.01 and abs(a4 - 1.0) < 0.001 else 'FAILED'} (err = {err4:.6f} K)",
         f"Case 5 (Mushy Start & Melt)    : {'PASSED' if err5 < 0.001 and err_a5 < 0.001 else 'FAILED'} (err = {err5:.6f} K)",
         f"Case 6 (Cooling Reversal)      : {'PASSED' if err6 < 0.001 and err_a6 < 0.001 else 'FAILED'} (err = {err6:.6f} K)",
         f"Case 7 (Heating Reversal)      : {'PASSED' if err7 < 0.001 and err_a7 < 0.001 else 'FAILED'} (err = {err7:.6f} K)",

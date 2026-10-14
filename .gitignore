@@ -1,4 +1,5 @@
 # OpenFOAM Build Artifacts
+**/Make/linux*
 Make/linux*
 *.o
 *.so
