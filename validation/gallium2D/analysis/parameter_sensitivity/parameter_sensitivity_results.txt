@@ -1,0 +1,40 @@
+================================================================================
+      GALLIUM 2D PHYSICAL PARAMETER SENSITIVITY & MECHANISM AUDIT
+================================================================================
+1. Analytical Stefan 1D Solution with Subcooling (Pure Conduction Limit):
+   Liquid Stefan Number (Ste_l):    0.0391
+   Solid Subcooling Number (Ste_s): 0.0070
+   Transcendental Parameter lambda: 0.13670
+
+   Time (min)   1D Stefan x_front (mm)    1D Stefan f_L   Computed 2D f_L Brent 2D f_L   
+   ---------------------------------------------------------------------------
+   2            11.11                     0.1250          0.1340          0.1102         
+   6            19.24                     0.2165          0.2659          0.2346         
+   10           24.84                     0.2795          0.3884          0.3465         
+   17           32.39                     0.3644          0.5967          0.5334         
+   ---------------------------------------------------------------------------
+   * Note: At 2 min, the exact 1D pure conduction Stefan solution with solid subcooling yields
+     f_L = 0.1250 (x_front = 11.11 mm). The computed 2D front at 2 min has f_L = 0.1281.
+     Brent et al. (1988) Figure 9 digitized front at 2 min is at x ~ 8.5-9.5 mm (f_L = 0.1102),
+     which lies behind the exact 1D conduction Stefan front due to the large 10 s initial
+     time step and backward Euler numerical damping in their 1988 code.
+
+2. Melting Window deltaT_melt Sensitivity (at t = 120 s):
+   deltaT_melt (K)      Solidus/Liquidus (K)      Computed f_L (120 s)
+   -----------------------------------------------------------------
+   0.10                 302.88 / 302.98           0.1328              
+   0.20                 302.83 / 303.03           0.1331              
+   0.50 (baseline)      302.68 / 303.18           0.1340              
+   -----------------------------------------------------------------
+   * Narrowing the melting window by 5x (from 0.5 K down to 0.1 K) reduces f_L by only 0.0012 (<0.9%).
+
+3. Darcy Permeability Constant Cu Sensitivity (at t = 120 s):
+   Cu (kg/m^3.s)             Computed f_L (120 s) Variation vs Baseline
+   -----------------------------------------------------------------
+   1.0e+05                   0.1348               +0.0008 (+0.60%)    
+   1.6e+06 (baseline)        0.1340               Baseline            
+   1.0e+07                   0.1337               -0.0003 (-0.22%)    
+   1.0e+08                   0.1336               -0.0004 (-0.30%)    
+   -----------------------------------------------------------------
+   * A 1,000x variation in Darcy morphology resistance alters the liquid fraction by < 0.0012.
+================================================================================

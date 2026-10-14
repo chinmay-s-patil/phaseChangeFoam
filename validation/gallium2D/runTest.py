@@ -617,6 +617,13 @@ def run_gallium(case_dir, nx=42, ny=32, end_time=120, deltaT_melt=0.5, cu=1.6e6,
     # Optional plotting
     if plot:
         try:
+            # If both Enthalpy-Porosity and EHCDarcy cases exist, use unified comparative plotter
+            comp_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "analysis", "plot_comparison_both_models.py")
+            ehc_case = os.path.join(os.path.dirname(os.path.abspath(__file__)), "analysis", "case_ehcDarcy")
+            if os.path.exists(comp_script) and os.path.exists(ehc_case):
+                subprocess.run(f"python3 {comp_script}", shell=True)
+                return overall_pass
+
             import matplotlib
             matplotlib.use('Agg')
             import matplotlib.pyplot as plt

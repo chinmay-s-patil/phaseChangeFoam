@@ -1,0 +1,11 @@
+FoamFile { version 2.0; format ascii; class volScalarField; location "0/fluid"; object p_rgh; }
+dimensions [1 -1 -2 0 0 0 0];
+internalField uniform 101325;
+boundaryField
+{
+    hotWall { type fixedFluxPressure; value uniform 101325; }
+    coldWall { type fixedFluxPressure; value uniform 101325; }
+    topWall { type fixedFluxPressure; value uniform 101325; }
+    bottomWall { type fixedFluxPressure; value uniform 101325; }
+    frontAndBack { type empty; }
+}
