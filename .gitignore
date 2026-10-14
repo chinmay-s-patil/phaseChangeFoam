@@ -27,3 +27,4 @@ verification/*/test_*/
 
 ideas/
 # src/solvers/phaseChangeMultiRegionSimpleFoam/
+validation/papers
