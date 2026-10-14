@@ -49,7 +49,6 @@
 
             if (pcModel.active())
             {
-                pcModel.correct();
                 pcModel.postEnergySolve(h);
                 thermo.correct();
                 pcModel.applyKappaToThermo();

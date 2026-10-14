@@ -606,20 +606,48 @@ boundaryField {
     pass_t5 = (flux_err < 0.02) and (abs(T_s2_interface_cell - 329.2) < 1.5)
     print(f"Test 5 Status: {'PASSED' if pass_t5 else 'FAILED'}")
 
-    print("\n=======================================================")
-    print("      COUPLED MULTI-REGION VERIFICATION RESULTS        ")
-    print("=======================================================")
-    print(f"Test 1 (nOuterCorr = 10 Convergence): {'PASSED' if pass_t1 else 'FAILED'}")
-    print(f"Test 2 (nOuterCorr = 1 FatalError)  : {'PASSED' if pass_t2 else 'FAILED'}")
-    print(f"Test 3 (Coupled Write & Restart)    : {'PASSED' if pass_t3 else 'FAILED'}")
-    print(f"Test 4 (Coupled EHC Energy Balance) : {'PASSED' if pass_t4 else 'FAILED'}")
-    print(f"Test 5 (Coupled k_eff Interface Flux): {'PASSED' if pass_t5 else 'FAILED'}")
-    print("-------------------------------------------------------")
+    summary_lines = [
+        "=======================================================",
+        "      COUPLED MULTI-REGION VERIFICATION RESULTS        ",
+        "=======================================================",
+        f"Test 1 (nOuterCorr = 10 Convergence): {'PASSED' if pass_t1 else 'FAILED'}",
+        f"  - Concatenated T max difference    : {max_dT:.4e} K",
+        f"  - Concatenated alpha max difference: {max_da:.4e}",
+        f"  - Interface T discontinuity        : {interface_dT:.4e} K",
+        f"  - Coupled domain mean alpha        : {mean_a:.4f}",
+        f"Test 2 (nOuterCorr = 1 FatalError)  : {'PASSED' if pass_t2 else 'FAILED'}",
+        f"  - FatalError triggered as expected : {pass_t2}",
+        f"Test 3 (Coupled Write & Restart)    : {'PASSED' if pass_t3 else 'FAILED'}",
+        f"  - Restart vs continuous max T diff : {diff_restart:.4e} K",
+        f"  - T_reversal calculated patch check: {pass_t3_disk}",
+        f"Test 4 (Coupled EHC Energy Balance) : {'PASSED' if pass_t4 else 'FAILED'}",
+        f"  - Initial Total Energy             : {E0_total:.6f} J",
+        f"  - Final Total Energy               : {E_final_total:.6f} J",
+        f"  - Coupled Energy Relative Error    : {rel_energy_err:.4e}",
+        f"Test 5 (Coupled k_eff Interface Flux): {'PASSED' if pass_t5 else 'FAILED'}",
+        f"  - Expected Interface Flux          : {q_flux_expected:.2f} W/m^2",
+        f"  - Simulated Interface Flux         : {q_flux_sim:.2f} W/m^2",
+        f"  - Relative Flux Error              : {flux_err:.4e}",
+        f"  - Solid2 Interface Cell T          : {T_s2_interface_cell:.4f} K",
+        f"  - PCM Interface Cell T             : {T_pcm_interface_cell:.4f} K",
+        "-------------------------------------------------------"
+    ]
 
-    if pass_t1 and pass_t2 and pass_t3 and pass_t4 and pass_t5:
-        print("\nALL COUPLED MULTI-REGION VERIFICATION TESTS PASSED SUCCESSFULLY!")
+    all_coupled_passed = pass_t1 and pass_t2 and pass_t3 and pass_t4 and pass_t5
+    if all_coupled_passed:
+        summary_lines.append("ALL COUPLED MULTI-REGION VERIFICATION TESTS PASSED SUCCESSFULLY!")
     else:
-        print("\nCOUPLED TEST FAILED!")
+        summary_lines.append("COUPLED TEST FAILED!")
+
+    for line in summary_lines:
+        print(line)
+
+    results_file = os.path.join(base_dir, "coupled_verification_results.txt")
+    with open(results_file, "w") as f:
+        f.write("\n".join(summary_lines) + "\n")
+    print(f"\nSaved verification results to {results_file}")
+
+    if not all_coupled_passed:
         sys.exit(1)
 
 if __name__ == "__main__":

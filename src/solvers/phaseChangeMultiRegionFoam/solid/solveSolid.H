@@ -29,6 +29,11 @@
     {
         actualIter = nlCorr + 1;
 
+        if (pcModel.active())
+        {
+            pcModel.correct();
+        }
+
         tmp<volScalarField> tCpThermo = thermo.Cp();
         tmp<volScalarField> tCpEff = pcModel.active() ? pcModel.CpEff() : tmp<volScalarField>(thermo.Cp());
         tmp<volScalarField> trhoEff = pcModel.active() ? pcModel.rhoEff() : tmp<volScalarField>(thermo.rho());
@@ -85,17 +90,13 @@
             hEqn.solve(h.select(finalIter));
 
             fvOptions.correct(h);
+            thermo.correct();
 
             if (pcModel.active())
             {
-                pcModel.correct();
                 pcModel.postEnergySolve(h);
                 thermo.correct();
                 pcModel.applyKappaToThermo();
-            }
-            else
-            {
-                thermo.correct();
             }
 
 
