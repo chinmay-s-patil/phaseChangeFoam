@@ -1,6 +1,13 @@
 {
     volScalarField& he = thermo.he();
 
+    if (pcmModel.active() && he.name() != "h")
+    {
+        FatalErrorInFunction
+            << "PCM phase change model requires sensible enthalpy 'h' in thermo."
+            << exit(FatalError);
+    }
+
     tmp<volScalarField> tCpThermo = thermo.Cp();
     const volScalarField& CpThermo = tCpThermo();
 
