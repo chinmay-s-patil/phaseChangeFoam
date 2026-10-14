@@ -289,10 +289,11 @@ def main():
 
     all_passed = True
 
-    # --- Case 1: Single-Step Heating Overshoot ---
-    # Note on tolerance: with nNonLinearCorrectors=50, the non-linear corrector loop reaches the iteration
-    # ceiling before nonLinearTolerance (1e-6 K) is fully reached (residual maxDeltaT ~ 0.0013 K per iter),
-    # leading to a small residual truncation error of ~0.0066 K. With >=100 iterations, it converges to <1e-5 K.
+    # --- Cases 1 & 2: Single-Step Jump Overshoot (Heating / Cooling) ---
+    # Tolerance Note: with nNonLinearCorrectors=50, the fixed-point non-linear corrector loop reaches
+    # the 50-iteration ceiling before nonLinearTolerance (1e-6 K) is fully reached (residual maxDeltaT ~ 0.0013 K),
+    # resulting in a residual error of ~0.0066 K. With >=100 iterations, it converges machine-exact (< 1e-5 K).
+    # For large temperature jumps across phase change boundaries, users should raise nNonLinearCorrectors.
     print("\n--- Case 1: Heating Jump Overshoot (T0 = 280 K -> 350 K in 1 step) ---")
     case1_dir = os.path.join(base_dir, "case1_heating")
     T1, a1, log1 = setup_single_cell_case(case1_dir, T0=280.0, Q_source=2400000.0, L_heat=100000.0)
@@ -307,8 +308,6 @@ def main():
         all_passed = False
 
     # --- Case 2: Single-Step Cooling Overshoot ---
-    # Note on tolerance: similarly, the ~0.0066 K error with 50 iterations is governed by the non-linear
-    # loop iteration ceiling before reaching nonLinearTolerance=1e-6 (residual maxDeltaT ~ 0.0013 K).
     print("\n--- Case 2: Cooling Jump Overshoot (T0 = 350 K -> 290 K in 1 step) ---")
     case2_dir = os.path.join(base_dir, "case2_cooling")
     T2, a2, log2 = setup_single_cell_case(case2_dir, T0=350.0, Q_source=-2200000.0, L_heat=100000.0)

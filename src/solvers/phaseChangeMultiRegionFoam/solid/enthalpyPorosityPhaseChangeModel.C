@@ -460,19 +460,10 @@ Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::latentHe
 
     tmp<volScalarField> trho = thermo_.rho();
     const volScalarField& rho = trho();
-    const surfaceScalarField* phiPtr = mesh_.findObject<surfaceScalarField>("phi");
-
 
     dimensionedScalar Ldim("L", dimEnergy/dimMass, L_);
 
-    if (phiPtr)
-    {
-        tSu.ref() = Ldim * (fvc::ddt(rho, phaseFraction_) + fvc::div(*phiPtr, phaseFraction_, "div(phi,phaseFraction)"));
-    }
-    else
-    {
-        tSu.ref() = Ldim * fvc::ddt(rho, phaseFraction_);
-    }
+    tSu.ref() = Ldim * fvc::ddt(rho, phaseFraction_);
 
     return tSu;
 }
@@ -552,7 +543,6 @@ void Foam::enthalpyPorosityPhaseChangeModel::postEnergySolve(volScalarField& he)
 
     const scalarField& T = thermo_.T().primitiveField();
     scalarField& f = phaseFraction_.primitiveFieldRef();
-    scalarField& h = he.primitiveFieldRef();
 
     const scalar window = Tl_ - Ts_;
     const scalar denom = (window > SMALL ? (L_/Cp_ + window) : (L_/Cp_));
@@ -561,7 +551,8 @@ void Foam::enthalpyPorosityPhaseChangeModel::postEnergySolve(volScalarField& he)
     {
         const scalar Tf = Ts_ + f[i]*window;
         const scalar fNew = min(max(f[i] + lambda_*(T[i] - Tf)/denom, 0.0), 1.0);
-        h[i] -= L_*(fNew - f[i]);
+        // Note: do not subtract L_*(fNew - f) from sensible enthalpy he;
+        // latent heat is already accounted for via latentHeatSource() in EEqn / hEqn.
         f[i] = fNew;
     }
 

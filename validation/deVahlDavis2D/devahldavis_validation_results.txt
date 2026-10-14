@@ -1,0 +1,13 @@
+======================================================================
+  de Vahl Davis (1983) Natural Convection Benchmark (Ra = 10^5)
+======================================================================
+Mesh resolution: 50 x 50
+SIMPLE iterations: 400
+
+Metric                    Computed        Benchmark       Rel. Diff      
+----------------------------------------------------------------------
+Mean Nusselt (Nu_mean)    4.5830          4.5190          1.42          %
+Max Nusselt (Nu_max)      7.9200          7.7170          2.63          %
+Min Nusselt (Nu_min)      0.8300          0.7290          13.85         %
+----------------------------------------------------------------------
+Validation Status: PASSED (Tolerance: <= 5.0%)

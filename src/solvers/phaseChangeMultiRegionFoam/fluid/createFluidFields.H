@@ -377,20 +377,21 @@ forAll(fluidRegions, i)
         const scalar maxRhoDevL = gMax(mag(rhoCells - rhol))/(rhol + 1e-12);
         const scalar maxRhoDevSL = mag(rhos - rhol)/(rhos + 1e-12);
 
+        const bool boussinesq = (fvc::domainIntegrate(thermoFluid[i].psi()).value() <= SMALL);
+        const scalar rhoTol = boussinesq ? 0.05 : 1e-5;
+
         scalar maxDev = max(maxCpDevS, maxCpDevL);
         maxDev = max(maxDev, maxCpDevSL);
-        maxDev = max(maxDev, maxRhoDevS);
-        maxDev = max(maxDev, maxRhoDevL);
         maxDev = max(maxDev, maxRhoDevSL);
 
-        if (maxDev > 1e-5)
+        if (maxDev > 1e-5 || maxRhoDevS > rhoTol || maxRhoDevL > rhoTol)
         {
             FatalErrorInFunction
                 << "PCM model '" << pcm.type()
                 << "' in fluid region " << fluidRegions[i].name()
                 << " requires equal solid/liquid heat capacities and densities matching background thermophysical properties "
                 << "(Cp_solid == Cp_liquid == thermo Cp, and rho_solid == rho_liquid == thermo rho). "
-                << "Found max deviation = " << maxDev << ".\n"
+                << "Found max deviation = " << max(maxDev, max(maxRhoDevS, maxRhoDevL)) << ".\n"
                 << "Parameters: Cp_solid=" << Cps << ", Cp_liquid=" << Cpl
                 << ", rho_solid=" << rhos << ", rho_liquid=" << rhol << "."
                 << exit(FatalError);

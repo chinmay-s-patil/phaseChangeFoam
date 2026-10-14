@@ -65,8 +65,11 @@ public:
     //- Correct phase change model fields
     virtual void correct() override;
 
-    //- Update history (no-op for EP, OpenFOAM handles oldTime level)
-    virtual void updateHistory() override {}
+    //- Update history and advance phaseFraction_old_
+    virtual void updateHistory() override
+    {
+        phaseChangeModel::updateHistory();
+    }
 
     //- Latent heat source term: L * [ fvc::ddt(rho, f) + fvc::div(phi, f) ]
     virtual tmp<volScalarField> latentHeatSource() const override;

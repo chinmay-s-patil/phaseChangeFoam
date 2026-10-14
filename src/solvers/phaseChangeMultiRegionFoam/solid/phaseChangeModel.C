@@ -222,7 +222,7 @@ Foam::phaseChangeModel::phaseChangeModel
 
     if (!T_reversal_.headerOk())
     {
-        T_reversal_ == thermo.T();
+        T_reversal_ = thermo.T();
     }
 
     // Backward compatibility for disk reads: if liquidFraction exists on disk but phaseFraction doesn't
@@ -238,7 +238,7 @@ Foam::phaseChangeModel::phaseChangeModel
     if (!phaseFraction_.headerOk() && liquidFractionIO.typeHeaderOk<volScalarField>(true))
     {
         volScalarField lFrac(liquidFractionIO, mesh);
-        phaseFraction_ == lFrac;
+        phaseFraction_ = lFrac;
         phaseFractionRestored_ = true;
     }
 
@@ -246,9 +246,9 @@ Foam::phaseChangeModel::phaseChangeModel
 
     initPhaseFractionFromTemperature();
 
-    phaseFraction_old_ == phaseFraction_;
-    heatingTrajectory_old_ == heatingTrajectory_;
-    T_reversal_old_ == T_reversal_;
+    phaseFraction_old_ = phaseFraction_;
+    heatingTrajectory_old_ = heatingTrajectory_;
+    T_reversal_old_ = T_reversal_;
 }
 
 
@@ -1172,9 +1172,9 @@ void Foam::phaseChangeModel::updateHistory()
 {
     if (active_)
     {
-        phaseFraction_old_ == phaseFraction_;
-        heatingTrajectory_old_ == heatingTrajectory_;
-        T_reversal_old_ == T_reversal_;
+        phaseFraction_old_ = phaseFraction_;
+        heatingTrajectory_old_ = heatingTrajectory_;
+        T_reversal_old_ = T_reversal_;
     }
 }
 

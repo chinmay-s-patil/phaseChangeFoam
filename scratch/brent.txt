@@ -1,0 +1,905 @@
+Numerical Heat Transfer
+
+ISSN: 0149-5720 (Print) (Online) Journal homepage: http://www.tandfonline.com/loi/unht19
+
+ENTHALPY-POROSITY TECHNIQUE FOR MODELING
+CONVECTION-DIFFUSION PHASE CHANGE:
+APPLICATION TO THE MELTING OF A PURE METAL
+A. D. Brent , V. R. Voller & K. J. Reid
+To cite this article: A. D. Brent , V. R. Voller & K. J. Reid (1988) ENTHALPY-POROSITY
+TECHNIQUE FOR MODELING CONVECTION-DIFFUSION PHASE CHANGE: APPLICATION
+TO THE MELTING OF A PURE METAL, Numerical Heat Transfer, 13:3, 297-318, DOI:
+10.1080/10407788808913615
+To link to this article: http://dx.doi.org/10.1080/10407788808913615
+
+Published online: 16 May 2007.
+
+Submit your article to this journal
+
+Article views: 782
+
+View related articles
+
+Citing articles: 348 View citing articles
+
+Full Terms & Conditions of access and use can be found at
+http://www.tandfonline.com/action/journalInformation?journalCode=unht20
+Download by: [University of Sydney Library]
+
+Date: 15 August 2017, At: 12:44
+
+Numerical Heat Transfer, vol. 13, pp. 297-318, 1988
+
+ENTHALPY-POROSITY TECHNIQUE FOR
+MODELING CONVECTION-DIFFUSION PHASE
+CHANGE: APPLICATION TO THE MELTING
+OF A PURE METAL
+A. D. Brent, V . R . Voller, and K . J . Reid
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+Mineral Resources Research Center, Universiry of Minnesota,
+Minneapolis. Minnesota 55455
+
+The melting of pure gallium in a rectangular cavity has been numen'cally investigated
+using the enthdpy-porosity approach for modeling combined convection-diffusion
+phase change. The major advantage of this technique is that 1 allows a frred-grid
+solution of the coupled momentum and energy equ&'ons to be undertaken without
+resorting to variable transformations. In this work, a two-dimensional dynamic model
+b used and the influence of laminar natural-convectionflow on the melling process
+is considered. Excellent agreement exists between the numeriEol predictions and experimental results available in the literature. The enthalpy-porosity approach has
+been found to Converge rapidly, and is capable of producing accumte results for both
+the position and morphology of the melt front at dgferent times with relatively modest
+computational requirements. These results may be mken to be a sound v a l M o n of
+this technique for modeling i s o t h e m l phase changes in metallurgical systems.
+
+INTRODUCTION
+Phase-change processes play an important role in both extraction and fabrication operations in the metallurgical industries. These processes involve complex
+heat and mass transfer phenomena that determine the ultimate strength and integrity
+of metallic components by governing the microstructures formed. The ability to predict phase-change phenomena in metallurgical systems is therefore of considerable
+engineering interest. A significant effort has recently been directed to the theoretical
+modeling of phase-change problems [ 1- 121.
+Phase change in a metallurgical system represents a moving-boundary problem.
+A number of techniques are available for the solution of these problems, and a comprehensive review can be found in Crank [I]. Much of the early work in this area
+was concerned primarily with phase change in which conduction was assumed to be
+the principal mechanism of energy transfer. In most practical situations involving a
+liquid/solid phase change, however, convection effects (either forced or free) are
+also of importance and in fact may totally dominate over conduction in some cases.
+Computations were carried out using an AT&T 3B2/400 microcomputer and a Cray 2/1 supercomputer. The AT&T 3B2/400 was pan of a computer donation by AT&T lnformation Systems, Inc.,
+to the Civil and Mineral Engineering Department of the University of Minnesota. Time on the Cray 2/
+1 was provided by a resource grant from the Minnesota Supercomputer Institute. The support by both
+AT&T lnformation Systems. Inc.. and the Minnesota Supercomputer Institute is gratefully acknowledged.
+
+Copyright 0 1988 by Hemisphere Publishing Corporation
+
+297
+
+298
+
+A. D. BRENT ET AL.
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+NOMENCLATURE
+
+x, y
+
+coefficients in the discretized energy
+equation
+porosity function for the momentum
+equations
+source term in the discretized energy
+equation
+specific heat
+morphology constant
+latent heat function
+acceleration due to gravity
+sensible enthalpy
+thermal conductivity
+latent heat of fusion
+Rnndtl number, c p / k
+effective pressure
+Raleigh number, gp(T, - T,.)Y'p2/ap
+buoyancy source term for v momentum
+equation
+source term for energy equation in
+terms of enthalpy
+source term for energy equation in
+terms of temperature
+source term for u momentum equation
+source term for v momentum equation
+temperaturn
+velocity vector
+velocity components in x and y
+directions
+coordinates
+
+length of rectangular cavity
+height of rectangular cavity
+thermal diffusivity, k / c
+volumetric coefficient of thermal
+expansion
+nodal latent heat
+porosity of computational cell, LW/L
+relaxation factor
+dynamic viscosity
+density
+
+Subscripts
+
+abs
+error
+hot
+int
+m
+
+n
+
+nb
+P
+ref
+
+quantity absorbed over a time step
+error in conservation balance
+heated wall conditions
+initial and cold wall conditions
+melting point
+iteration counter
+neighboring node points
+pth node point or control volume
+reference conditions
+
+Superscript
+0
+
+time-dependent coefficients, also old
+values at orevious time steo
+
+The modeling- methodologies developed for melting or solidification studies
+may broadly be classified into three groups:
+1. Empirical: A possible engineering approach is to apply a conduction treatment and account for the enhanced energy transfer resulting from convection by boosting the liquid conductivity. This approach has been applied
+successfully to some metallurgical problems 113-151.
+2. Classical: A more rigorous approach is to fully account for convection in
+the liquid region. This may involve deriving suitable governing heat and
+mass transfer equations and the development of accompanying numerical
+techniques for their solution. Difficulties arise if the governing equations
+are based on the classical Stefan formulation, i.e., a temperature-based heat
+transfer equation. The main reason for this is that in the vicinity of the phase
+change, conditions on temperature, velocity, and latent heat evolution have
+to be accounted for. This effectively rules out the application of a fixedgrid numerical solution, as deforming grids or transformed coordinate systems are required to account for the position of the phase front. Examples
+of combined convection/diffusion phase-change studies employing these
+techniques may be found in Sparrow et al. 121, Ramachandran et al. 131,
+
+ENTHALPY-POROSITY TECHNIQUE FOR PHASE CHANGE
+
+299
+
+Gadgil and Gobin [4], Albert and O'Neill 151, and Sparrow and Ohkubo
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+161.
+3. Enrhalpy: An alternative to the empirical and classical approaches outlined
+above is the so-called enthalpy formulation, which allows a fixed-grid solution to be undertaken. This approach removes the need to explicitly satisfy
+conditions at the phase front and is therefore able to utilize standard solution
+procedures for the fluid flow and energy equations directly, without resorting to mathematical manipulations and transformations. This approach
+is particularly attractive in cases where phase change may constitute only
+part of a complex problem. Examples of fixed-grid solutions of convective/
+diffusion phase-change problems may be found in Morgan [7], Gartling [8],
+and Voller et al. [9- 121.
+The enthalpy methods account for the latent heat in the energy equation by
+assigning a nodal latent heat value to each computational cell according to the temperature of the cell. Upon changing phase, the nodal latent heat content of the cell
+is adjusted to account for latent heat absorption or evolution, this adjustment being
+reflected in the energy equation as either a heat source or sink. A distinctive advantage of this arrangement is that no explicit conditions for energy conservation at
+the solid/liquid interface need to be accounted for. A major problem, however, with
+fixed-grid solution procdures, is accommodating the zero velocity condition, which
+is required as a liquid region turns to solid. Various methods have been used to
+"switch off" velocities in computational cells that are freezing (or 'switch on" velocities in the case of melting). Velocities may simply be set to zero in a computational cell when the mean latent heat content reaches some predetermined value
+between 0 (cell all solid) and L (cell all liquid), where L is the latent heat of the
+phase change 171. A somewhat more subtle approach is employed by Gartling [8],
+in which the viscosity of a cell is driven to a very large value as the latent heat
+content of the cell falls to zero. This increasing viscosity provides the necessary
+coupling between the physical state of the material in the cell and the momentum
+equations, thereby driving velocities to zero in cells that are solid. Voller et al. [9121 have examined various methods for dealing with the zero solid velocity condition
+in fixed-grid solutions for freezing in a thermal cavity, and have proposed an alternative but similar approach to that adopted by Gartling. Computational cells that are
+undergoing a phase change (i.e., 0 < AH < L) are modeled as pseudo-porous media,
+with the porosity, e, being a function of AH and ranging between 1 (fully liquid
+cell) and 0 (fully solid cell). The present work involves the application of this "enthalpy-porosity" technique to the two-dimensional melting of a pure metal in a rectangular cavity. A comparison is made between the results predicted by this method
+and experimental values available in the literature in order to validate the applicability of this technique for metal systems.
+
+THE ENTHALPY-POROSITY APPROACH
+In considering the phase change of an alloy, three distinct regions will be present: a solid region, a totally liquid region, and a mushy region consisting of liquid
+
+A. D. BRENT ET AL.
+
+300
+
+dispersed among solid dendrites. To model such a phase change, the basic conservation equations have to be solved throughout the calculation domain.
+Governing Equations
+The energy equation may be written in terms of the sensible enthalpy, h =
+$;s,cuT as follows [12]:
+
+Xph)
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+-+ div(puh) = div(a grad h) + S,,
+at
+
+where a is the thermal diffusivity ( k / c ) , and Sh is a source term that will be discussed
+in more detail below. In the full liquid and mushy regions, fluid flow equations are
+required. These equations consist of the conservation of momentum equations (one
+for each velocity component) and a conservation of mass equation. Under the assumptions of Newtonian laminar flow, these equations are
+~(Pu)
+at
+
+-+ div(puu) = div(p grad u) -
+
+a~ + Au
+ax
+
+ap
+a(Pv) + div(puv) = div(p. grad v) - - + Av + S,
+at
+
+ay
+
+where u = (u,v) is the velocity, P is an effective pressure, and p is the viscosity.
+Assuming the Boussinesq treatment to be valid-i.e., density is constant in all terms
+except a gravity source term-natural-convection effects can be accounted for on
+defining the buoyancy source term to be
+
+where p is a thermal expansion coefficient and h,, and p,, are reference values of
+enthalpy and density, respectively. The function of the parameter A in the momentum
+equations will be discussed more fully below.
+Source Terms
+In using a fixed-grid approach for the analysis of solidification and melting
+systems, a central difficulty is in accounting for mass and heat transfer conditions
+in the vicinity of the phase change. The basic approach for overcoming this problem
+is to define appropriate volume source terms for the governing equations. In the
+enthalpy-porosity approach, the latent heat evolution is accounted for on defining
+the energy-equation source term [Sh in Eq. (I)] to have the form [12]:
+
+ENTHALPY-POROSITY TECHNIQUE FOR PHASE CHANGE
+
+301
+
+a(p w' + div(pu AH)
+S* = -
+
+ar
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+where AH = f(T), the latent heat content, is defined as a function of temperature.
+In the case of an isothermal phase change, the t e r n div(pu AH) vanishes and the
+function f(T) will be defined as follows:
+
+where T, is the phase-change temperature and L is the latent heat of fusion. For a
+mushy-region phase change, the temperature and latent heat relationship can be found
+via experiment or one of the available metallurgical relationships; e.g., the Scheil
+equation [I61 can be used.
+The condition that all velocities in solid regions are zero is accounted for in
+the enthalpy-porosity approach by appropriately defining the parameter A in Eqs. (2)
+and (3). The basic principle is gradually to reduce the velocities from a finite value
+in the liquid, to zero in the full solid, over the computational cells that are changing
+phase. This can be achieved by assuming that such cells behave as porous media
+with porosity E = the "element liquid fraction" [12]. The porosity can be computed
+as AH/L (i.e., the fraction of liquid in the cell), where AH is the latent heat content
+of the cell in question. In cells that are undergoing a phase change, A is defined so
+that the momentum equations are forced to mimic Carman-Kozeny equations for flow
+in a porous media [12]:
+(1 grad P = [-C $]u.
+
+where C is a constant accounting for the mushy-region morphology and u, is an
+apparent velocity. In order to achieve this behavior, an appropriate definition of A
+is
+
+where b is merely a computational constant introduced to avoid division by zero.
+In practice the effect of A is as follows: In full liquid elements, A is zero and
+has no influence; in elements that are changing phase, the value of A will dominate
+over the transient, convective, and diffusive components of the momentum equations, thereby forcing them to imitate the Carman-Kozeny law; in totally solid elements, the final large value of A will swamp out all terms in the governing equations
+and force any velocity predictions effectively to zero. The validity of the CarmanKozeny equation in describing the flow in a dendritic mushy region has been investigated experimentally [17], and thus application of Eq. (9) has physical significance. Further details on the implementation of the enthalpy-porosity approach for
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+302
+
+A. D. BRENT ET AL.
+
+mushy-region phase changes can be found in [9-121. It should be noted that the
+constant C may significantly influence the morphology of the phase front, and care
+must be taken in assigning a value to it. This constant effectively controls the degree
+of penetration of the convection field into the mushy region. Further work needs to
+be carried out in the area of mushy-region phase change to establish guiding principles in assigning appropriate values for both the constants C and b in Eq. (9).
+In the case of an isothermal phase change, however, the flow inside computational cells that are melting or freezing does not follow the governing laws for flow
+in a porous media. In an isothermal phase-change system, the phase front is a welldefined line and has no band or width associated with it as in the case of a mushy
+phase change. In a discretized calculation domain, however, the phase front will
+have a finite width associated with it. This width will generally be only that of a
+single computational cell, and hence any convenient method for gradually extinguishing the velocities in a solidifying cell will be acceptable. A possible alternative
+to applying the Carman-Kozeny equations is to use a linear function for A , that is,
+
+One advantage of using a simple linear function is that it is slightly less expensive to compute than the Carman-Kozeny formula. The influence of A will again
+be gradually to override the other terms in the discretized momentum equations in
+solidifying control volumes, thereby forcing velocity predictions in solid regions to
+zero. Although the value of the constant C in Eqs. (9) and (10) will not influence
+the morphology of the phase front as significantly as in the case of a mushy-region
+phase change, it should be sufficiently large to force velocity predictions in solid
+regions essentially to zero. It should be mentioned that although any convenient
+method may be acceptable for extinguishing velocities in solidifying cells in isothermal phase-change systems, it is desirable that the method chosen allows a smooth,
+gradual transition rather than a step change in velocity. Step changes in the momentum-equation source terms tend to retard convergence of their numerical solution, and sometimes lead to oscillations that may result in divergence. Inappropriate
+switching methods for the velocities may also lead to reduced accuracy, particularly
+when coarse grids are employed. A quantitative evaluation of the influence of different switching techniques has been conducted by Voller et al. [lo].
+Numerical Implementation of the Enthalpy-Porosity Technique
+Once a suitable expression has been selected for the velocity-switching function
+A in the momentum equations, standard solution procedures for the coupled momentum and continuity equations may be used without any modification. In this
+study, the SIMPLE procedure described by Patankar was applied [IS]. To ensure a
+converged solution of the energy equation, however, special treatment of the enthalpy source term [Eq. (6)] is required. In the numerical solution of the energy
+equation, the latent heat content of each control volume needs to be updated according to the temperature values predicted from the energy equation after each iteration in the computational cycle. A reliable method for updating the latent heat
+content of each computational cell has been developed by Voller et al. [lo, 121. This
+
+ENTHALPY-POROSITY TECHNIQUE FOR PHASE CHANGE
+
+303
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+method avoids oscillations in the iterative procedure that could result in the inability
+to achieve a converged solution, and may be applied in both finite-element- and
+control volume-based finitediierence numerical schemes. As a control volume-based
+numerical scheme was used in this work, the following discussion will be limited
+to the control volume approach. Following the control volume-based formulation and
+notation in Patankar [18], the discretized energy equation [Eq. (I)] may be written
+as follows:
+
+where the subscripts indicate the appropriate node point values, the a's are coefficients that depend on the combined convection/diffusion fluxes into the pth control
+volume, d contains energy sources and sinks for the pth control volume, and a; is
+the unsteady coefficient linking the present h, value to its value at the previous time
+step, h;. For this discretized energy equation, the nodal latent heat value for the pth
+control volume is updated after the nth iteration according to Voller et al. [lo, 121
+as
+
+where f is the inverse of the latent heat function [Eq. (7) for an isothermal phase
+change] used to describe the latent heat content of each computational cell. The
+enthalpy update expression given by Eq. (12) is entirely general, i.e., it is applicable
+to both mushy-region phase changes that occur over a temperature range as well as
+to isothermal phase changes. It is only the form of the latent heat function f(T) that
+would distinguish an isothermal phase change from a phase change occumng over
+a temperature range. As this work is concerned with the application of the enthalpyporosity technique to a pure metal system, the following discussion will be restricted
+to isothermal phase changes. It should be noted that during iterations it is possible
+that use of Eq. (12) to update the nodal latent heat values may lead to nonphysical
+values, i.e., nodal latent heat values greater than L or less than zero. The first of
+these conditions will occur if more than an entire control volume changes phase in
+a single time step, and the second may arise if a control volume is close to starting
+the phase change at the beginning of a time step. To prevent the nodal latent heat
+contents from assuming physically unrealistic values, the iterative update of [AH,],+,
+should be restricted between zero and L. For an isothermal phase change, the computational implementation of the enthalpy update given by Eq. (12) may thus be
+simply accomplished as follows:
+
+where A is a relaxation factor.
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+304
+
+A. D. BRENT ET AL.
+
+Equation (13) illustrates the physical significance of the enthalpy update, i.e.,
+the nodal latent heat values are adjusted according to the difference between the
+nodal temperature predicted from the energy equation and the phase-change temperature. In the case of freezing, the nodal latent heat value assigned to computational cells undergoing a phase change provides a heat source in the energy equation
+to account for latent heat evolution. This source expires when the latent heat content
+of the cell is exhausted. At this point AHp = 0 and the cell is totally solid. Conversely, in a melting situation the nodal latent heat value of a computational cell
+undergoing a p h a ~ echange provides the energy equation with a heat sink to account
+for the absorption of latent heat. This sink disappears when the total latent heat of
+the phase change is reached. At this point Mp= L and the cell is totally fluid.
+While iterating, corrections in the nodal latent heat values of computational cells in
+which a phase change is occurring are driven by the difference between the temperature predicted from the energy equation and the phase-change temperature. The
+enthalpy update scheme attempts to annihilate this difference s o that at convergence,
+the temperature of all cells in which both liquid and solid coexist will be that of the
+phase-change temperature, T,,,.This scheme thus accurately reflects the physical state
+of an isothermal phase change in a discretized domain, i.e., the phase front is 'smeared"
+across the width of the computational cells in which the phase change is occurring.
+The ratio ap/ai in the nodal latent heat update arises from the derivation of
+Eq. (12) [I21 and is a "normalizing" factor that accounts for the number of grid
+points and size of time step used. This ratio increases upon both grid refinement and
+on increasing size of time step, thereby compensating for these changes in the enthalpy update equation and ensuring rapid convergence of the method. The physical
+significance of the ap/aj term is as follows:
+I. For a given size of time step, a larger number of conml volumes will change
+phase during any particular time step if a fine grid is used. As the ap/aj
+term increases as a function of the number of grid points, it forces more
+rapid changes in the nodal enthalpy values near the phase front when a fine
+grid is employed. This allows the true position of the phase front to be
+quickly established in the discretized domain.
+2. For a fixed grid size, increasing the size of the time step results in a larger
+number of control volumes changing phase during each time step. As the
+value of the ratio a p / a i increases according to the time step size, this term
+ensures rapid changes in the nodal enthalpy values in the region of the phase
+change when large time steps are used. This again quickly establishes the
+true position of the phase front in the discretized domain.
+
+MELTING OF PURE GALLIUM I N A RECTANGULAR CAVITY
+T o verify the applicability of the enthalpy-porosity approach to metallurgical
+systems, the modeling of an isothermal phase change was undertaken for which reliable experimental data exists in the literature. The study examined the two-dimensional melting of pure gallium in a rectangular cavity with one heated wall. This
+subject was chosen for the following reasons.
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+ENTHALPY-POROSITY TECHNIQUE FOR PHASE CHANGE
+
+305
+
+1. If the enthalpy-porosity technique is to be applied to metallurgical systems,
+it is essential to verify the accuracy of its predictions for a substance that
+is representative of metal properties. Comparisons to other materials such
+as water/ice or organic phase-change materials (PCMs) may not be valid
+if the technique is to be used for metallurgical applications. Large dissimilarities between the thennophysical properties of organic compounds and
+metals result in considerably different flow structures and phase-front morphologies [19-2 I].
+2. Gallium has a melting point close to the ambient (29.7g°C), and experiments with it may therefore be well controlled and are able to yield complete
+information about a melting or freezing front (e.g., the shape and position
+of the front may be traced at different times). The high melting temperatures
+of most practical structural metals (e.g., steel and titanium) are not conducive to experimentation, and great difficulties exist with obtaining reliable
+phase-change data for these materials. As a result of the convenience of
+working with gallium, experimental data available in the literature may be
+assumed to be both comprehensive and accurate.
+3. A comprehensive experimental study on the melting of gallium in a rectangular cavity has been conducted by Gau and Viskanta [21]. The authors
+present detailed traces of the morphology of the melt front at various times.
+The narrow temperature range (lO°C) used by these investigators allows the
+assumption of constant physical properties, which simplifies a computational simulation of this work. The results obtained by Gau and Viskanta
+[21] also show a great deal of morphology of the melt front. It is believed
+that if the numerical analysis is capable of accurately predicting the acute
+morphology obtained in the experiments, this would represent a sound validation of the enthalpy-porosity approach for isothermal phase changes in
+metallurgical systems.
+It should be noted that there is no fundamental difference between applying
+the enthalpy-porosity technique to either melting or solidifcation problems. The
+equations and numerical scheme developed for melting are equally applicable to freezing
+situations; the particular type of phase change that occurs is determined only by the
+initial and boundary conditions of the problem.
+Calculation Domain
+
+A diagram of the calculation domain and boundary conditions is given in Fig.
+1. The values of Ti,,, Tho,,X, and Y were taken from one of Gau and Viskanta's
+experiments [21] for which the melt front had been traced in detail at a number of
+different times. With reference to Fig. 1, these values were Tin,= 28.3OC, Tho,=
+3 8 T , X = 8.89 cm, and Y = 6.35 cm. The physical properties for pure gallium are
+well documented [22-251, and the values used in this investigation are given in Table
+1. The physical property values were chosen at 32°C. a temperature that is representative of the temperature range of the experiment (i.e., 28.3-38°C). The Prandtl
+number for liquid gallium at this temperature is 0.0216, and the situation shown in
+Fig. 1 corresponds to a Stefan number of 0.039 and a Raleigh number of 6 X 10'.
+
+A. D. BRENT ET AL.
+Top Wall (insulated)
+
+------------------
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+Heated Wall (That)-
+
+Solid Gallium
+-Cold
+
+Wall (Tint)
+
+I n i t i a l Temperature (Tint)
+
+I
+
+Bottom wall' (insulated)
+
+I
+I
+I
+
+!
+Fig. 1 Calculation domain and boundary conditions.
+
+It should be mentioned at this point that while gallium may be an ideal metal
+for phase-change studies from an experimental point of view, the fact that the thermal
+conductivity of solid, crystalline gallium is highly anisotropic complicates a theoretical analysis. The conductivity of the solid crystal ranges from 88.5 W . m-' . K - I
+along the b axis to 16 W . m-' . K-I along the c axis [22]. The thermal conductivity
+of polycrystalline gallium at the melting point (29.78"C) is 33.5 W .m-I . K-I [22].
+However, the problem of anisotropic solid thermal conductivity is alleviated to a
+large degree by examining a melting rather than a feezing problem. In melting, the
+only disturbance the system is subjected to when the experiment is started at time t
+= 0, is that one of the walls is heated to a temperature above the melting pint (see
+Fig. I). Once melting is initiated against this wall, all the heat transfer into the
+system occurs through a layer of molten liquid. It is therefore the physical properties
+of the liquid rather than the solid that will govern the phase change in a melting
+process. If freezing is studied, however, the major resistance to energy transport
+resides in a solid layer growing on a cold wall, and it is then the thermal conductivity
+Table 1
+
+Physical properties of Pure Gallium
+
+Density (liquid), p
+Reference density, p,
+Reference temperature, T,,
+Volumetric thermal expansion coefficienl of liquid, P
+Thermal conductivity, k
+Melting point, T,
+Latent heat of fusion, L
+Specific heat capacity, C
+Dynamic viscosity. p
+Prandtl number. PI
+
+6093 k g . m-'
+6095 kg. m-'
+29.78"C
+1.2 X lo-'
+32.0 W .m-' . K"
+29.78C
+80160 J .kg-'
+381.5 J .kg-'
+1.81 X lo-' kg. m-' . s-'
+2.16 X lo-'
+
+ENTHALPY-POROSITY TECHNlQUE FOR PHASE CHANGE
+
+307
+
+of the solid that exerts a controlling influence on the phase change. The problems
+associated with freezing studies on gallium have been noted by Gau and Viskanta
+[21], who were unable to obtain reproducible results for the phase front position and
+morphology when conducting solidifcation studies on the metal. It should be noted
+that although the thermal conductivity of liquid gallium is also anisotropic (although
+to a lesser degree than that of the solid) [22], the presence of convection currents
+will tend to average out directional differences in thermal conductivity.
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+Numerical Solution
+The conservation equations assuming two-dimensional laminar flow in cartesian coordinates with constant physical properties are given in the appendix, along
+with appropriate boundary conditions for this problem. These equations represent a
+set of four nonlinear, coupled partial differential equations, which were solved iteratively using the control volume-based finite-difference procedure described by
+Patankar [IS]. A fully implicit formulation was used for the time-dependent terms
+and the combined convection/diffusion coefficients were evaluated using Patankar's
+power law scheme. The SIMPLE algorithm was applied to solve the momentum and
+continuity equations to obtain the velocity field. A line-by-line solver based on the
+TDMA was used to iteratively solve the algebraic discretization equations. Details
+of the numerical method and solution procedures may be found in Patankar [IS].
+The nodal enthalpy update procedure described by Voller et al. [lo, 121 was used
+to iteratively adjust nodal enthalpy values [i.e., Eq. (13)l. A flow chart of the computational algorithm is given in Fig. 2.
+After conducting a grid-refinement study, a uniform 42 X 32 grid was chosen
+for this work. A time step of 5 s was applied for the first four time steps to resolve
+the rapid initial changes in temperature near the heated wall, after which a constant
+time step of 10 s was used. Further refinements in the grid or time step size did not
+produce discernable improvements in accuracy. In order to be consistent with the
+general methodology developed for mushy-region phase changes, the Carman-Kozeny formula [Eq. (9)] was applied for switching the velocities in cells undergoing a
+phase change. A value of 1.6 X lo6 was used for the morphology constant C and
+for the constant b in Eq. (9). Underrelaxation factors of 0.5,
+a value of 1 X
+0.6, and 0.9 were used for the solution of the two momentum equations, the pressure
+correction equation, and the energy equation, respectively. Underrelaxation of the
+enthalpy update [Eq. (13)] was also required to avoid divergence in this highly nonlinear, coupled situation. It was found advantageous to ramp the underrelaxation
+factor A in Eq. (13) from an initial value of 0.2 at the beginning of each time step
+to a maximum of 0.4 as convergence was neared. The position of the phase front
+at desired times was determined by plotting the L/2 nodal latent heat contour. This
+was found to provide a smoother, more precise estimate of the phase-front position
+than a plot of the melting-point isotherm. The reason for this is that all control volumes in which both liquid and solid coexist will be at the melting point (T,,,), and
+hence the T,,, isotherm represents a band rather than a well-defined line. The rationale
+behind using the L/2 contour is the assumption that the phase front at any given
+time passes through control volumes that posses half the latent heat of the phase
+change.
+
+A. D. BRENT ET AL.
+
+Initial temperature and
+velocity fields at time t
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+A
+
+t
+
+-
+
+0
+
+-- "
+-
+
+set Toid
+T
+Uold
+Void
+Step forward in time
+t - t i d t
+
+Calculate sources ST, S,
+
+and S,
+
+1
+
+I
+
+Update nodal Latent
+heat velirea according
+to temperature
+
+Solve for u, v and T
+Calculate overall momentum
+and energy balances
+
+A
+
+t
+
+Write out results if
+required for time t
+
+Y
+
+NO
+
+Fig. 2 Flow chan of the computational algorithm.
+
+Convergence Criteria and Computational Requirements
+
+The convergence criteria for the numerical solution of the conservation equations given in the appendix were based on both the maximum local mass imbalance
+within the cavity (reflecting convergence of the flow field) and on an unsteady overall energy balance (indicating convergence of the energy equation). As the energy
+equation contains a source term (viz., the latent heat term p(aAH/ar)J that is not
+coupled directly to the momentum equations, it is necessary to monitor both the mass
+
+ENTHALPY-POROSITY TECHNIQUE FOR PHASE CHANGE
+
+309
+
+and energy balances to ensure a fully converged solution. The unsteady energy balance was calculated as the sum of the total energy flowing into the cavity at the two
+end walls and the energy absorbed by the material in the cavity, over each time step
+Ar, as follows:
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+where
+
+and
+
+The energy absorption term contains a contribution from the latent heat change
+over the time step. The integrals in Eqs. (15)-(17) were evaluated numerically by
+summing over the respective control volumes. The temperature derivatives in Eqs.
+(15) and (16) were evaluated in a fully implicit manner to be consistent with the
+numerical scheme used. Convergence was declared after the maximum local mass
+imbalance became less than I X w 4 % of the total mass present in the cavity and
+the absolute value of the energy balance error dropped below 1 X lo-*%. Increasing
+the stringency of the convergence criteria beyond these values did not result in significant improvements in accuracy. An average of 4 3 iterations per time step were
+needed to achieve convergence. The computations were conducted on both an AT&T
+3B2/400 microcomputer and a Cray 2/1 supercomputer. The longest simulation carried out (i.e., a melt time of 19 min, spanning 116 time steps) required 26 CPU
+hours on the microcomputer and 9 CPU min on the supercomputer. No attempt was
+made to optimize or vectorize the code. Such steps may be expected to produce
+significant reductions in CPU times. In particular, code vectorization would result
+in substantially faster execution on the Clray 2/1. However, these CPU times compare very favorably with those quoted in the literature for comparable investigations
+[26, 271. These requirements may still be considered modest for the complex problem investigated, and indicate that two-dimensional fine-grid solutions based on the
+enthalpy-porosity technique are entirely feasible using a microcomputer. For threedimensional phase-change analyses, however, it is anticipated the application of vectorized code on a supercomputer would be required to yield acceptable execution
+times.
+Resutts and Discussion
+The position of the melt front and streamlines at 3, 6, LO, and 19 min are
+shown in Figs. 3a-6a. The melt front is virtually planar after 3 min as the natural
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+A. D. BRENT ET AL.
+
+Fig. 3 Flow and temperature fields at 3 min for the
+two-dimensional melting of gallium. Panel (a) depicts
+the streamlines and melt front; panel (b) the isotherms.
+
+convection field has just begun to develop (Fig. 3a). Figure 4a shows the developing
+morphology after 6 min when the natural convection has intensified and is beginning
+to have a pronounced influence on the overall energy transport from the heated wall
+to the melt face. The morphology of the melt front is as expected; fluid rising at the
+heated wall travels across the cavity and impinges on the upper section of the solid
+front, thereby resulting in this area melting back beyond the mean position of the
+front. The influence of the convection currents intensifies with time, and the morphology of the melt front becomes more acute as melting progresses. Figures 5a and
+6a show the melt front and streamlines after 10 and 19 min, respectively. From Fig.
+6a it is evident that after 19 min the shape of the melt front is governed primarily
+by convection effects, with conduction exerting very little influence. Although the
+upper section of the melt front advances rapidly due to the impingement of warm
+fluid, the lower section moves considerably slower, thereby resulting in the acute
+morphology illustrated in Fig. 6a.Development of the intensity of the free convection
+field may be traced by examining Fig. 7, in which the maximum absolute value of
+the stream function is plotted against time. In the early stages of melting the max-
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+ENTHALPY-POROSITY TECHNIQUE FOR PHASE CHANGE
+
+311
+
+imum absolute value of the stream function increases rapidly as the temperature gradients driving the convection currents begin to develop. As the volume of the molten
+fraction in the cavity increases with time, the influence of viscous stresses against
+the cavity walls decrease, thereby allowing the fluid velocity (and consequently the
+absolute value of the stream function) to rise. The fluid motion continues to intensify
+until it levels off after approximately 12 min, by which time the natural convection
+field in the cavity is well developed.
+The regions of maximum heat flux may be identified by examining the isotherm
+plots given in Figs. 3b-6b. The steepest temperature gradients are present in two
+areas, viz., at the upper section of the melt face where warm fluid impinges on the
+solid, and at the lower section of the heated wall where cool fluid returning from
+the melt front impinges on the heated wall. The 'insulatingn nature of the melt front
+in the cavity is also evident from the isotherm plots. Almost the entire temperature
+drop across the cavity occurs in the molten region, leaving the temperature of the
+residual solid essentially uniform near the initial temperature. The reason for this is
+that virtually all the energy entering the cavity at the heated wall is absorbed by the
+
+Fig. 4 Flow and temperature fields at 6 min for the
+two-dimensional melting of gallium. Panel (a) depicts
+the streamlines and melt front; panel ( b ) the isothemls.
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+A. D. BRENT ET AL.
+
+Fig. 5 Flow and temperature fields at 10 min for the
+two-dimensional melting of gallium. Panel (a) depicts
+the streamlines and melt front; panel ( b ) the isotherms.
+
+phase change at the melt front, allowing only a small fraction to penetrate the slightly
+supercooled solid. As the major temperature gradients occur in the liquid phase, it
+is the thermal conductivity of the liquid rather than the solid that controls heat transfer, and hence the problems associated with the theoretical treatment of anisotropic
+solid conductivity d o not arise.
+The melt fronts calculated in this study and those determined experimentally
+by Gau and Viskanta [21] at various times are plotted in Fig. 8. From Fig. 8 it is
+evident that both the qualitative behavior and acute morphology of the experimental
+melt fronts have been realistically duplicated in the numerical study. An appreciation
+of the accuracy of the numerical predictions may be obtained by studying Fig. 9, in
+which the computed fronts at 2, 6, 10, and 17 min are compared directly to their
+experimental counterparts. Excellent agreement exists between the computed and
+experimental melt front positions, and small discrepancies between the measured and
+calculated results may be attributed to factors such as three-dimensional effects in
+the experimental apparatus used to determine the front position, experimental error,
+and variations in fluid properties.
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+Fig. 6 Flow and temperature fields at 19 min for the
+two-dimensional melting of gallium. Panel (a) depicts
+the streamlines and melt front; panel (b) the isotherms.
+
+Fig. 7 Relationship between the maximum absolute value of
+the stream function and time for the two-dimensional melting of
+gallium.
+
+A. D. BRENT ET AL.
+
+CONCLUSIONS
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+The applicability of the enthalpy-porosity technique for modeling an isothermal
+phase change in a metallurgical system has been verified by examining the twodimensional melting of pure gallium under the influence of natural convection in a
+rectangular cavity. Results obtained from this numerical study were compared to
+experimental data available in the literature. The method converges rapidly and is
+capable of accurately predicting both the position and morphology of the melt front
+at various times with relatively modest computational requirements. The results of
+this work may be taken to be a sound validation of the enthalpy-porosity technique
+for simulating isothermal phase changes in metallurgical systems.
+
+Time (min)
+
+Fig. 8 Calculated and experimental melt fronts at various times. Panel
+(a) shows melt front positions determined experimentally by Gau and
+Viskanta 1211; panel (b) depicts the theoretical melt front positions calculated in this study.
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+ENTHALPY-POROSITY TECHNIQUE FOR PHASE CHANGE
+
+Numerical
+
+- -- Experimental (Gau and Viskanta (211)
+Fig. 9 Comparison of calculated and experimental melt fronts for the two-dimensional melting
+of gallium.
+
+Validation of this approach for mushy phase-change systems is to be considered
+next. A detailed study of the quantitative influence of the morphology constant C in
+a mushy phase-change situation is also required as the criteria for assigning a value
+to this parameter need to be established. The application of the enthalpy-porosity
+method to the modeling of "freeze-linings" or "skulls" in metallurgical processes
+will also be undertaken. The ability to predict both the morphology and position of
+these protective solid layers that isolate a melt from the structural components of the
+vessel in which it is contained is of particular interest in the field of ultra-pure metals
+processing.
+APPENDIX
+Conservation Equations and Boundary Conditions for the
+Two-Dimensional Melting of Gallium
+
+1. Conservation equations
+1.1 Continuity
+
+A. D. BRENT ET AL.
+
+1.2 Momentum equations
+x direction:
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+y direction:
+
+where
+
+1.3 Energy equation
+
+where
+
+2. Boundary conditions
+2.1 Left wall (x = 0):
+u=v=o
+T = Tho,
+2.2 Top and bottom walls O, = 0 and y = Y):
+
+2.3 Right wall (x = X):
+
+ENTHALPY-POROSITY TECHNIQUE FOR PHASE CHANGE
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+REFERENCES
+1. J. Crank, Free and Moving Boundary Problems. Clarendon Press, Oxford, 1984.
+2. E. M. Sparrow, S. V. Patankar, and S. Ramadhyani, Analysis of Melting in the Presence
+of Natural Convection in the Melt Region, J. Heat Transfer, vol. 99, pp. 520-526, 1977.
+3. N. Ramachandran, I . R. Gupta, and T. Jalunu, Thermal and Fluid Flow Effects During
+Solidification in a Rectangular Cavity, Int. J . Heat Mass Transfer, vol. 25, pp. 187194, 1982.
+4. A . Gadgil and D. Gobin, Analysis of Two-Dimensional Melting in Rectangular Enclosures in the Presence of Convection, J. Heat Transfer, vol. 106, pp. 20-26, 1984.
+5. M. R. Albert and K. O'Neill, Transient Two-Dimensional Phase Change with Convection Using Deforming Finite Elements, in R. W. Lewis et al. (eds), Computer Techniques
+in Heat Transfer. vol. I , Pineridge Press, Swansea, 1985.
+6. E. M. Sparrow and Y. Ohkubo, Numerical Analysis of Two-Dimensional Transient Freezing
+Including Solid-Phase and Tube-Wall Conduction and Liquid-Phase Natural Convection,
+Numer. Heat Transfer, vol. 9, pp. 59-77, 1986.
+7. K. Morgan, A Numerical Analysis of Freezing and Melting with Convection, Comp.
+Methods Appl. Eng., vol. 28, pp. 275-284, 1981.
+8. D. K. Gartling, Finite Element Analysis of Convective Heat Transfer Problems with
+Phase Change, in K. Morgan et al. (eds.), Computer Methods in Fluids, Pentech, London, 1980.
+9. V. R. Voller, N. C. Markatos, and M. Cross, Solidification in Convection and Diffusion,
+in N. C. Markatos et al. (eds.), Numerical Simulations of Fluid Flow and HeallMass
+Transfer Processes, Springer-Verlag, Berlin, 1986.
+10. V. R. Voller, N. C. Markatos, and M. Cross, Techniques for Accounting for the Moving
+Interface in Convection/Diffusion Phase Change, in R. W. Lewis and K. Morgan (eds.),
+Numerical Methods in Thermal Problenis, vol. 4 , Pineridge Press, Swansea, 1985.
+I I. V. R. Voller, M. Cross, and N. C. Markatos, An Enthalpy Method for Convection/
+Diffusion Phase Change, Int. J . Numer. Methods Eng., vol. 24, pp. 271-284, 1987.
+12. V. R. Voller and C. Prakash, A Fixed Grid Numerical Modelling Methodology for Convection/Diffusion Mushy Region Phase Change Problems, Int. J . Heat Mass Transfer,
+vol. 30, pp. 1709-1719, 1987.
+13. C. Gau and R. Viskanta, Melting and Solidifcation of a Metal System in a Rectangular
+Cavity, Int. J . Heat Mass Transfer, vol. 27, pp. 113-123, 1984.
+14. J. Szekely and P. S. Chhabra, The Effects of Natural Convection on the Shape and
+Movement of the Melt-Solid Interface in the Contmlled Solidification, Met. Trans. B ,
+vol. 1, pp. 1195-1203, 1970.
+15. F. M. Chiesa and R. I. L. Guthrie, Natural Convection Heat Transfer Rate During the
+Solidification and Melting of Metals and Alloy Systems, J . Hear Transfer, vol. 99, pp.
+520-526, 1977.
+16. W. K u n and D. J. Fisher, Fundamenrals of Solidifcation, Trans. Tech., Switzerland,
+1986.
+17. D. R. Poirier, Permeability for Flow of lnterdendritic Liquid in Columnar-Dendritic Alloys, Met. Trans. B . . vol. 18B, pp. 245-256, 1987.
+18. S. V. Patankar, Numerical Heat Transfer and Fluid Flow, Hemisphere, Washington,
+D.C.. 1980.
+19. C. Benard, D. Gobin, and F. Maninez, Melting in Rectangular Enclosures: Experiments
+and Numerical Simulations, J . Heat Transfer, vol. 107, pp. 794-802, 1985.
+20. B. W. Webb and R. Viskanta, Natural-Convection-Dominated Melting Heat Transfer in
+an Inclined Rectangular Enclosure, Int. J . Heat Mass Transfer, vol. 29(2), pp. 183-192,
+1986.
+
+Downloaded by [University of Sydney Library] at 12:44 15 August 2017
+
+318
+
+A. D. BRENT ET AL.
+
+21. C. Gau and R. Viskanta, Melting and Solidification of a Pure Metal on a Vertical Wall,
+J . Heat Transfer, vol. 108, pp. 174-181, 1986.
+22. W. H. Cubberley (ed.), Metals Handbook-Properties and Selection: Nonferrous Alloys
+and Pure Metals, 9th ed.. American Society of Metals, Metals Park, Ohio, pp. 736737, 1979.
+23. Gallium and Gallium Compounds, in Kirk-Othmer Encyclopedia of Chemical Technoiogy, 3d ed., vol. l I, p. 606, Wiley, New York.
+24. M . J. Duggin, The Thermal Conductivity of Liquid Gallium, Phys. Lett.. vol. 29A(8),
+pp. 470-47 1, 1969.
+25. A . 0 . Ukanwa, Diffusion in Liquid Metal Systems, NASA Contractor Technical Report
+NASA-CR-144016, p. 9, June 1975.
+26. C. J . Ho and R. Viskanta, Heat Transfer During Melting from an Isothermal Vertical
+Wall, J. Heat Transfer, vol. 106(c), pp. 12- 19, 1984.
+27. G . E. Schneider, Computation of Heat Transfer with Solid/Liquid Phase Change Including Free Convection, J. Thermophys. Heat Transfer, vol. 1(2), pp. 136-145, 1987.
+Received September 2 1 . 1987
+Accepted November 3. 1987
+
+Requests for reprints should be sent to V. R. Voller.
+
+

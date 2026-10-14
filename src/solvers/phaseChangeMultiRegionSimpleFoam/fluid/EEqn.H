@@ -17,21 +17,28 @@
       : turbulence.alphaEff();
     const volScalarField& alphaEff = talphaEff();
 
+    bool compressible = (fvc::domainIntegrate(thermo.psi()).value() > SMALL);
+
     fvScalarMatrix EEqn
     (
         fvm::div(phi, he)
-      + (
-            he.name() == "e"
-          ? fvc::div(phi, volScalarField("Ekp", 0.5*magSqr(U) + p/rho))
-          : fvc::div(phi, volScalarField("K", 0.5*magSqr(U)))
-        )
       - fvm::laplacian(alphaEff, he)
      ==
-        rho*(U&g)
-      + rad.Sh(thermo, he)
+        rad.Sh(thermo, he)
       + Qdot
       + fvOptions(rho, he)
     );
+
+    if (compressible)
+    {
+        EEqn +=
+            (
+                he.name() == "e"
+              ? fvc::div(phi, volScalarField("Ekp", 0.5*magSqr(U) + p/rho))
+              : fvc::div(phi, volScalarField("K", 0.5*magSqr(U)))
+            )
+          - rho*(U&g);
+    }
 
 
 

@@ -5,7 +5,8 @@ if (finalIter)
 
 if (oCorr == 0)
 {
-    if (!frozenFlow)
+    bool compressible = (fvc::domainIntegrate(thermo.psi()).value() > SMALL);
+    if (!frozenFlow && compressible)
     {
         #include "rhoEqn.H"
     }

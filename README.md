@@ -483,6 +483,12 @@ if (pcmModel.active() && oCorr == nOuterCorr - 1)
 > - **Darcy Lag**: In fluid regions, `UEqn.H` is assembled before `EEqn.H`. Consequently, momentum drag uses the phase fraction $f$ from the end of the previous outer corrector step. For sharp melting fronts, using $nOuterCorrectors \ge 2$ ensures outer-iteration convergence and eliminates this 1-outer-corrector lag.  
 > - **`fvSchemes` Requirement**: Source-based latent heat advection evaluates $\nabla \cdot (\phi f)$ using `fvc::div(phi, phaseFraction)`. Case setups must include `div(phi,phaseFraction)` in `system/<region>/fvSchemes` under `divSchemes` (e.g. `div(phi,phaseFraction) Gauss upwind;`).
 
+> [!TIP]
+> **6. Non-Linear Iteration Convergence for Large Phase Change Steps**  
+> Under large temperature jumps across phase change boundaries or high latent heat ratios ($L/C_p \gg 1$), the fixed-point non-linear corrector loop in `solveSolid.H` converges linearly (Picard-style iteration). In `system/<region>/fvSolution`, ensure `PIMPLE.nNonLinearCorrectors` is set sufficiently high (e.g., 50–150 for large jumps, while 20–30 suffices for normal continuous steps) and monitor log files for the warning:  
+> `Solid region <name> did not converge within N non-linear iterations (maxDeltaT = ... > tol = ...)`  
+> If this warning appears, increase `nNonLinearCorrectors` or reduce the time step $\Delta t$ to ensure the exact energy path is fully converged.
+
 ---
 
 ## Utilities, Tutorials, & Verification Suite
