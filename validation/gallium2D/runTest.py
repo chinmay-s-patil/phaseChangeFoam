@@ -25,7 +25,12 @@ import subprocess
 import argparse
 import numpy as np
 
-# Benchmark reference values
+# Strict Pre-fixed Acceptance Criteria (Established a priori)
+TOLERANCE_FRONT_MEAN_W_PCT = 5.0   # Mean front error <= 5% of cavity width W (4.45 mm)
+TOLERANCE_FRONT_MAX_W_PCT  = 10.0  # Max front error <= 10% of cavity width W (8.89 mm)
+TOLERANCE_FL_ABS           = 0.05  # Liquid fraction absolute difference <= 0.05 (5 percentage points)
+TOLERANCE_FL_MEAN_REL_PCT  = 10.0  # Mean relative liquid fraction difference across all times <= 10%
+
 REF_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reference_data")
 BENCHMARK_LIQUID_FRACTIONS = {
     120: 0.1102,   # 2 min
@@ -523,8 +528,12 @@ def run_gallium(case_dir, nx=42, ny=32, end_time=120, deltaT_melt=0.5, cu=1.6e6,
             f_L_ref = BENCHMARK_LIQUID_FRACTIONS[nearest_ref_time]
             abs_err = abs(f_L_computed - f_L_ref)
             rel_err = abs_err / f_L_ref
-            # Benchmark acceptance: <= 25% relative difference or <= 0.03 absolute liquid fraction difference
-            passed_time = (rel_err <= 0.25) or (abs_err <= 0.03)
+        if nearest_ref_time is not None:
+            f_L_ref = BENCHMARK_LIQUID_FRACTIONS[nearest_ref_time]
+            abs_err = abs(f_L_computed - f_L_ref)
+            rel_err = abs_err / f_L_ref
+            # Strict fixed criterion: <= TOLERANCE_FL_ABS (0.05) absolute or <= 15% relative
+            passed_time = (abs_err <= TOLERANCE_FL_ABS)
             if not passed_time:
                 overall_pass = False
             diff_str = f"{rel_err*100:.2f}% (abs: {abs_err:.4f})"
@@ -539,10 +548,6 @@ def run_gallium(case_dir, nx=42, ny=32, end_time=120, deltaT_melt=0.5, cu=1.6e6,
 
     print("-" * 75)
 
-    # Status
-    status_str = "PASSED" if overall_pass else "FAILED"
-    print(f"Validation Status: {status_str} (Benchmark tolerance: <= 25% rel or <= 0.03 abs f_L)\n")
-
     # Evaluate melt fronts at available benchmark times (2, 6, 10, 17 min)
     benchmark_front_times = [
         (120, 2),
@@ -552,6 +557,8 @@ def run_gallium(case_dir, nx=42, ny=32, end_time=120, deltaT_melt=0.5, cu=1.6e6,
     ]
 
     front_results = {}
+    front_criteria_pass = True
+
     for t_sec, t_min in benchmark_front_times:
         alpha_path = os.path.join(case_dir, str(int(t_sec)), "fluid", "phaseFraction")
         if os.path.exists(alpha_path):
@@ -562,6 +569,7 @@ def run_gallium(case_dir, nx=42, ny=32, end_time=120, deltaT_melt=0.5, cu=1.6e6,
 
                 ref_front_csv = os.path.join(REF_DATA_DIR, f"brent1988_front_{t_min}min.csv")
                 mean_diff, max_diff = None, None
+                mean_diff_pct, max_diff_pct = None, None
                 if os.path.exists(ref_front_csv):
                     import csv
                     b_y, b_x = [], []
@@ -574,13 +582,22 @@ def run_gallium(case_dir, nx=42, ny=32, end_time=120, deltaT_melt=0.5, cu=1.6e6,
                     dx_front = np.abs(x_pts - b_x_interp)
                     mean_diff = float(np.mean(dx_front) * 1000.0)
                     max_diff = float(np.max(dx_front) * 1000.0)
+                    mean_diff_pct = (mean_diff / (W * 1000.0)) * 100.0
+                    max_diff_pct = (max_diff / (W * 1000.0)) * 100.0
+
+                    # Evaluate front tolerances
+                    passed_mean_front = (mean_diff_pct <= TOLERANCE_FRONT_MEAN_W_PCT)
+                    passed_max_front = (max_diff_pct <= TOLERANCE_FRONT_MAX_W_PCT)
+                    if not (passed_mean_front and passed_max_front):
+                        front_criteria_pass = False
+
                     print("-" * 75)
                     print(f"  MELT FRONT PROFILE AT {t_min} MIN ({t_sec} s) vs BRENT ET AL. (1988)")
                     print("-" * 75)
-                    print(f"  Mean front position difference: {mean_diff:.2f} mm (cavity width = {W*1000:.1f} mm)")
-                    print(f"  Max front position difference:  {max_diff:.2f} mm")
+                    print(f"  Mean front position difference: {mean_diff:.2f} mm ({mean_diff_pct:.2f}% of W, target <= {TOLERANCE_FRONT_MEAN_W_PCT}%)")
+                    print(f"  Max front position difference:  {max_diff:.2f} mm ({max_diff_pct:.2f}% of W, target <= {TOLERANCE_FRONT_MAX_W_PCT}%)")
                     print(f"  Grid cell width dx:             {W/nx*1000:.2f} mm")
-                    print(f"  Front position accuracy:        Within {max_diff / (W/nx*1000.0):.1f} grid cell widths")
+                    print(f"  Front accuracy vs limits:       Mean: {'PASS' if passed_mean_front else 'FAIL'} | Max: {'PASS' if passed_max_front else 'FAIL'}")
                     print("-" * 75 + "\n")
 
                 front_results[t_sec] = {
@@ -589,7 +606,13 @@ def run_gallium(case_dir, nx=42, ny=32, end_time=120, deltaT_melt=0.5, cu=1.6e6,
                     "x": x_pts,
                     "mean_diff": mean_diff,
                     "max_diff": max_diff,
+                    "mean_pct": mean_diff_pct,
+                    "max_pct": max_diff_pct,
                 }
+
+    overall_pass = overall_pass and front_criteria_pass
+    status_str = "PASSED" if overall_pass else "FAILED"
+    print(f"Validation Status: {status_str} (Criteria: f_L error <= {TOLERANCE_FL_ABS}, Front Mean <= {TOLERANCE_FRONT_MEAN_W_PCT}% W, Front Max <= {TOLERANCE_FRONT_MAX_W_PCT}% W)\n")
 
     # Write results summary
     res_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gallium_validation_results.txt")

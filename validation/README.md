@@ -42,16 +42,19 @@ It implements a progressive two-rung validation hierarchy verifying both pure na
   - Prandtl number: $\text{Pr} = \nu / \alpha = 0.0216$
   - Rayleigh number: $\text{Ra} = g \beta \Delta T H^3 / (\nu \alpha) \approx 6 \times 10^5$
 - **Benchmark Metrics**:
-  1. Liquid volume fraction $f_L(t)$ at $t = 2\text{ min}$ (120 s) against numerical benchmark.
-  2. Melt front contour position $x_{front}(y)$ at $t = 2\text{ min}$ digitized from Figure 9 of Brent et al. (1988).
-- **Status**: **PASSED** (Front position accurate to within $1.2$ grid cell widths across the full cavity width).
-- **Runtime**: $\approx 35\text{ s}$ for 120 s physical simulation ($1,200$ time steps).
+  1. Liquid volume fraction evolution $f_L(t)$ evaluated across the full $17\text{ min}$ ($1020\text{ s}$) benchmark ($t = 2, 6, 10, 17\text{ min}$).
+  2. Melt front contour position $x_{front}(y)$ at $t = 2, 6, 10, 17\text{ min}$ compared against numerical and experimental front positions.
+- **Status**: **UNDER RIGOROUS VALIDATION / AUDIT** (Comprehensive spatial mesh, time-step convergence, and exact per-step energy balance audit).
+- **Runtime**: $\approx 35\text{ s}$ for 120 s short gate; $\approx 4\text{--}5\text{ min}$ for full 17 min simulation ($10,200$ time steps at $\Delta t = 0.1\text{ s}$).
 
 ---
 
 ## Reference Data & Literature Sources
-- **`papers/brent1988.pdf`**: Direct copy of Brent, Voller, Reid (1988), *Numerical Heat Transfer*, 13(3), pp. 297–318.
-- **`gallium2D/reference_data/`**: Digitized melt front coordinates ($t = 2, 6, 10, 17\text{ min}$) and liquid fraction curve extracted from Brent et al. (1988).
+- **Brent, Voller, Reid (1988)**: "Enthalpy-Porosity Technique for Modeling Convection-Diffusion Phase Change: Application to the Melting of a Pure Metal", *Numerical Heat Transfer*, 13(3), pp. 297–318. DOI: [10.1080/10407788808913615](https://doi.org/10.1080/10407788808913615).
+- **Hannoun, Alexiades, Mai (2003)**: "Resolving the Controversy over Tin and Gallium Melting in a Rectangular Cavity", *Numerical Heat Transfer, Part B: Fundamentals*, 44(3), pp. 253–276. DOI: [10.1080/716100520](https://doi.org/10.1080/716100520).
+- **Ye & Arıcı (2023)**: "Redefined-interface-error-based 2D verification and validation study on natural convection melting: Benchmark with pure Gallium", *International Communications in Heat and Mass Transfer*, 147, 106952. DOI: [10.1016/j.icheatmasstransfer.2023.106952](https://doi.org/10.1016/j.icheatmasstransfer.2023.106952).
+- **Gau & Viskanta (1986)**: "Melting and Solidification of a Metal System—I. Melting from a Vertical Wall", *Int. J. Heat Mass Transfer*, 29(12), pp. 1951–1963.
+- **`gallium2D/reference_data/`**: Digitized melt front coordinates ($t = 2, 6, 10, 17\text{ min}$) and liquid fraction curves from Brent et al. (1988) and subsequent literature.
 
 ---
 

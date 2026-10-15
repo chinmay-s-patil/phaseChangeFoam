@@ -24,6 +24,12 @@ verification/**/case*/
 verification/*/case*/
 verification/**/test_*/
 verification/*/test_*/
+validation/**/case*
+validation/*/case*
+validation/**/test_*
+validation/*/test_*
+validation/**/study_*
+validation/**/energy_audit_*
 
 ideas/
 # src/solvers/phaseChangeMultiRegionSimpleFoam/
