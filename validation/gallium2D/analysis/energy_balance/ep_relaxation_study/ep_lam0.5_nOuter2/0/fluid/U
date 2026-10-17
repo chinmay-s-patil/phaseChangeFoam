@@ -1,0 +1,11 @@
+FoamFile { version 2.0; format ascii; class volVectorField; location "0/fluid"; object U; }
+dimensions [0 1 -1 0 0 0 0];
+internalField uniform (0 0 0);
+boundaryField
+{
+    hotWall { type fixedValue; value uniform (0 0 0); }
+    coldWall { type fixedValue; value uniform (0 0 0); }
+    topWall { type fixedValue; value uniform (0 0 0); }
+    bottomWall { type fixedValue; value uniform (0 0 0); }
+    frontAndBack { type empty; }
+}

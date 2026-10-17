@@ -151,19 +151,22 @@ def run_exact_audit(case_dir, nx=42, ny=32):
         # Find closest index in hot_times
         idx = np.argmin(np.abs(hot_times - t_val))
         ein = E_in_hot[idx] if len(E_in_hot) > idx else 0.0
-        eout = E_out_cold[idx] if len(E_out_cold) > idx else 0.0
-        enet = ein - eout
+        # OpenFOAM raw coldWall flux is negative (leaving domain).
+        # Outward heat loss magnitude:
+        eout_raw = E_out_cold[idx] if len(E_out_cold) > idx else 0.0
+        eout_loss = -eout_raw
+        enet = ein - eout_loss
 
         surplus = E_stored - enet
         rel_err = (surplus / enet) * 100.0 if enet > 0 else 0.0
         f_L = float(np.mean(alpha))
 
-        print(f"{t_val:<8.1f} {t_val/60.0:<8.2f} {ein:<13.2f} {eout:<14.2e} {enet:<13.2f} {E_sens:<11.2f} {E_lat:<11.2f} {E_stored:<13.2f} {surplus:<11.2f} {rel_err:<+8.2f}%")
+        print(f"{t_val:<8.1f} {t_val/60.0:<8.2f} {ein:<13.2f} {eout_loss:<14.2f} {enet:<13.2f} {E_sens:<11.2f} {E_lat:<11.2f} {E_stored:<13.2f} {surplus:<11.2f} {rel_err:<+8.2f}%")
         results.append({
             "t_sec": t_val,
             "t_min": t_val / 60.0,
             "E_in_hot": ein,
-            "E_out_cold": eout,
+            "E_out_cold": eout_loss,
             "E_net": enet,
             "E_sens": E_sens,
             "E_lat": E_lat,
