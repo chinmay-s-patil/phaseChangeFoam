@@ -26,13 +26,15 @@ verification/**/test_*/
 verification/*/test_*/
 validation/**/case*
 validation/*/case*
-validation/**/test_*
-validation/*/test_*
+validation/**/test_*/
+validation/*/test_*/
+!validation/**/test_*.py
 validation/**/study_*
 validation/**/energy_audit_*
 validation/**/dt_convergence_study*
 validation/**/ep_lam*
 validation/**/ehc_lam*
+validation/**/sweep_runs/**
 validation/**/ep_relaxation_study/**
 !validation/**/ep_relaxation_study/*.txt
 !validation/**/ep_relaxation_study/*.json
