@@ -31,6 +31,12 @@ validation/*/test_*
 validation/**/study_*
 validation/**/energy_audit_*
 validation/**/dt_convergence_study*
+validation/**/ep_lam*
+validation/**/ehc_lam*
+validation/**/ep_relaxation_study/**
+!validation/**/ep_relaxation_study/*.txt
+!validation/**/ep_relaxation_study/*.json
+!validation/**/ep_relaxation_study/*.py
 
 ideas/
 # src/solvers/phaseChangeMultiRegionSimpleFoam/
