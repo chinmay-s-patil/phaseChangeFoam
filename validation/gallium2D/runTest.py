@@ -68,7 +68,7 @@ def run_cmd(cmd, cwd=None, allow_failure=False):
         sys.exit(1)
     return res
 
-def setup_case(case_dir, nx=42, ny=32, end_time=120, deltaT_melt=0.5, cu=1.6e6):
+def setup_case(case_dir, nx=42, ny=32, end_time=120, deltaT_melt=0.5, cu=1.6e6, model="EHCDarcy", lam=1.0):
     os.makedirs(case_dir, exist_ok=True)
     os.makedirs(os.path.join(case_dir, "system"), exist_ok=True)
     os.makedirs(os.path.join(case_dir, "system/fluid"), exist_ok=True)
@@ -282,12 +282,17 @@ mixture
     T_l = T_m - deltaT_melt / 2.0
     T_u = T_m + deltaT_melt / 2.0
 
-    with open(os.path.join(case_dir, "constant/fluid/phaseChangeDict"), "w") as f:
-        f.write(f"""FoamFile {{ version 2.0; format ascii; class dictionary; location "constant/fluid"; object phaseChangeDict; }}
-active true;
-phaseChange
-{{
-    type enthalpyPorosity;
+    if model == "EHCDarcy":
+        pc_block = f"""    type EHCDarcy;
+    active true;
+    forward
+    {{
+        T_lowerBound {T_l:.4f};
+        T_upperBound {T_u:.4f};
+        latentHeat 80160.0;
+    }}"""
+    else:
+        pc_block = f"""    type enthalpyPorosity;
     active true;
     forward
     {{
@@ -295,7 +300,14 @@ phaseChange
         T_upperBound {T_u:.4f};
         latentHeat 80160.0;
     }}
-    lambda 0.2;
+    lambda {lam};"""
+
+    with open(os.path.join(case_dir, "constant/fluid/phaseChangeDict"), "w") as f:
+        f.write(f"""FoamFile {{ version 2.0; format ascii; class dictionary; location "constant/fluid"; object phaseChangeDict; }}
+active true;
+phaseChange
+{{
+{pc_block}
     porosity
     {{
         Cu {cu:e};
@@ -461,17 +473,20 @@ def evaluate_melt_front(alpha_2d, nx, ny, W, H):
 
     return y_coords, x_front
 
-def run_gallium(case_dir, nx=42, ny=32, end_time=120, deltaT_melt=0.5, cu=1.6e6, plot=False):
+def run_gallium(case_dir, nx=42, ny=32, end_time=120, deltaT_melt=0.5, cu=1.6e6, model="EHCDarcy", lam=1.0, plot=False):
     print("=" * 75)
     print("  Brent, Voller, Reid (1988) Gallium Melting Benchmark")
     print("=" * 75)
     print(f"Setting up case in:   {case_dir}")
+    print(f"Formulation:          {model}")
+    if model == "enthalpyPorosity":
+        print(f"Newton relaxation:    lambda = {lam}")
     print(f"Mesh resolution:      {nx} x {ny}")
     print(f"End time:             {end_time} s ({end_time/60.0:.1f} min)")
     print(f"Melting window:       {deltaT_melt} K (302.93 +/- {deltaT_melt/2.0} K)")
     print(f"Darcy constant Cu:    {cu:e}")
 
-    setup_case(case_dir, nx=nx, ny=ny, end_time=end_time, deltaT_melt=deltaT_melt, cu=cu)
+    setup_case(case_dir, nx=nx, ny=ny, end_time=end_time, deltaT_melt=deltaT_melt, cu=cu, model=model, lam=lam)
 
     of_env = "source /usr/lib/openfoam/openfoam2412/etc/bashrc || source /usr/lib/openfoam/openfoam2406/etc/bashrc || true"
     solver_bin = find_solver("phaseChangeMultiRegionFoam")
@@ -732,6 +747,8 @@ def main():
     parser.add_argument("--endTime", type=int, default=120, help="Simulation duration in seconds (default: 120 s = 2 min)")
     parser.add_argument("--deltaT", type=float, default=0.5, help="Melting interval width in K (default: 0.5)")
     parser.add_argument("--cu", type=float, default=1.6e6, help="Darcy mushy constant (default: 1.6e6)")
+    parser.add_argument("--model", choices=["EHCDarcy", "enthalpyPorosity"], default="EHCDarcy", help="Phase change model formulation (default: EHCDarcy)")
+    parser.add_argument("--lambda", dest="lam", type=float, default=1.0, help="Newton relaxation factor for enthalpyPorosity (default: 1.0)")
     parser.add_argument("--plot", action="store_true", default=True, help="Generate comparison plot")
     parser.add_argument("--clean", action="store_true", help="Remove simulation folder after running")
     args = parser.parse_args()
@@ -746,6 +763,8 @@ def main():
         end_time=args.endTime,
         deltaT_melt=args.deltaT,
         cu=args.cu,
+        model=args.model,
+        lam=args.lam,
         plot=args.plot
     )
 

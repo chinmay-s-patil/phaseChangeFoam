@@ -59,22 +59,23 @@ def parse_openfoam_field(filepath):
 
 def integrate_flux(time_flux_list):
     """
-    Computes cumulative energy in Joules using trapezoidal integration.
-    time_flux_list is list of (time, flux_watts).
+    Computes cumulative discrete boundary energy in Joules using right-endpoint summation:
+    E(t_N) = sum_{n=1}^N Q(t_n) * Delta t_n
+    which is the exact discrete boundary-flux conjugate of the backward-Euler temporal operator:
+    Delta E_stored^n = Q_net(t^n) * Delta t_n.
     """
     if not time_flux_list:
         return np.array([]), np.array([])
     times = np.array([x[0] for x in time_flux_list])
     fluxes = np.array([x[1] for x in time_flux_list])
     
-    # Trapezoidal cumulative integral
+    # Right-endpoint discrete sum: each step n has energy Q(t_n) * dt_n
     cum_energy = np.zeros(len(times))
-    # At t=0, flux can be taken as fluxes[0]
     dt0 = times[0]
-    cum_energy[0] = fluxes[0] * dt0  # initial step
+    cum_energy[0] = fluxes[0] * dt0
     for i in range(1, len(times)):
         dt = times[i] - times[i-1]
-        cum_energy[i] = cum_energy[i-1] + 0.5 * (fluxes[i-1] + fluxes[i]) * dt
+        cum_energy[i] = cum_energy[i-1] + fluxes[i] * dt
     return times, cum_energy
 
 def run_exact_audit(case_dir, nx=42, ny=32):

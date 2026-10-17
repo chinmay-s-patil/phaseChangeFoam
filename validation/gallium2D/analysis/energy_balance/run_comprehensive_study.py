@@ -216,6 +216,20 @@ def calculate_front_deviation(case_dir, t_sec, nx=42, ny=32):
     max_diff_mm = float(np.max(dx_front) * 1000.0)
     return mean_diff_mm, max_diff_mm
 
+def parse_execution_time(log_path):
+    if not os.path.exists(log_path):
+        return None
+    with open(log_path, 'r') as f:
+        lines = f.readlines()
+        for line in reversed(lines[-50:]):
+            if "ExecutionTime =" in line:
+                try:
+                    parts = line.split("ExecutionTime =")[1].split("s")[0].strip()
+                    return float(parts)
+                except:
+                    pass
+    return None
+
 def main():
     print("=" * 80)
     print(" STARTING MASTER COMPREHENSIVE NUMERICAL BENCHMARK SUITE")
@@ -223,13 +237,12 @@ def main():
 
     # 1. Check/Run 17-minute EP tutorial baseline (lambda = 0.2, nOuter = 8) if not completed
     ep_n8_17m_dir = os.path.join(STUDY_17MIN_DIR, "audit_17min_ep_n8")
-    run_17m_ep_n8 = False
     if not os.path.exists(os.path.join(ep_n8_17m_dir, "1020", "fluid", "phaseFraction")):
-        run_17m_ep_n8 = True
         print(f"\nSetting up 17-minute EP (lambda=0.2, nOuter=8) in {ep_n8_17m_dir} ...")
         setup_case(BASE_CASE, ep_n8_17m_dir, model_type="enthalpyPorosity", lam=0.2, n_outer=8, end_time=1020)
-        p_17m_ep_n8 = launch_simulation(ep_n8_17m_dir)
-        print("  --> Launched 17-minute EP tutorial run in background.")
+        p_17m = launch_simulation(ep_n8_17m_dir)
+        p_17m.wait()
+        print("  --> 17-minute EP run completed.")
 
     # 2. Define all 2-minute sweep cases
     sweep_cases = [
@@ -265,46 +278,41 @@ def main():
     ]
 
     os.makedirs(SWEEP_DIR, exist_ok=True)
-    batch_size = 4
     sweep_results = []
 
-    print(f"\nRunning {len(sweep_cases)} sweep cases in batches of {batch_size} ...")
-    for b_idx in range(0, len(sweep_cases), batch_size):
-        batch = sweep_cases[b_idx:b_idx+batch_size]
-        print(f"\n---> Batch {b_idx//batch_size + 1}/{(len(sweep_cases)-1)//batch_size + 1}: {[item[3] for item in batch]}")
-        procs = []
-        for model_type, lam, n_outer, cid in batch:
-            cdir = os.path.join(SWEEP_DIR, cid)
+    print(f"\nProcessing {len(sweep_cases)} sweep cases ...")
+    for model_type, lam, n_outer, cid in sweep_cases:
+        cdir = os.path.join(SWEEP_DIR, cid)
+        whf_file = os.path.join(cdir, "postProcessing", "fluid", "wallHeatFlux1", "0", "wallHeatFlux.dat")
+        log_file = os.path.join(cdir, "log.simulation")
+
+        if not (os.path.exists(whf_file) and os.path.exists(log_file)):
+            print(f"Running simulation for {cid} ...")
             setup_case(BASE_CASE, cdir, model_type=model_type, lam=lam if lam else 1.0, n_outer=n_outer, end_time=120)
-            t0 = time.time()
             p = launch_simulation(cdir)
-            procs.append((cid, model_type, lam, n_outer, cdir, p, t0))
-
-        for cid, model_type, lam, n_outer, cdir, p, t0 in procs:
             p.wait()
-            elapsed = time.time() - t0
-            print(f"  --> Case {cid} completed in {elapsed:.1f} s")
-            # Audit
-            audit_res = run_exact_audit(cdir)
-            # Find t = 120s
-            row_120 = None
-            for r in audit_res:
-                if abs(r["t_sec"] - 120.0) < 1e-3:
-                    row_120 = r
-                    break
-            if row_120:
-                row_120["model"] = model_type
-                row_120["lambda"] = lam
-                row_120["n_outer"] = n_outer
-                row_120["case_id"] = cid
-                row_120["clock_time"] = elapsed
-                sweep_results.append(row_120)
 
-    # If 17-minute EP run was launched, wait for it
-    if run_17m_ep_n8:
-        print("\nWaiting for 17-minute EP (lambda=0.2, nOuter=8) run to finish...")
-        p_17m_ep_n8.wait()
-        print("  --> 17-minute EP run completed.")
+        # Extract OpenFOAM internal CPU execution time
+        cpu_time = parse_execution_time(log_file)
+        if cpu_time is None:
+            cpu_time = 0.0
+
+        # Run exact audit (right-endpoint rule)
+        audit_res = run_exact_audit(cdir)
+        row_120 = None
+        for r in audit_res:
+            if abs(r["t_sec"] - 120.0) < 1e-3:
+                row_120 = r
+                break
+        if row_120:
+            row_120["model"] = model_type
+            row_120["lambda"] = lam
+            row_120["n_outer"] = n_outer
+            row_120["case_id"] = cid
+            row_120["clock_time"] = cpu_time
+            row_120["cpu_time"] = cpu_time
+            row_120["total_outer_passes"] = int(1200 * n_outer)
+            sweep_results.append(row_120)
 
     # 3. Save Sweep Results
     sweep_json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ep_sweep_results.json")
@@ -313,13 +321,13 @@ def main():
 
     sweep_txt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ep_sweep_results.txt")
     with open(sweep_txt_path, "w") as f:
-        f.write("=" * 115 + "\n")
-        f.write(f"{'Model Formulation':<28} {'lambda':<8} {'nOuter':<8} {'f_L(2m)':<10} {'E_net(J)':<12} {'E_stored(J)':<13} {'Delta E(J)':<12} {'Closure(%)':<12} {'Clock Time':<10}\n")
-        f.write("-" * 115 + "\n")
+        f.write("=" * 125 + "\n")
+        f.write(f"{'Model Formulation':<24} {'lambda':<8} {'nOuter':<8} {'Outer Passes':<14} {'f_L(2m)':<10} {'E_net(J)':<12} {'E_stored(J)':<13} {'Delta E(J)':<12} {'Closure(%)':<12} {'CPU Time':<10}\n")
+        f.write("-" * 125 + "\n")
         for r in sweep_results:
             lam_str = f"{r['lambda']:.1f}" if r['lambda'] is not None else "—"
-            f.write(f"{r['model']:<28} {lam_str:<8} {r['n_outer']:<8} {r['f_L']:<10.4f} {r['E_net']:<12.2f} {r['E_stored']:<13.2f} {r['surplus']:<+12.2f} {r['rel_err']:<+11.2f}% {r['clock_time']:<9.1f}s\n")
-        f.write("=" * 115 + "\n")
+            f.write(f"{r['model']:<24} {lam_str:<8} {r['n_outer']:<8} {r['total_outer_passes']:<14} {r['f_L']:<10.4f} {r['E_net']:<12.2f} {r['E_stored']:<13.2f} {r['surplus']:<+12.2f} {r['rel_err']:<+11.2f}% {r['cpu_time']:<9.2f}s\n")
+        f.write("=" * 125 + "\n")
     print(f"\nSaved sweep results to:\n  - {sweep_json_path}\n  - {sweep_txt_path}")
 
     # 4. Perform Audits on All Four 17-minute Cases

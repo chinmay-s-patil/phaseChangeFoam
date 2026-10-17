@@ -53,18 +53,37 @@ class TestEnergyAuditSignConvention(unittest.TestCase):
                                   msg="Old buggy convention (ein - eout_raw = 12 J) must NOT match corrected E_net")
         self.assertAlmostEqual(buggy_enet, 12.0, places=5)
 
-    def test_startup_integration_exactness(self):
+    def test_right_endpoint_discrete_backward_euler(self):
         """
-        Tests rectangular startup step (t = 0 to t1) followed by trapezoidal integration.
+        Tests exact right-endpoint discrete summation: E_N = sum_{n=1}^N Q(t_n) * dt_n
+        which matches OpenFOAM's fully implicit backward Euler finite-volume operator.
         For linearly increasing flux Q(t) = 10 * t:
-        Startup (0 -> 0.1): 10 * 0.1 * 0.1 = 0.1 J
-        0.1 -> 0.2: 0.5 * (1.0 + 2.0) * 0.1 = 0.15 J
-        Total at 0.2s = 0.25 J
+        Step 1 (0 -> 0.1): Q(0.1) * 0.1 = 1.0 * 0.1 = 0.10 J
+        Step 2 (0.1 -> 0.2): 0.10 + Q(0.2) * 0.1 = 0.10 + 2.0 * 0.1 = 0.30 J
         """
         series = [(0.1, 1.0), (0.2, 2.0)]
         t, E = integrate_flux(series)
         self.assertAlmostEqual(E[0], 0.10, places=6)
-        self.assertAlmostEqual(E[1], 0.25, places=6)
+        self.assertAlmostEqual(E[1], 0.30, places=6)
+
+    def test_linearly_decaying_flux_quadrature(self):
+        """
+        Tests right-endpoint summation on a linearly decaying flux:
+        Q(t) = 100 - 10*t for t in [0.1, 0.2, ..., 1.0] at dt = 0.1s.
+        The exact discrete backward Euler sum is:
+        sum_{n=1}^{10} (100 - 10 * t_n) * 0.1
+        = (99 + 98 + 97 + 96 + 95 + 94 + 93 + 92 + 91 + 90) * 0.1
+        = 945.0 * 0.1 = 94.50 J.
+        In contrast, trapezoidal integration would yield 94.95 J (overestimating by 0.45 J).
+        """
+        steps = np.arange(0.1, 1.1, 0.1)
+        decaying_series = [(float(t), 100.0 - 10.0 * float(t)) for t in steps]
+        t, E = integrate_flux(decaying_series)
+
+        expected_discrete_sum = sum((100.0 - 10.0 * float(st)) * 0.1 for st in steps)
+        self.assertAlmostEqual(expected_discrete_sum, 94.50, places=6)
+        self.assertAlmostEqual(E[-1], 94.50, places=6,
+                               msg=f"Right-endpoint sum failed! Expected 94.50 J, got {E[-1]} J")
 
     def test_mock_wallheatflux_file_parsing(self):
         """

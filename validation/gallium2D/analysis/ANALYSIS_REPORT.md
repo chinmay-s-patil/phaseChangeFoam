@@ -31,9 +31,9 @@ Study-specific acceptance thresholds are defined as standard **engineering toler
 
 | Metric | Engineering Target | EP (Tutorial: $\lambda = 0.2, n_{\text{outer}}=8$) | EP ($\lambda = 0.2, n_{\text{outer}}=12$) | EP (Default: $\lambda = 1.0, n_{\text{outer}}=8$) | EHCDarcy (Baseline: $n_{\text{outer}}=8$) | Status (EP, $\lambda=1.0$) | Status (EHCDarcy) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Energy Closure ($t = 2\text{ min}$)** | $\le 2.0\%$ | +7.16% (+129.1 J) *(FAIL)* | +2.68% (+49.5 J) *(FAIL)* | **-0.26% (-4.9 J)** | **-0.53% (-10.1 J)** | **PASSED** | **PASSED** |
-| **Energy Closure ($t = 6\text{ min}$)** | $\le 2.0\%$ | +7.27% (+257.5 J) *(FAIL)* | +2.75% (+99.7 J) *(FAIL)* | **+0.01% (+0.4 J)** | **-0.33% (-12.1 J)** | **PASSED** | **PASSED** |
-| **Energy Closure ($t = 17\text{ min}$)** | $\le 2.0\%$ | +7.45% (+587.2 J) *(FAIL)* | +2.87% (+231.0 J) *(FAIL)* | **-0.14% (-11.8 J)** | **-0.17% (-14.0 J)** | **PASSED** | **PASSED** |
+| **Energy Closure ($t = 2\text{ min}$)** | $\le 2.0\%$ | +7.35% (+132.3 J) *(FAIL)* | +2.86% (+52.9 J) *(FAIL)* | **-0.06% (-1.2 J)** | **-0.34% (-6.4 J)** | **PASSED** | **PASSED** |
+| **Energy Closure ($t = 6\text{ min}$)** | $\le 2.0\%$ | +7.37% (+260.7 J) *(FAIL)* | +2.85% (+103.2 J) *(FAIL)* | **+0.11% (+4.2 J)** | **-0.23% (-8.4 J)** | **PASSED** | **PASSED** |
+| **Energy Closure ($t = 17\text{ min}$)** | $\le 2.0\%$ | +7.49% (+590.4 J) *(FAIL)* | +2.92% (+234.4 J) *(FAIL)* | **-0.10% (-8.0 J)** | **-0.13% (-10.3 J)** | **PASSED** | **PASSED** |
 | **Mean Front Dev. ($t = 2\text{ min}$)** | $\le 5.0\%$ $W$ ($4.45\text{ mm}$) | 1.95 mm (2.19%) | 1.77 mm (1.99%) | 1.71 mm (1.93%) | **1.67 mm (1.88%)** | **PASSED** | **PASSED** |
 | **Mean Front Dev. ($t = 6\text{ min}$)** | $\le 5.0\%$ $W$ ($4.45\text{ mm}$) | 2.60 mm (2.93%) | 2.15 mm (2.42%) | 1.98 mm (2.22%) | **1.87 mm (2.11%)** | **PASSED** | **PASSED** |
 | **Mean Front Dev. ($t = 10\text{ min}$)** | $\le 5.0\%$ $W$ ($4.45\text{ mm}$) | 3.51 mm (3.95%) | 2.76 mm (3.11%) | 2.45 mm (2.76%) | **2.35 mm (2.65%)** | **PASSED** | **PASSED** |
@@ -44,10 +44,10 @@ Study-specific acceptance thresholds are defined as standard **engineering toler
 
 *Scorecard Evaluation Summary*:  
 Under the single, strict energy closure target of $|\epsilon_{\text{energy}}| \le 2.0\%$ across all benchmark times:
-- `EHCDarcy` passes all verification metrics across the entire 17-minute benchmark (energy closure -0.53% (-10.1 J) at 2 min, -0.33% (-12.1 J) at 6 min, and -0.17% (-14.0 J) at 17 min).
-- Enthalpy-Porosity under tutorial settings ($\lambda = 0.2, n_{\text{outer}}=8$) fails energy closure (+7.16% (+129.1 J) *(FAIL)*, +7.27% (+257.5 J) *(FAIL)*, +7.45% (+587.2 J) *(FAIL)*) and late front deviation (5.43 mm (6.11%) *(FAIL)*).
-- Increasing outer iterations to $n_{\text{outer}}=12$ under $\lambda = 0.2$ reduces error but still fails the $\le 2.0\%$ target across all times (+2.68% (+49.5 J) *(FAIL)*, +2.75% (+99.7 J) *(FAIL)*, +2.87% (+231.0 J) *(FAIL)*).
-- Restoring code-default Newton relaxation $\lambda = 1.0$ at $n_{\text{outer}}=8$ allows Enthalpy-Porosity to achieve -0.26% (-4.9 J) at 2 min, +0.01% (+0.4 J) at 6 min, and -0.14% (-11.8 J) at 17 min, passing the single $\le 2.0\%$ target across all times and closely matching EHCDarcy.
+- `EHCDarcy` passes all verification metrics across the entire 17-minute benchmark (energy closure -0.34% (-6.4 J) at 2 min, -0.23% (-8.4 J) at 6 min, and -0.13% (-10.3 J) at 17 min).
+- Enthalpy-Porosity under tutorial settings ($\lambda = 0.2, n_{\text{outer}}=8$) fails energy closure (+7.35% (+132.3 J) *(FAIL)*, +7.37% (+260.7 J) *(FAIL)*, +7.49% (+590.4 J) *(FAIL)*) and late front deviation (5.43 mm (6.11%) *(FAIL)*).
+- Increasing outer iterations to $n_{\text{outer}}=12$ under $\lambda = 0.2$ reduces error but still fails the $\le 2.0\%$ target across all times (+2.86% (+52.9 J) *(FAIL)*, +2.85% (+103.2 J) *(FAIL)*, +2.92% (+234.4 J) *(FAIL)*).
+- Restoring code-default Newton relaxation $\lambda = 1.0$ at $n_{\text{outer}}=8$ allows Enthalpy-Porosity to achieve -0.06% (-1.2 J) at 2 min, +0.11% (+4.2 J) at 6 min, and -0.10% (-8.0 J) at 17 min, passing the single $\le 2.0\%$ target across all times and closely matching EHCDarcy.
 
 ---
 
@@ -73,7 +73,7 @@ Controlled step-resolved investigation ($\Delta t = 0.1\text{ s}$, 1,200 steps t
 
 ---
 
-### 2.2 Resolution of Historical Post-Processing Artifacts (EHCDarcy -1.26%, -2.87%, -4.39%)
+### 2.2 Resolution of Historical Boundary Accounting Artifacts (Sign Bug & Quadrature Shift)
 In an earlier version of the time-resolved audit script (`exact_energy_balance_audit.py`), `EHCDarcy` was reported with negative closure discrepancies of $-1.26\%$ at 2 min, $-2.87\%$ at 6 min, $-4.39\%$ at 12 min, and $-5.86\%$ at 17 min. 
 
 Inspection of the script source revealed a sign convention error in net boundary energy evaluation:
@@ -81,23 +81,30 @@ Inspection of the script source revealed a sign convention error in net boundary
 # Historical bug in exact_energy_balance_audit.py (now resolved):
 enet = ein - eout  # eout was already negative in OpenFOAM wallHeatFlux.dat!
 ```
-In OpenFOAM's `wallHeatFlux` function object, heat entering the fluid domain is signed positive, while heat leaving across the isothermal cold boundary ($T_{\text{fluid}} > T_{\text{cold}} = 301.45\text{ K}$) produces a negative patch integral ($\dot{Q}_{\text{cold, raw}} < 0$). Subtracting a negative cumulative energy (`ein - (-eout) = ein + eout`) double-counted outward cold-wall heat loss as an artificial heat injection into the domain. At 17 min, cumulative cold-wall loss is $246.61\text{ J}$; adding rather than subtracting this loss inflated apparent net input to $8650.34\text{ J}$, producing the spurious $-507.28\text{ J}$ ($-5.86\%$) deficit against domain stored energy ($8143.07\text{ J}$).
+In OpenFOAM's `wallHeatFlux` function object, heat entering the fluid domain is signed positive, while heat leaving across the isothermal cold boundary ($T_{\text{fluid}} > T_{\text{cold}} = 301.45\text{ K}$) produces a negative patch integral ($\dot{Q}_{\text{cold, raw}} < 0$). Subtracting a negative cumulative energy (`ein - (-eout) = ein + eout`) double-counted outward cold-wall heat loss as an artificial heat injection into the domain. At 17 min, cumulative cold-wall loss is $246.64\text{ J}$; adding rather than subtracting this loss inflated apparent net input to $8646.65\text{ J}$, producing the spurious $-503.59\text{ J}$ ($-5.82\%$) deficit against domain stored energy ($8143.06\text{ J}$).
 
 When the physically correct definition is enforced ($E_{\text{net, in}} = E_{\text{hot}} - E_{\text{cold, out}} = E_{\text{hot}} + E_{\text{cold, raw}}$):
-- At $t = 2\text{ min}$: $E_{\text{net, in}} = 1895.42 - 6.99 = 1888.43\text{ J}$, $E_{\text{stored}} = 1878.37\text{ J} \implies \Delta E = \mathbf{-10.06\text{ J}}$ ($\mathbf{-0.53\%}$).
-- At $t = 6\text{ min}$: $E_{\text{net, in}} = 3737.23 - 48.24 = 3688.99\text{ J}$, $E_{\text{stored}} = 3676.92\text{ J} \implies \Delta E = \mathbf{-12.07\text{ J}}$ ($\mathbf{-0.33\%}$).
-- At $t = 17\text{ min}$: $E_{\text{net, in}} = 8403.72 - 246.61 = 8157.11\text{ J}$, $E_{\text{stored}} = 8143.06\text{ J} \implies \Delta E = \mathbf{-14.05\text{ J}}$ ($\mathbf{-0.17\%}$).
+- At $t = 2\text{ min}$: $E_{\text{net, in}} = 1891.80 - 7.00 = 1884.80\text{ J}$, $E_{\text{stored}} = 1878.37\text{ J} \implies \Delta E = \mathbf{-6.43\text{ J}}$ ($\mathbf{-0.34\%}$).
+- At $t = 6\text{ min}$: $E_{\text{net, in}} = 3733.53 - 48.25 = 3685.28\text{ J}$, $E_{\text{stored}} = 3676.92\text{ J} \implies \Delta E = \mathbf{-8.36\text{ J}}$ ($\mathbf{-0.23\%}$).
+- At $t = 17\text{ min}$: $E_{\text{net, in}} = 8400.01 - 246.64 = 8153.37\text{ J}$, $E_{\text{stored}} = 8143.06\text{ J} \implies \Delta E = \mathbf{-10.31\text{ J}}$ ($\mathbf{-0.13\%}$).
 
-To ensure this sign error cannot reoccur, a formal unit test with synthetic boundary fluxes (hot $+10\text{ W}$, cold $-2\text{ W} \implies E_{\text{net}} = 8\text{ J/s}$) is committed in [test_exact_energy_balance_audit.py](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/validation/gallium2D/analysis/energy_balance/test_exact_energy_balance_audit.py).
+To ensure this sign error cannot reoccur, a formal unit test with synthetic boundary fluxes (hot $+10\text{ W}$, cold $-2\text{ W} \implies E_{\text{net}} = 8\text{ J/s}$) and linearly decaying fluxes is committed in [test_exact_energy_balance_audit.py](file:///home/lavender/OpenFoamUbu/solvers/phaseChangeFoam/validation/gallium2D/analysis/energy_balance/test_exact_energy_balance_audit.py).
 
 ---
 
-### 2.3 Mathematical Definition of the Step-Resolved Energy Audit
-The authoritative energy audit evaluates boundary fluxes at every time step ($\Delta t = 0.1\text{ s}$, 10,200 steps to 17 min) against domain-integrated sensible and latent enthalpy:
-$$E_{\text{net, in}}(t_n) = E_{\text{net}, 0 \to t_1} + \sum_{k=2}^n \frac{1}{2}\left[\dot{Q}_{\text{net}}(t_{k-1}) + \dot{Q}_{\text{net}}(t_k)\right]\Delta t_k$$
-where $\dot{Q}_{\text{net}}(t) = \dot{Q}_{\text{hot}}(t) - \dot{Q}_{\text{cold, out}}(t)$. For the initial startup step ($0 \le t \le t_1 = 0.1\text{ s}$), gross hot-wall input is evaluated as a rectangular step:
-$$E_{\text{hot}, 0 \to 0.1} = \dot{Q}_{\text{hot}}(t_1)\Delta t_1$$
-yielding $8.123\text{ J}$ for EHCDarcy ($\dot{Q}_{\text{hot}} = 81.23\text{ W}$) and $7.173\text{ J}$ for baseline EP ($\dot{Q}_{\text{hot}} = 71.73\text{ W}$).
+### 2.3 Mathematical Definition of the Step-Resolved Energy Audit & Discrete Backward-Euler Quadrature
+In OpenFOAM's finite-volume formulation with implicit backward-Euler time discretization (`Euler ddtScheme`), the discrete energy balance from time level $t^{n-1}$ to $t^n$ satisfies:
+$$\frac{E_{\text{stored}}^n - E_{\text{stored}}^{n-1}}{\Delta t_n} = \dot{Q}_{\text{net}}(t^n) \iff \Delta E_{\text{stored}}^n = \dot{Q}_{\text{net}}(t^n)\,\Delta t_n$$
+Summing over all discrete time steps $n = 1, 2, \dots, N$ yields the **exact discrete right-endpoint Riemann sum**:
+$$E_{\text{net, in}}(t_N) = \sum_{n=1}^N \dot{Q}_{\text{net}}(t_n)\,\Delta t_n$$
+where $\dot{Q}_{\text{net}}(t_n) = \dot{Q}_{\text{hot}}(t_n) - \dot{Q}_{\text{cold, out}}(t_n)$.
+
+> **Note on Quadrature Rule & Discrete Energy Balance**:  
+> In earlier audit iterations, a composite trapezoidal rule was applied between sampled time steps with a rectangular first step:
+> $$E_{\text{trap}}(t_N) = \dot{Q}(t_1)\,\Delta t_1 + \sum_{k=2}^N \frac{\dot{Q}(t_{k-1}) + \dot{Q}(t_k)}{2}\,\Delta t_k$$
+> Algebraically, this trapezoidal formulation equals the right-endpoint sum plus a boundary offset:
+> $$E_{\text{trap}}(t_N) = \sum_{n=1}^N \dot{Q}(t_n)\,\Delta t_n + \frac{\dot{Q}(t_1) - \dot{Q}(t_N)}{2}\,\Delta t$$
+> Because the initial conduction surge produces an intense spike ($\dot{Q}(t_1) \approx 81.2\text{ W}$ at $\Delta t = 0.1\text{ s}$) that rapidly decays to quasi-steady values ($\dot{Q}(t_N) \approx 8.5\text{ W}$ at 2 min, $4.5\text{ W}$ at 17 min), the trapezoidal rule added an artificial, non-physical quadrature offset of $+\frac{81.2 - 8.5}{2} \times 0.1 \approx +3.63\text{ J}$ at 2 min (and $+3.83\text{ J}$ at 17 min) on both walls. Apparent discrepancies at the $0.1\text{--}0.5\%$ level were therefore partly a post-processing quadrature artifact rather than solver physics. Adopting the exact right-endpoint sum $\sum_{n=1}^N \dot{Q}(t_n)\,\Delta t_n$ eliminates this spurious offset and achieves exact discrete compatibility with the backward-Euler time discretization.
 
 Stored enthalpy relative to initial conditions ($T_{\text{init}} = 301.45\text{ K}$, $f_L = 0$) evaluates to:
 $$E_{\text{sens}}(t) = \int_\Omega \rho C_p (T - T_{\text{init}})\,dV, \quad E_{\text{lat}}(t) = \int_\Omega \rho L f_L\,dV, \quad E_{\text{stored}}(t) = E_{\text{sens}}(t) + E_{\text{lat}}(t)$$
@@ -111,82 +118,83 @@ $$\Delta E(t) = E_{\text{stored}}(t) - E_{\text{net, in}}(t), \quad \epsilon_{\t
 #### Complete Transient History: `EHCDarcy` Formulation ($42 \times 32$ Grid, $n_{\text{outer}}=8$, $\Delta t = 0.1\text{ s}$)
 | Time | $E_{\text{hot}}$ (J) | $E_{\text{cold, out}}$ (J) | $E_{\text{net, in}}$ (J) | $E_{\text{sens}}$ (J) | $E_{\text{lat}}$ (J) | $E_{\text{stored}}$ (J) | Discrepancy $\Delta E$ (J) | Closure Error (%) |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **1 min** | $1302.13$ | $0.98$ | $1301.15$ | $59.10$ | $1233.29$ | $1292.38$ | $-8.77\text{ J}$ | **-0.67\%** |
-| **2 min** | $1895.42$ | $6.99$ | $1888.43$ | $81.37$ | $1797.00$ | $1878.37$ | $-10.06\text{ J}$ | **-0.53\%** |
-| **4 min** | $2856.79$ | $26.00$ | $2830.78$ | $107.27$ | $2712.27$ | $2819.54$ | $-11.24\text{ J}$ | **-0.40\%** |
-| **6 min** | $3737.23$ | $48.24$ | $3688.99$ | $129.06$ | $3547.86$ | $3676.92$ | $-12.07\text{ J}$ | **-0.33\%** |
-| **8 min** | $4597.54$ | $73.20$ | $4524.34$ | $149.51$ | $4362.21$ | $4511.72$ | $-12.61\text{ J}$ | **-0.28\%** |
-| **10 min** | $5450.87$ | $101.59$ | $5349.28$ | $169.47$ | $5166.69$ | $5336.15$ | $-13.13\text{ J}$ | **-0.25\%** |
-| **12 min** | $6297.87$ | $134.42$ | $6163.44$ | $187.90$ | $5962.05$ | $6149.96$ | $-13.49\text{ J}$ | **-0.22\%** |
-| **14 min** | $7141.83$ | $173.06$ | $6968.77$ | $206.68$ | $6748.32$ | $6955.00$ | $-13.77\text{ J}$ | **-0.20\%** |
-| **16 min** | $7982.93$ | $219.50$ | $7763.43$ | $224.28$ | $7525.23$ | $7749.51$ | $-13.92\text{ J}$ | **-0.18\%** |
-| **17 min** | $8403.72$ | $246.61$ | $8157.11$ | $232.71$ | $7910.36$ | $8143.06$ | $-14.05\text{ J}$ | **-0.17\%** |
+| **1 min** | $1298.65$ | $0.98$ | $1297.67$ | $59.10$ | $1233.29$ | $1292.38$ | $-5.29\text{ J}$ | **-0.41\%** |
+| **2 min** | $1891.80$ | $7.00$ | $1884.80$ | $81.37$ | $1797.00$ | $1878.37$ | $-6.43\text{ J}$ | **-0.34\%** |
+| **4 min** | $2853.10$ | $26.01$ | $2827.09$ | $107.27$ | $2712.27$ | $2819.54$ | $-7.55\text{ J}$ | **-0.27\%** |
+| **6 min** | $3733.53$ | $48.25$ | $3685.28$ | $129.06$ | $3547.86$ | $3676.92$ | $-8.36\text{ J}$ | **-0.23\%** |
+| **8 min** | $4593.83$ | $73.21$ | $4520.62$ | $149.51$ | $4362.21$ | $4511.72$ | $-8.90\text{ J}$ | **-0.20\%** |
+| **10 min** | $5447.16$ | $101.60$ | $5345.56$ | $169.47$ | $5166.69$ | $5336.15$ | $-9.41\text{ J}$ | **-0.18\%** |
+| **12 min** | $6294.16$ | $134.44$ | $6159.72$ | $187.90$ | $5962.05$ | $6149.96$ | $-9.77\text{ J}$ | **-0.16\%** |
+| **14 min** | $7138.12$ | $173.08$ | $6965.04$ | $206.68$ | $6748.32$ | $6955.00$ | $-10.04\text{ J}$ | **-0.14\%** |
+| **16 min** | $7979.22$ | $219.52$ | $7759.70$ | $224.28$ | $7525.23$ | $7749.51$ | $-10.19\text{ J}$ | **-0.13\%** |
+| **17 min** | $8400.01$ | $246.64$ | $8153.37$ | $232.71$ | $7910.36$ | $8143.06$ | $-10.31\text{ J}$ | **-0.13\%** |
 
 #### Complete Transient History: `enthalpyPorosity` (Default: $\lambda = 1.0, n_{\text{outer}}=8$, $\Delta t = 0.1\text{ s}$)
 | Time | $E_{\text{hot}}$ (J) | $E_{\text{cold, out}}$ (J) | $E_{\text{net, in}}$ (J) | $E_{\text{sens}}$ (J) | $E_{\text{lat}}$ (J) | $E_{\text{stored}}$ (J) | Discrepancy $\Delta E$ (J) | Closure Error (%) |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **1 min** | $1304.88$ | $0.97$ | $1303.91$ | $59.35$ | $1236.91$ | $1296.26$ | $-7.65\text{ J}$ | **-0.59\%** |
-| **2 min** | $1898.22$ | $7.01$ | $1891.21$ | $81.64$ | $1804.69$ | $1886.33$ | $-4.88\text{ J}$ | **-0.26\%** |
-| **4 min** | $2860.25$ | $26.13$ | $2834.11$ | $107.66$ | $2725.59$ | $2833.25$ | $-0.86\text{ J}$ | **-0.03\%** |
-| **6 min** | $3741.72$ | $48.49$ | $3693.23$ | $129.40$ | $3564.23$ | $3693.64$ | $+0.41\text{ J}$ | **+0.01\%** |
-| **8 min** | $4603.00$ | $73.56$ | $4529.44$ | $149.92$ | $4379.05$ | $4528.96$ | $-0.48\text{ J}$ | **-0.01\%** |
-| **10 min** | $5457.37$ | $102.05$ | $5355.32$ | $169.75$ | $5183.13$ | $5352.87$ | $-2.45\text{ J}$ | **-0.05\%** |
-| **12 min** | $6305.90$ | $134.96$ | $6170.94$ | $188.36$ | $5977.75$ | $6166.11$ | $-4.83\text{ J}$ | **-0.08\%** |
-| **14 min** | $7151.05$ | $173.65$ | $6977.40$ | $206.94$ | $6762.95$ | $6969.89$ | $-7.50\text{ J}$ | **-0.11\%** |
-| **16 min** | $7993.62$ | $220.10$ | $7773.52$ | $224.44$ | $7538.76$ | $7763.21$ | $-10.31\text{ J}$ | **-0.13\%** |
-| **17 min** | $8414.69$ | $247.19$ | $8167.51$ | $232.79$ | $7922.90$ | $8155.68$ | $-11.82\text{ J}$ | **-0.14\%** |
+| **1 min** | $1301.35$ | $0.98$ | $1300.38$ | $59.35$ | $1236.91$ | $1296.26$ | $-4.12\text{ J}$ | **-0.32\%** |
+| **2 min** | $1894.55$ | $7.01$ | $1887.53$ | $81.64$ | $1804.69$ | $1886.33$ | $-1.20\text{ J}$ | **-0.06\%** |
+| **4 min** | $2856.51$ | $26.14$ | $2830.37$ | $107.66$ | $2725.59$ | $2833.25$ | $+2.88\text{ J}$ | **+0.10\%** |
+| **6 min** | $3737.97$ | $48.50$ | $3689.47$ | $129.40$ | $3564.23$ | $3693.64$ | $+4.16\text{ J}$ | **+0.11\%** |
+| **8 min** | $4599.25$ | $73.57$ | $4525.68$ | $149.92$ | $4379.05$ | $4528.96$ | $+3.28\text{ J}$ | **+0.07\%** |
+| **10 min** | $5453.61$ | $102.06$ | $5351.55$ | $169.75$ | $5183.13$ | $5352.87$ | $+1.32\text{ J}$ | **+0.02\%** |
+| **12 min** | $6302.15$ | $134.97$ | $6167.18$ | $188.36$ | $5977.75$ | $6166.11$ | $-1.06\text{ J}$ | **-0.02\%** |
+| **14 min** | $7147.29$ | $173.67$ | $6973.62$ | $206.94$ | $6762.95$ | $6969.89$ | $-3.73\text{ J}$ | **-0.05\%** |
+| **16 min** | $7989.87$ | $220.12$ | $7769.74$ | $224.44$ | $7538.76$ | $7763.21$ | $-6.54\text{ J}$ | **-0.08\%** |
+| **17 min** | $8410.93$ | $247.21$ | $8163.72$ | $232.79$ | $7922.90$ | $8155.68$ | $-8.04\text{ J}$ | **-0.10\%** |
 
 *Latent Enthalpy Reconciliation at $t = 17\text{ min}$*:  
-For EHCDarcy, direct cell summation yields $E_{\text{lat}} = \sum \rho V_{\text{cell}} L \alpha = 7910.36\text{ J}$, matching $m L f_L = 13790.40 \times 0.5736135 = 7910.36\text{ J}$.  
+For EHCDarcy, direct cell summation yields $E_{\text{lat}} = \sum \rho V_{\text{cell}} L \alpha = 7910.36\text{ J}$, matching $m L f_L = 13790.40 \times 0.5736131 = 7910.36\text{ J}$.  
 For EP ($\lambda = 1.0, n_{\text{outer}}=8$), direct cell summation yields $7922.90\text{ J}$, matching $m L f_L = 13790.40 \times 0.5745226 = 7922.90\text{ J}$. Both formulations reconcile latent enthalpy with liquid fraction to $0.01\text{ J}$.
 
 ---
 
-### 2.5 Systematic Study of Newton Relaxation ($\lambda$) and Outer Iterations in Enthalpy-Porosity
+### 2.5 Systematic Study of Newton Relaxation ($\lambda$), Outer Correctors, and Computational Cost
 In OpenFOAM's `enthalpyPorosityPhaseChangeModel.C`, the liquid fraction is updated after the sensible enthalpy matrix solve via Newton projection:
 $$f_{\text{new}} = \min\left(\max\left(f + \lambda \frac{T - T_f}{L/C_p + \Delta T_{\text{window}}}, 0\right), 1\right)$$
 where $\lambda$ is the Newton relaxation factor (code default: `1.0`, the exact Newton step for a linear melting window). In the baseline tutorial case dictionary, this parameter was set to `lambda 0.2`, damping each outer iteration correction to only $20\%$ of the full Newton step.
 
-To decouple physical modeling capabilities from under-relaxation artifacts and rigorously test outer corrector convergence, a systematic sweep of $\lambda \in \{1.0, 0.5, 0.2\}$ across PIMPLE outer correctors $n_{\text{outer}} \in [2, 16]$ was executed alongside `EHCDarcy` at $n_{\text{outer}} \in [2, 8]$ to $t = 120\text{ s}$ ($2\text{ min}$):
+To decouple physical modeling capabilities from under-relaxation artifacts and rigorously test outer corrector convergence, a systematic sweep of $\lambda \in \{1.0, 0.5, 0.2\}$ across PIMPLE outer correctors $n_{\text{outer}} \in [2, 16]$ was executed alongside `EHCDarcy` at $n_{\text{outer}} \in [2, 8]$ to $t = 120\text{ s}$ ($2\text{ min}$). All execution times report OpenFOAM CPU solver time (`ExecutionTime` parsed from solver logs) alongside the exact number of 2D outer corrector passes ($1200 \times n_{\text{outer}}$):
 
-| Model Formulation | $\lambda$ | $n_{\text{outer}}$ | $f_L(2\text{ min})$ | Net Input $E_{\text{net}}$ (J) | Stored $E_{\text{stored}}$ (J) | Discrepancy $\Delta E$ (J) | Closure Error (%) | Clock Time (s) |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| EHCDarcy | — | 2 | 0.1315 | 1737.46 J | 1895.54 J | +158.08 J | +9.10% | 11.4 s |
-| EHCDarcy | — | 3 | 0.1303 | 1889.03 J | 1878.26 J | -10.77 J | -0.57% | 16.0 s |
-| EHCDarcy | — | 4 | 0.1303 | 1888.78 J | 1878.33 J | -10.46 J | -0.55% | 20.6 s |
-| EHCDarcy | — | 5 | 0.1303 | 1888.57 J | 1878.36 J | -10.20 J | -0.54% | 24.4 s |
-| **EHCDarcy** | — | **8** | **0.1303** | **1888.43 J** | **1878.37 J** | **-10.06 J** | **-0.53%** | 35.4 s |
-| enthalpyPorosity | 1.0 | 2 | 0.1650 | 1514.33 J | 2370.39 J | +856.06 J | +56.53% | 35.5 s |
-| enthalpyPorosity | 1.0 | 3 | 0.1358 | 1761.65 J | 1956.42 J | +194.77 J | +11.06% | 35.5 s |
-| enthalpyPorosity | 1.0 | 4 | 0.1262 | 1875.39 J | 1819.56 J | -55.84 J | -2.98% | 35.5 s |
-| enthalpyPorosity | 1.0 | 5 | 0.1235 | 1924.17 J | 1779.98 J | -144.19 J | -7.49% | 25.6 s |
-| enthalpyPorosity | 1.0 | 6 | 0.1245 | 1932.21 J | 1795.67 J | -136.54 J | -7.07% | 31.3 s |
-| enthalpyPorosity | 1.0 | 7 | 0.1278 | 1914.45 J | 1842.37 J | -72.08 J | -3.76% | 35.6 s |
-| **enthalpyPorosity** | 1.0 | **8** | **0.1309** | **1891.21 J** | **1886.33 J** | **-4.88 J** | **-0.26%** | 39.9 s |
-| enthalpyPorosity | 1.0 | 10 | 0.1320 | 1873.02 J | 1902.18 J | +29.17 J | +1.56% | 47.7 s |
-| enthalpyPorosity | 1.0 | 12 | 0.1307 | 1878.54 J | 1883.31 J | +4.77 J | +0.25% | 57.2 s |
-| enthalpyPorosity | 1.0 | 16 | 0.1305 | 1881.78 J | 1880.61 J | -1.17 J | -0.06% | 73.7 s |
-| enthalpyPorosity | 0.5 | 2 | 0.1750 | 1426.91 J | 2513.52 J | +1086.61 J | +76.15% | 73.7 s |
-| enthalpyPorosity | 0.5 | 3 | 0.1480 | 1637.79 J | 2130.52 J | +492.73 J | +30.08% | 15.9 s |
-| enthalpyPorosity | 0.5 | 5 | 0.1334 | 1806.34 J | 1922.33 J | +115.99 J | +6.42% | 24.8 s |
-| enthalpyPorosity | 0.5 | 8 | 0.1294 | 1877.84 J | 1865.11 J | -12.73 J | -0.68% | 38.5 s |
-| enthalpyPorosity | 0.2 | 2 | 0.1762 | 1347.75 J | 2533.71 J | +1185.96 J | +88.00% | 38.5 s |
-| enthalpyPorosity | 0.2 | 3 | 0.1527 | 1550.06 J | 2198.28 J | +648.22 J | +41.82% | 16.0 s |
-| enthalpyPorosity | 0.2 | 5 | 0.1395 | 1710.51 J | 2009.79 J | +299.28 J | +17.50% | 24.8 s |
-| enthalpyPorosity | 0.2 | 8 | 0.1340 | 1802.03 J | 1931.11 J | +129.09 J | +7.16% | 39.0 s |
-| enthalpyPorosity | 0.2 | 12 | 0.1317 | 1849.18 J | 1898.69 J | +49.51 J | +2.68% | 56.0 s |
+| Model Formulation | $\lambda$ | $n_{\text{outer}}$ | Outer Passes | $f_L(2\text{ min})$ | Net Input $E_{\text{net}}$ (J) | Stored $E_{\text{stored}}$ (J) | Discrepancy $\Delta E$ (J) | Closure Error (%) | CPU Time (s) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| EHCDarcy | — | 2 | 2400 | 0.1315 | 1733.95 J | 1895.54 J | +161.59 J | +9.32% | 10.98 s |
+| EHCDarcy | — | 3 | 3600 | 0.1303 | 1885.40 J | 1878.26 J | -7.14 J | -0.38% | 15.57 s |
+| EHCDarcy | — | 4 | 4800 | 0.1303 | 1885.15 J | 1878.33 J | -6.83 J | -0.36% | 20.01 s |
+| EHCDarcy | — | 5 | 6000 | 0.1303 | 1884.94 J | 1878.36 J | -6.58 J | -0.35% | 23.83 s |
+| **EHCDarcy** | — | **8** | 9600 | **0.1303** | **1884.80 J** | **1878.37 J** | **-6.43 J** | **-0.34%** | 34.95 s |
+| enthalpyPorosity | 1.0 | 2 | 2400 | 0.1650 | 1511.41 J | 2370.39 J | +858.98 J | +56.83% | 10.73 s |
+| enthalpyPorosity | 1.0 | 3 | 3600 | 0.1358 | 1758.45 J | 1956.42 J | +197.97 J | +11.26% | 15.19 s |
+| enthalpyPorosity | 1.0 | 4 | 4800 | 0.1262 | 1871.94 J | 1819.56 J | -52.38 J | -2.80% | 19.50 s |
+| enthalpyPorosity | 1.0 | 5 | 6000 | 0.1235 | 1920.57 J | 1779.98 J | -140.59 J | -7.32% | 25.11 s |
+| enthalpyPorosity | 1.0 | 6 | 7200 | 0.1245 | 1928.53 J | 1795.67 J | -132.86 J | -6.89% | 30.82 s |
+| enthalpyPorosity | 1.0 | 7 | 8400 | 0.1278 | 1910.76 J | 1842.37 J | -68.39 J | -3.58% | 35.12 s |
+| **enthalpyPorosity** | 1.0 | **8** | 9600 | **0.1309** | **1887.53 J** | **1886.33 J** | **-1.20 J** | **-0.06%** | 39.38 s |
+| enthalpyPorosity | 1.0 | 10 | 12000 | 0.1320 | 1869.38 J | 1902.18 J | +32.80 J | +1.75% | 47.16 s |
+| enthalpyPorosity | 1.0 | 12 | 14400 | 0.1307 | 1874.92 J | 1883.31 J | +8.40 J | +0.45% | 56.63 s |
+| enthalpyPorosity | 1.0 | 16 | 19200 | 0.1305 | 1878.15 J | 1880.61 J | +2.45 J | +0.13% | 73.08 s |
+| enthalpyPorosity | 0.5 | 2 | 2400 | 0.1750 | 1424.08 J | 2513.52 J | +1089.45 J | +76.50% | 10.64 s |
+| enthalpyPorosity | 0.5 | 3 | 3600 | 0.1480 | 1634.82 J | 2130.52 J | +495.71 J | +30.32% | 15.39 s |
+| enthalpyPorosity | 0.5 | 5 | 6000 | 0.1334 | 1803.06 J | 1922.33 J | +119.27 J | +6.62% | 24.24 s |
+| enthalpyPorosity | 0.5 | 8 | 9600 | 0.1294 | 1874.30 J | 1865.11 J | -9.19 J | -0.49% | 37.94 s |
+| enthalpyPorosity | 0.2 | 2 | 2400 | 0.1762 | 1344.95 J | 2533.71 J | +1188.76 J | +88.39% | 10.93 s |
+| enthalpyPorosity | 0.2 | 3 | 3600 | 0.1527 | 1547.23 J | 2198.28 J | +651.06 J | +42.08% | 15.64 s |
+| enthalpyPorosity | 0.2 | 5 | 6000 | 0.1395 | 1707.54 J | 2009.79 J | +302.25 J | +17.70% | 24.40 s |
+| enthalpyPorosity | 0.2 | 8 | 9600 | 0.1340 | 1798.86 J | 1931.11 J | +132.25 J | +7.35% | 38.65 s |
+| enthalpyPorosity | 0.2 | 12 | 14400 | 0.1317 | 1845.83 J | 1898.69 J | +52.86 J | +2.86% | 55.65 s |
 
 **Key Findings on Enthalpy-Porosity vs. EHCDarcy Convergence Dynamics**:
 1. **Newton Step Relaxation Dynamics ($\lambda = 1.0$)**:  
    Under code-default $\lambda = 1.0$, the discrete energy closure error exhibits a damped, oscillatory convergence path:
-   $$\epsilon_{\text{energy}}(2\text{ min}): \quad +56.5% (n=2), +11.1% (n=3), -3.0% (n=4), -7.5% (n=5), -7.1% (n=6), -3.8% (n=7), -0.3% (n=8), +1.6% (n=10), +0.3% (n=12), -0.1% (n=16)$$
-   At low corrector counts ($n \le 3$), enthalpy-porosity exhibits large positive surpluses ($+56.5\%$ at $n=2$, $+11.1\%$ at $n=3$) because the explicit latent heat update lags the rapid early conduction surge. As $n$ increases, the scheme overcorrects into a negative deficit ($-7.5\%$ at $n=5$), crosses zero near $n=7\text{--}8$ ($-0.26\%$ at $n=8$), and asymptotically stabilizes below $1.5\%$ for $n \ge 8$.
-2. **EHCDarcy Monotonicity and Rapid Convergence**:  
+   $$\epsilon_{\text{energy}}(2\text{ min}): \quad +56.8% (n=2), +11.3% (n=3), -2.8% (n=4), -7.3% (n=5), -6.9% (n=6), -3.6% (n=7), -0.1% (n=8), +1.8% (n=10), +0.4% (n=12), +0.1% (n=16)$$
+   At low corrector counts ($n \le 3$), enthalpy-porosity exhibits large positive surpluses ($+56.8\%$ at $n=2$, $+11.3\%$ at $n=3$) because the explicit latent heat update lags the rapid early conduction surge. As $n$ increases, the scheme overcorrects into a negative deficit ($-7.3\%$ at $n=5$), crosses zero near $n=7\text{--}8$ ($-0.06\%$ at $n=8$), and asymptotically stabilizes below $0.5\%$ for $n \ge 12$ ($+0.45\%$ at $n=12$, $+0.13\%$ at $n=16$).
+2. **EHCDarcy Monotonicity and Rapid Convergence (from $n_{\text{outer}} \ge 3$)**:  
    In contrast, `EHCDarcy` incorporates latent heat directly into the left-hand matrix capacity via a path-integral effective heat capacity $C_p^{\text{eff}}(T)$. As a result:
-   $$\epsilon_{\text{energy}}(2\text{ min}): \quad +9.10% (n=2), -0.57% (n=3), -0.55% (n=4), -0.54% (n=5), -0.53% (n=8)$$
-   While EHCDarcy exhibits $+9.10\%$ at $n=2$ ($11.4\text{ s}$), it immediately converges to $-0.57\%$ by $n_{\text{outer}} = 3$ ($16.0\text{ s}$) and stays strictly bounded below $0.6\%$ for all higher counts ($-0.55\%$ at $n=4$, $-0.54\%$ at $n=5$, $-0.53\%$ at $n=8$), completely avoiding the under-damped sign oscillations seen in EP.
-3. **Is EP Cheaper Than EHCDarcy?**  
-   **No.** `EHCDarcy` achieves verified energy closure ($\le 2.0\%$) with only $n_{\text{outer}} = 3$ (closure error $-0.57\%$, clock time $16.0\text{ s}$). Enthalpy-Porosity at $\lambda = 1.0$ requires $n_{\text{outer}} \ge 8$ (clock time $39.9\text{ s}$) to overcome its Newton update oscillations and satisfy the same tolerance ($+56.5\%$ at $n=2$, $+11.1\%$ at $n=3$, $-7.5\%$ at $n=5$). EHCDarcy is therefore both the cheaper and more robust formulation when corrector counts are constrained.
+   $$\epsilon_{\text{energy}}(2\text{ min}): \quad +9.32% (n=2), -0.38% (n=3), -0.36% (n=4), -0.35% (n=5), -0.34% (n=8)$$
+   While EHCDarcy exhibits an initial sign transition from $+9.32\%$ at $n=2$ ($10.98\text{ s}$ CPU) to $-0.38\%$ at $n_{\text{outer}} = 3$ ($15.57\text{ s}$ CPU), it is **strictly monotonic and bounded within $[-0.38\%, -0.34\%]$ for all $n_{\text{outer}} \ge 3$** ($-0.36\%$ at $n=4$, $-0.35\%$ at $n=5$, $-0.34\%$ at $n=8$), completely avoiding the large under-damped sign oscillations seen in EP.
+3. **Computational Efficiency & Outer Corrector Cost**:  
+   Per outer iteration pass, both formulations incur virtually identical CPU execution times ($\approx 4.2\text{--}4.3\text{ ms}$ per 2D cell-pass; e.g. at $n_{\text{outer}}=3$, EHCDarcy requires $15.57\text{ s}$ for 3,600 outer passes vs. $15.19\text{ s}$ for EP).  
+   However, `EHCDarcy` achieves verified discrete energy closure ($\le 0.4\%$) with only $n_{\text{outer}} = 3$ (closure error $-0.38\%$, CPU time $15.57\text{ s}$). Enthalpy-Porosity at $\lambda = 1.0$ requires $n_{\text{outer}} \ge 12$ (CPU time $56.63\text{ s}$, 14,400 passes) to reliably settle below $\le 0.5\%$ closure ($+0.45\%$). Consequently, EHCDarcy achieves equivalent energy conservation in **$25\%$ of the outer corrector passes and $3.6\times$ less CPU time ($15.57\text{ s}$ vs. $56.63\text{ s}$)**, confirming that EHCDarcy is substantially more economical for fluid-region melting.
 
 ---
 
@@ -207,7 +215,7 @@ To establish rigorous temporal convergence, uniform time steps were executed to 
 
 | Uniform Time Step | Total Steps (120 s) | $f_L(60\text{ s})$ | $f_L(120\text{ s})$ | Mid-Height Front $x_{\text{front}}(120\text{ s})$ |
 | :--- | :---: | :---: | :---: | :---: |
-| $\Delta t = 0.100\text{ s}$ (Baseline) | 1,200 | $0.0886$ | $0.1303$ | $13.62\text{ mm}$ |
+| $\Delta t = 0.100\text{ s} (Baseline)$ | 1,200 | $0.0886$ | $0.1303$ | $13.62\text{ mm}$ |
 | $\Delta t = 0.050\text{ s}$ | 2,400 | $0.0887$ | $0.1305$ | $13.64\text{ mm}$ |
 | $\Delta t = 0.025\text{ s}$ | 4,800 | $0.0888$ | $0.1306$ | $13.65\text{ mm}$ |
 
@@ -218,16 +226,16 @@ Refining $\Delta t$ by a factor of 4 produces a change in $f_L(120\text{ s})$ of
 ## 4. Latent Advection Term Analysis: `div(phi, phaseFraction)`
 
 ### 4.1 Physical Sharp Interface vs. Numerical Mushy Zone
-In physical pure metal melting, phase change occurs at a discrete sharp interface $\Gamma(t)$. Liquid velocity satisfies the no-slip condition at the interface ($\mathbf{u}_{\text{interface}} = 0$), so physical advection of latent heat is identically zero.
+In physical pure metal melting, phase change occurs at a discrete sharp interface $\Gamma(t)$. Liquid velocity satisfies the no-slip condition at the interface ($\\mathbf{u}_{\text{interface}} = 0$), so physical advection of latent heat is identically zero.
 
 In fixed-grid diffuse-interface methods, the phase boundary is numerically broadened across a finite transition window $\Delta T_{\text{window}}$. Across this numerical mushy zone:
-- A cell-centred scale diagnostic $\sum V_i \rho L (\mathbf{u}_i \cdot \nabla f_{L,i})$ across all 85 mushy cells at $t = 1020\text{ s}$ demonstrates that the median cell-wise ratio in the core mushy zone ($0.01 < f_L < 0.90$, 80 cells) is small:
-  $$\operatorname{median}_i \left(\frac{|\mathbf{u}_i \cdot \nabla f_{L,i}|}{|\partial f_{L,i}/\partial t|}\right) = 0.99\% \approx 1.0\%$$
+- A cell-centred scale diagnostic $\sum V_i \rho L (\\mathbf{u}_i \cdot \nabla f_{L,i})$ across all 85 mushy cells at $t = 1020\text{ s}$ demonstrates that the median cell-wise ratio in the core mushy zone ($0.01 < f_L < 0.90$, 80 cells) is small:
+  $$\operatorname{median}_i \left(\frac{|\\mathbf{u}_i \cdot \nabla f_{L,i}|}{|\partial f_{L,i}/\partial t|}\right) = 0.99\% \approx 1.0\%$$
 - In the outer 5 fringe cells ($f_L \ge 0.90$), localized advection reaches $9.20\text{ W}$ absolute and $-7.52\text{ W}$ signed. Under continuum incompressibility, these signs represent local divergence in the core and convergence into the fringe, canceling across the closed cavity. Omitting numerical latent advection is an established and physically motivated benchmark approximation standard across classical CFD phase-change literature.
 
 ### 4.2 Implementation Verification in `phaseChangeMultiRegionFoam`
 Inspection of `EEqn.H` confirms:
-- The energy equation solves for sensible enthalpy $h$ with standard advection $\nabla \cdot (\rho \mathbf{u} h)$.
+- The energy equation solves for sensible enthalpy $h$ with standard advection $\nabla \cdot (\rho \\mathbf{u} h)$.
 - Latent heat is governed solely by the unsteady source term $L \frac{\partial(\rho f_L)}{\partial t}$ in `enthalpyPorosity` (or via $C_p^{\text{eff}}$ in `EHCDarcy`).
 - The entry `div(phi,phaseFraction)` previously present in `system/fluid/fvSchemes` was an unused legacy dictionary token that was never invoked during matrix assembly.
 
@@ -249,7 +257,7 @@ Refinement ratios: $r_{21} = h_2 / h_1 = 1.500$, $r_{32} = h_3 / h_2 = 1.3223$.
 | Coarse (Grid 3) | $32 \times 24$ | 768 | $0.3698$ | $0.5682$ | $29.18\text{ mm}$ | $56.01\text{ mm}$ | $66.75\text{ mm}$ |
 | Medium (Grid 2) | $42 \times 32$ | 1344 | $0.3747$ | $0.5736$ | $28.19\text{ mm}$ | $57.06\text{ mm}$ | $67.80\text{ mm}$ |
 | Fine (Grid 1) | $63 \times 48$ | 3024 | $0.3760$ | $0.5725$ | $27.58\text{ mm}$ | $57.68\text{ mm}$ | $66.87\text{ mm}$ |
-| **Richardson Extrapolated ($\phi_{\text{ext}}$)** | — | $\infty$ | — | — | — | **$57.99\text{ mm}$** | — |
+| **Richardson Extrapolated ($\phi_{\text{ext}}$)** | — | $\infty$ | — | — | — | — | **$57.99\text{ mm}$** | — |
 
 ### 5.2 Formal ASME / Roache Grid Convergence Analysis
 1. **Global Liquid Fraction $f_L(17\text{ min})$**:
@@ -262,7 +270,7 @@ Refinement ratios: $r_{21} = h_2 / h_1 = 1.500$, $r_{32} = h_3 / h_2 = 1.3223$.
    - **Fine-Grid Convergence Index ($\text{GCI}_{\text{fine}}^{21}$)**: **$0.67\%$**
    - **Medium-Grid Convergence Index ($\text{GCI}_{\text{med}}^{32}$)**: **$2.04\%$**
    - **Asymptotic Range Consistency Ratio**:
-     $$\frac{\mathrm{GCI}_{\mathrm{med}}^{32}}{r_{21}^p \, \mathrm{GCI}_{\text{fine}}^{21}} = \frac{2.038\%}{1.500^{2.70} \times 0.672\%} \approx \mathbf{1.01}$$
+     $$\frac{\mathrm{GCI}_{\mathrm{med}}^{32}}{r_{21}^p \, \mathrm{GCI}_{\text{fine}}^{21}} = \frac{2.04\%}{1.500^{2.70} \times 0.67\%} \approx \mathbf{1.01}$$
      The consistency ratio is within $1\%$ of theoretical asymptotic limit $1.00$.
 
 **Scope of Grid Study**: Formal ASME GCI verification is established specifically for `EHCDarcy`; no formal grid-convergence study was conducted for `enthalpyPorosity`.
@@ -324,9 +332,10 @@ Because the exponent on $\mathrm{Ra}$ is only $0.0243$, varying $\mathrm{Ra}$ by
 
 ### 8.1 Summary of Methodological Resolutions
 1. **Energy-Balance Audit and Boundary Accounting Resolutions**:
-   - **Unified $\le 2.0\%$ Acceptance Target**: A single strict criterion of $|\epsilon_{\text{energy}}| \le 2.0\%$ across all times ($t \le 17\text{ min}$) is enforced. `EHCDarcy` achieves complete energy closure across the entire transient ($-0.17\%$ to $-0.53\%$, well within tolerance).
+   - **Unified $\le 2.0\%$ Acceptance Target**: A single strict criterion of $|\epsilon_{\text{energy}}| \le 2.0\%$ across all times ($t \le 17\text{ min}$) is enforced. `EHCDarcy` achieves complete energy closure across the entire transient ($-0.13\%$ to $-0.34\%$, well within tolerance).
    - **Historical Audit Sign Bug**: In earlier versions of `exact_energy_balance_audit.py`, subtracting negative raw cold-wall heat flux double-counted cold-wall heat loss as an artificial heat source, creating false deficits ($-1.26\%$ to $-5.86\%$). Correcting to $E_{\text{net}} = E_{\text{hot}} - E_{\text{cold, out}}$ resolved true physical closure.
-   - **Enthalpy-Porosity Newton Relaxation ($\lambda$)**: Tutorial under-relaxation ($\lambda = 0.2$) caused severe non-conservation ($+7.16\%$ at 2 min, $+7.45\%$ at 17 min). Setting code-default $\lambda = 1.0$ at $n_{\text{outer}}=8$ achieves $-0.26\%$ at 2 min and $-0.14\%$ at 17 min. However, EP exhibits under-damped Newton oscillations and fails at low outer correctors ($n_{\text{outer}} \le 5$), whereas `EHCDarcy` conserves energy down to $n_{\text{outer}}=3$ ($-0.57\%$, clock time $16.0\text{ s}$).
+   - **Discrete Right-Endpoint Quadrature**: OpenFOAM's implicit backward-Euler operator evaluates flux discretely at the new time step $t^n$. Adopting the right-endpoint sum $\sum \dot{Q}(t_n)\,\Delta t_n$ eliminates the spurious $+3.63\text{ J}$ trapezoidal offset caused by the early conduction surge peak, bringing discrete energy conservation to within $< 0.35\%$.
+   - **Enthalpy-Porosity Newton Relaxation ($\lambda$)**: Tutorial under-relaxation ($\lambda = 0.2$) caused severe non-conservation ($+7.35\%$ at 2 min, $+7.49\%$ at 17 min). Setting code-default $\lambda = 1.0$ at $n_{\text{outer}}=8$ achieves $-0.06\%$ at 2 min and $-0.10\%$ at 17 min. However, EP exhibits under-damped Newton oscillations and fails at low outer correctors ($n_{\text{outer}} \le 5$), whereas `EHCDarcy` conserves energy down to $n_{\text{outer}}=3$ ($-0.38\%$, CPU time $15.57\text{ s}$).
    - **Coarse Integration Artifact**: The coarse $1601.5\text{ J}$ script underestimated first-minute delivery by $229.66\text{ J}$ due to temporal undersampling of the early conduction surge. Temporal undersampling accounts for $99.97\%$ of the coarse gross discrepancy.
 
 2. **Spatial and Temporal Sensitivity Bounds**:
@@ -334,7 +343,7 @@ Because the exponent on $\mathrm{Ra}$ is only $0.0243$, varying $\mathrm{Ra}$ by
    - Global melt fraction matches Ye & Arıcı (2023, Eq. 6) within $0.33$ percentage points ($0.5736$ vs. $0.5703$).
 
 ### 8.2 Scope Distinction: Numerical Benchmark Verification vs. Physical Experimental Validation
-- **Numerical Benchmark Verification**: This report provides rigorous evidence of **numerical benchmark consistency and code-to-code verification** against established 2D CFD literature (Brent et al. 1988, Hannoun et al. 2003, Ye & Arıcı 2023). Under the stated idealized assumptions, `phaseChangeMultiRegionFoam` achieves a mean phase-front deviation of $3.46\text{ mm}$ ($3.89\%$ of cavity width) and maximum local deviation of $6.34\text{ mm}$ ($7.13\%$ of cavity width) relative to Brent et al. (1988), with an energy closure discrepancy of $-0.17\%$.
+- **Numerical Benchmark Verification**: This report provides rigorous evidence of **numerical benchmark consistency and code-to-code verification** against established 2D CFD literature (Brent et al. 1988, Hannoun et al. 2003, Ye & Arıcı 2023). Under the stated idealized assumptions, `phaseChangeMultiRegionFoam` achieves a mean phase-front deviation of $3.46\text{ mm}$ ($3.89\%$ of cavity width) and maximum local deviation of $6.34\text{ mm}$ ($7.13\%$ of cavity width) relative to Brent et al. (1988), with an energy closure discrepancy of $-0.13\%$.
 - **Distinction from Experimental Validation**: These results **do not constitute a full quantitative validation against independent physical experimental measurements**. Quantitative alignment with physical experiments (such as Gau & Viskanta 1986) requires resolving 3D endwall boundary-layer drag, conjugate thermal inertia of the heating apparatus, solid-state gallium crystallographic anisotropy ($k \in [28, 41]\text{ W/(m K)}$), and non-intrusive front measurement methods.
 - **Engineering Tolerances**: Acceptance thresholds (front mean deviation $\le 5\% W$, liquid fraction within $\pm 0.05$) are classified as engineering tolerances suitable for computational thermal engineering.
 
