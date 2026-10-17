@@ -84,13 +84,19 @@ def generate_master_plot(root_dir, output_png):
     times_brent = np.array([120, 360, 600, 1020])
     fL_brent = np.array([0.1102, 0.2346, 0.3465, 0.5334])
 
-    # Ye & Arıcı (2023) correlation: f_L = 0.03816 * Fo^0.4907 * Ra^0.3164 * Ste^0.8407
+    # Ye & Arıcı (2023, Eq. 6) benchmark correlation:
+    # \phi_n = 2.708 * \tau^{0.712} * Ra^{0.0243} * Ar^{-0.0515}
     times_cont = np.linspace(30, 1020, 100)
     alpha_liq = 32.0 / (6095.0 * 381.5)
-    Fo = alpha_liq * times_cont / (H**2)
-    Ra = 6.0e5
-    Ste = 0.039
-    fL_ye2023 = 0.03816 * (Fo**0.4907) * (Ra**0.3164) * (Ste**0.8407)
+    nu_liq = 0.00181 / 6095.0
+    beta = 0.00012
+    dT_m = 311.15 - 302.93
+    Ste = 381.5 * dT_m / 80160.0
+    Ra = 9.81 * beta * dT_m * (H**3) / (nu_liq * alpha_liq)
+    Ar = H / W
+    Fo = alpha_liq * times_cont / (W**2)
+    tau = Fo * Ste
+    fL_ye2023 = 2.708 * (tau**0.712) * (Ra**0.0243) * (Ar**-0.0515)
 
     # 1D Stefan pure conduction
     lam_stefan = 0.13670
