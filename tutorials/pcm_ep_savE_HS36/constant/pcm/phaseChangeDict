@@ -38,24 +38,7 @@ phaseChange
         latentHeat      163000.0; // Latent heat of fusion: 163 kJ/kg
     }
 
-    // -------------------------------------------------------------------------
-    // Reverse / Freezing Properties (savE HS36 datasheet: 40 °C to 30 °C range)
-    // -------------------------------------------------------------------------
-    reverse
-    {
-        T_lowerBound    303.15;   // Freezing lower bound: 30 °C (303.15 K)
-        T_upperBound    313.15;   // Freezing upper bound: 40 °C (313.15 K)
-        latentHeat      163000.0; // Freezing latent heat: 163 kJ/kg
-    }
 
-    // -------------------------------------------------------------------------
-    // Stateful Thermal Hysteresis Tracking
-    // -------------------------------------------------------------------------
-    hysteresis
-    {
-        active              true;
-        reversalTolerance   1e-3;
-    }
 
     // -------------------------------------------------------------------------
     // Phase Density Properties (Conservative thermo density)

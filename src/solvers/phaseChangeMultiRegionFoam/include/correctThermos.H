@@ -10,7 +10,7 @@ forAll(fluidRegions, i)
     if (pcmModel.active())
     {
         pcmModel.correct();
-        pcmModel.postEnergySolve(he);
+        pcmModel.postEnergySolve(he, finalIter);
         thermo.correct();
         pcmModel.applyKappaToThermo();
     }
@@ -28,7 +28,7 @@ forAll(solidRegions, i)
     if (pcModel.active())
     {
         pcModel.correct();
-        pcModel.postEnergySolve(h);
+        pcModel.postEnergySolve(h, finalIter);
         thermo.correct();
         pcModel.applyKappaToThermo();
     }

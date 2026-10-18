@@ -94,18 +94,20 @@
 
             if (pcModel.active())
             {
-                pcModel.postEnergySolve(h);
+                pcModel.postEnergySolve(h, finalIter);
                 thermo.correct();
                 pcModel.applyKappaToThermo();
             }
 
 
             maxDeltaT = max(mag(thermo.T() - Tprev)).value();
+            reduce(maxDeltaT, maxOp<scalar>());
             Tprev = thermo.T();
 
             if (pcModel.active())
             {
                 maxDeltaAlpha = max(mag(pcModel.phaseFraction() - alphaPrev)).value();
+                reduce(maxDeltaAlpha, maxOp<scalar>());
                 alphaPrev = pcModel.phaseFraction();
             }
 

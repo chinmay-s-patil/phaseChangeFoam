@@ -298,10 +298,14 @@ void Foam::phaseChangeModel::readDict()
     }
 
     const dictionary& pcDict = phaseChangeDict.subDict("phaseChange");
-    checkAllowedKeys(pcDict, {"active", "phaseChangeMode", "type", "direction", "melting", "freezing", "forward", "reverse", "hysteresis", "density", "thermophysical", "thermo", "convection", "porosity", "buoyancy", "liquid", "vapor", "C_evap", "C_cond", "latentHeat", "Tsat", "enableTsatP", "pRef", "speciesName", "massSource", "energySource", "speciesSource", "lambda"});
+    checkAllowedKeys(pcDict, {"active", "phaseChangeMode", "meltingModel", "speciesModel", "type", "direction", "melting", "freezing", "forward", "reverse", "hysteresis", "density", "thermophysical", "thermo", "convection", "porosity", "buoyancy", "liquid", "vapor", "C_evap", "C_cond", "latentHeat", "Tsat", "enableTsatP", "pRef", "speciesName", "massSource", "energySource", "speciesSource", "lambda", "convergenceTol", "tolerance"});
 
     word modeName = "none";
-    if (pcDict.found("phaseChangeMode"))
+    if (pcDict.found("meltingModel"))
+    {
+        modeName = pcDict.get<word>("meltingModel");
+    }
+    else if (pcDict.found("phaseChangeMode"))
     {
         modeName = pcDict.get<word>("phaseChangeMode");
     }
@@ -395,10 +399,10 @@ void Foam::phaseChangeModel::readDict()
         Tuf_ = freezeDict.get<scalar>("T_upperBound");
         Lf_  = freezeDict.get<scalar>("latentHeat");
 
-        if (Tuf_ <= Tlf_)
+        if (Tuf_ < Tlf_)
         {
             FatalIOErrorInFunction(freezeDict)
-                << "T_upperBound (" << Tuf_ << ") must be strictly greater than "
+                << "T_upperBound (" << Tuf_ << ") must be greater than or equal to "
                 << "T_lowerBound (" << Tlf_ << ") in reverse/freezing block for region "
                 << mesh_.name() << exit(FatalIOError);
         }
@@ -430,10 +434,10 @@ void Foam::phaseChangeModel::readDict()
         Tum_ = meltDict.get<scalar>("T_upperBound");
         Lm_  = meltDict.get<scalar>("latentHeat");
 
-        if (Tum_ <= Tlm_)
+        if (Tum_ < Tlm_)
         {
             FatalIOErrorInFunction(meltDict)
-                << "T_upperBound (" << Tum_ << ") must be strictly greater than "
+                << "T_upperBound (" << Tum_ << ") must be greater than or equal to "
                 << "T_lowerBound (" << Tlm_ << ") in forward/melting block for region "
                 << mesh_.name() << exit(FatalIOError);
         }
@@ -452,10 +456,10 @@ void Foam::phaseChangeModel::readDict()
             Tuf_ = freezeDict.lookupOrDefault<scalar>("T_upperBound", Tum_);
             Lf_  = freezeDict.lookupOrDefault<scalar>("latentHeat", Lm_);
 
-            if (Tuf_ <= Tlf_)
+            if (Tuf_ < Tlf_)
             {
                 FatalIOErrorInFunction(freezeDict)
-                    << "T_upperBound (" << Tuf_ << ") must be strictly greater than "
+                    << "T_upperBound (" << Tuf_ << ") must be greater than or equal to "
                     << "T_lowerBound (" << Tlf_ << ") in reverse/freezing block for region "
                     << mesh_.name() << exit(FatalIOError);
             }
@@ -1217,14 +1221,14 @@ Foam::autoPtr<Foam::phaseChangeModel> Foam::phaseChangeModel::New
                     modeName = pcDict.get<word>("meltingModel");
                     typeFound = true;
                 }
-                else if (pcDict.found("type"))
-                {
-                    modeName = pcDict.get<word>("type");
-                    typeFound = true;
-                }
                 else if (pcDict.found("phaseChangeMode"))
                 {
                     modeName = pcDict.get<word>("phaseChangeMode");
+                    typeFound = true;
+                }
+                else if (pcDict.found("type"))
+                {
+                    modeName = pcDict.get<word>("type");
                     typeFound = true;
                 }
 

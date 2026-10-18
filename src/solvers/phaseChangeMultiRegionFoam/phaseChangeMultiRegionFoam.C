@@ -113,6 +113,15 @@ int main(int argc, char *argv[])
             }
         }
 
+        forAll(fluidRegions, i)
+        {
+            fluidPhaseChangeModel& phaseChange = fluidPhaseChangeModels[i];
+            if (phaseChange.active())
+            {
+                initialMassFluid[i] += fvc::domainIntegrate(phaseChange.massSource()).value() * runTime.deltaTValue();
+            }
+        }
+
         // --- PIMPLE loop
         for (int oCorr=0; oCorr<nOuterCorr; ++oCorr)
         {
@@ -155,6 +164,8 @@ int main(int argc, char *argv[])
                     maxDeltaT_outer = max(maxDeltaT_outer, max(mag(thermoFluid[i].T() - T_outer_prev_fluid[i])).value());
                     T_outer_prev_fluid[i] = thermoFluid[i].T();
                 }
+
+                reduce(maxDeltaT_outer, maxOp<scalar>());
 
                 Info<< "Coupled outer convergence max DeltaT = " << maxDeltaT_outer << " K (tol = " << outerTol << " K)" << endl;
 

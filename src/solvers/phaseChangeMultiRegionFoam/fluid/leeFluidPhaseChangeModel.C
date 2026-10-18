@@ -220,10 +220,16 @@ void Foam::leeFluidPhaseChangeModel::correct()
         return;
     }
 
-    const volScalarField& T_old = thermo_.T().oldTime();
-    const volScalarField& p_old = thermo_.p().oldTime();
+    const word ddtName =
+        mesh_.schemesDict().found("ddtSchemes")
+      ? mesh_.schemesDict().subDict("ddtSchemes").lookupOrDefault<word>("default", "Euler")
+      : word("Euler");
+    const bool isTransient = (ddtName != "none" && ddtName != "steadyState");
+    const volScalarField& T_old = isTransient ? thermo_.T().oldTime() : thermo_.T();
+    const volScalarField& p_old = isTransient ? thermo_.p().oldTime() : thermo_.p();
     
-    const volScalarField& rho_old = mesh_.lookupObject<volScalarField>("rho").oldTime();
+    const volScalarField& rho_field = mesh_.lookupObject<volScalarField>("rho");
+    const volScalarField& rho_old = isTransient ? rho_field.oldTime() : rho_field;
 
     // thermo_.Cp() returns a fresh tmp<volScalarField> without historic oldTime() storage.
     // Because correct() is called at oCorr == 0 before any equation solves (EEqn/YEqn),
@@ -269,8 +275,8 @@ void Foam::leeFluidPhaseChangeModel::correct()
         const scalar T0 = T_old[cellI];
         const scalar rho0 = rho_old[cellI];
         const scalar Cp_c = max(CpField[cellI], scalar(1.0));
-        const scalar Yl0 = (liquidIndex_ != -1) ? max(Y[liquidIndex_].oldTime()[cellI], scalar(0)) : scalar(0);
-        const scalar Yv0 = (vaporIndex_ != -1) ? max(Y[vaporIndex_].oldTime()[cellI], scalar(0)) : scalar(0);
+        const scalar Yl0 = (liquidIndex_ != -1) ? max((isTransient ? Y[liquidIndex_].oldTime()[cellI] : Y[liquidIndex_][cellI]), scalar(0)) : scalar(0);
+        const scalar Yv0 = (vaporIndex_ != -1) ? max((isTransient ? Y[vaporIndex_].oldTime()[cellI] : Y[vaporIndex_][cellI]), scalar(0)) : scalar(0);
 
         scalar mDotVal = 0.0;
         scalar energySourceVal = 0.0;
@@ -288,8 +294,8 @@ void Foam::leeFluidPhaseChangeModel::correct()
         if (T0 > Tsat_c)
         {
             const scalar mDot_raw = C_evap * rho0 * Yl0 * max(T0 - Tsat_c, scalar(0)) / Tsat_c;
-            const scalar massCap = (dt > 1e-12) ? (rho0 * Yl0 / dt) : mDot_raw;
-            const scalar thermalCap = (dt > 1e-12) ? (rho0 * Cp_c * max(T0 - Tsat_c, scalar(0)) / (L_eff * dt)) : mDot_raw;
+            const scalar massCap = (isTransient && dt > 1e-12) ? (rho0 * Yl0 / dt) : mDot_raw;
+            const scalar thermalCap = (isTransient && dt > 1e-12) ? (rho0 * Cp_c * max(T0 - Tsat_c, scalar(0)) / (L_eff * dt)) : mDot_raw;
 
             mDotVal = min(mDot_raw, min(massCap, thermalCap));
             energySourceVal = - mDotVal * L_eff;
@@ -297,8 +303,8 @@ void Foam::leeFluidPhaseChangeModel::correct()
         else if (T0 < Tsat_c)
         {
             const scalar mDot_raw = C_cond * rho0 * Yv0 * max(Tsat_c - T0, scalar(0)) / Tsat_c;
-            const scalar massCap = (dt > 1e-12) ? (rho0 * Yv0 / dt) : mDot_raw;
-            const scalar thermalCap = (dt > 1e-12) ? (rho0 * Cp_c * max(Tsat_c - T0, scalar(0)) / (L_eff * dt)) : mDot_raw;
+            const scalar massCap = (isTransient && dt > 1e-12) ? (rho0 * Yv0 / dt) : mDot_raw;
+            const scalar thermalCap = (isTransient && dt > 1e-12) ? (rho0 * Cp_c * max(Tsat_c - T0, scalar(0)) / (L_eff * dt)) : mDot_raw;
 
             mDotVal = - min(mDot_raw, min(massCap, thermalCap));
             energySourceVal = - mDotVal * L_eff;
@@ -309,6 +315,11 @@ void Foam::leeFluidPhaseChangeModel::correct()
         vaporSource_[cellI] = mDotVal;
         energySource_[cellI] = energySourceVal;
     }
+
+    mDot_.correctBoundaryConditions();
+    liquidSource_.correctBoundaryConditions();
+    vaporSource_.correctBoundaryConditions();
+    energySource_.correctBoundaryConditions();
 }
 
 

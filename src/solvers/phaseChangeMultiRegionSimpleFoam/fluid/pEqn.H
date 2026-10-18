@@ -34,7 +34,8 @@
 
         if (phaseChange.active())
         {
-            p_rghEqn += phaseChange.massSource();
+            // Subtract mass source from RHS: div(phi) = S_m => laplacian(p) = div(phiHbyA) - S_m
+            p_rghEqn -= phaseChange.massSource();
         }
 
         p_rghEqn.setReference

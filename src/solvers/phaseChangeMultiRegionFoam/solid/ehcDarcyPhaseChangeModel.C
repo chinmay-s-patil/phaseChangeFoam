@@ -140,6 +140,8 @@ Foam::tmp<Foam::volScalarField> Foam::ehcDarcyPhaseChangeModel::momentumSp() con
         coeffCells[celli] = Cu_ * sqr(1.0 - a) / (pow3(a) + q_);
     }
 
+    coeff.correctBoundaryConditions();
+
     if (mesh_.time().outputTime())
     {
         tCoeff.ref().write();

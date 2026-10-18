@@ -21,14 +21,14 @@ VALIDATION_SUITES = [
         "title": "de Vahl Davis (1983) Natural Convection (Ra = 10^5)",
         "script": "deVahlDavis2D/runTest.py",
         "fast": True,
-        "description": "Steady natural convection cavity, Nu_mean benchmark target 4.519 (+/- 5%)"
+        "description": "Steady natural convection cavity, Nu_mean benchmark target 4.519 (+/- 5%) (~2s)"
     },
     {
         "name": "gallium2D",
-        "title": "Brent, Voller, Reid (1988) Gallium Melting Benchmark",
+        "title": "Brent et al. (1988) Gallium Melting Fast Regression Gate",
         "script": "gallium2D/runTest.py",
-        "fast": False,
-        "description": "Coupled thermal phase change & natural convection cavity (Ra ~ 6e5, Pr = 0.0216)"
+        "fast": True,
+        "description": "2-minute regression gate: f_L(2m) = 0.1303 +/- 0.002, |energy closure| <= 0.5% (~35s)"
     },
 ]
 

@@ -186,7 +186,7 @@ public:
     virtual void updateHistory();
 
     //- Hook called after energy equation solution to update phase fraction and enthalpy
-    virtual void postEnergySolve(volScalarField& he) {}
+    virtual void postEnergySolve(volScalarField& he, const bool finalIter = false) {}
 
     //- Re-apply effective thermal conductivity override to thermo database
     virtual void applyKappaToThermo();

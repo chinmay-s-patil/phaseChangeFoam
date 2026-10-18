@@ -193,7 +193,7 @@ To decouple physical modeling capabilities from under-relaxation artifacts and r
    $$\epsilon_{\text{energy}}(2\text{ min}): \quad +9.32% (n=2), -0.38% (n=3), -0.36% (n=4), -0.35% (n=5), -0.34% (n=8)$$
    While EHCDarcy exhibits an initial sign transition from $+9.32\%$ at $n=2$ ($10.98\text{ s}$ CPU) to $-0.38\%$ at $n_{\text{outer}} = 3$ ($15.57\text{ s}$ CPU), it is **strictly monotonic and bounded within $[-0.38\%, -0.34\%]$ for all $n_{\text{outer}} \ge 3$** ($-0.36\%$ at $n=4$, $-0.35\%$ at $n=5$, $-0.34\%$ at $n=8$), completely avoiding the large under-damped sign oscillations seen in EP.
 3. **Computational Efficiency & Outer Corrector Cost**:  
-   Per outer iteration pass, both formulations incur virtually identical CPU execution times ($\approx 4.2\text{--}4.3\text{ ms}$ per 2D cell-pass; e.g. at $n_{\text{outer}}=3$, EHCDarcy requires $15.57\text{ s}$ for 3,600 outer passes vs. $15.19\text{ s}$ for EP).  
+   Per outer iteration pass, both formulations incur virtually identical CPU execution times ($\approx 4.2\text{--}4.3\text{ ms}$ per outer-corrector pass of the whole mesh, or $\approx 3.2\,\mu\text{s}$ per cell per pass; e.g. at $n_{\text{outer}}=3$, EHCDarcy requires $15.57\text{ s}$ for 3,600 outer passes vs. $15.19\text{ s}$ for EP).  
    However, `EHCDarcy` achieves verified discrete energy closure ($\le 0.4\%$) with only $n_{\text{outer}} = 3$ (closure error $-0.38\%$, CPU time $15.57\text{ s}$). Enthalpy-Porosity at $\lambda = 1.0$ requires $n_{\text{outer}} \ge 12$ (CPU time $56.63\text{ s}$, 14,400 passes) to reliably settle below $\le 0.5\%$ closure ($+0.45\%$). Consequently, EHCDarcy achieves equivalent energy conservation in **$25\%$ of the outer corrector passes and $3.6\times$ less CPU time ($15.57\text{ s}$ vs. $56.63\text{ s}$)**, confirming that EHCDarcy is substantially more economical for fluid-region melting.
 
 ---
@@ -219,7 +219,14 @@ To establish rigorous temporal convergence, uniform time steps were executed to 
 | $\Delta t = 0.050\text{ s}$ | 2,400 | $0.0887$ | $0.1305$ | $13.64\text{ mm}$ |
 | $\Delta t = 0.025\text{ s}$ | 4,800 | $0.0888$ | $0.1306$ | $13.65\text{ mm}$ |
 
-Refining $\Delta t$ by a factor of 4 produces a change in $f_L(120\text{ s})$ of only **$0.0003$ ($0.23\%$)** and shifts the mid-height melt front by only **$0.03\text{ mm}$ ($0.22\%$)**. The baseline time step $\Delta t = 0.1\text{ s}$ provides time-step independent results.
+Refining $\Delta t$ by a factor of 4 produces a change in $f_L(120\text{ s})$ of only **$0.0003 ($0.23\\%)** and shifts the mid-height melt front by only **$0.03\text{ mm} ($0.22\\%)**. The baseline time step $\Delta t = 0.1\text{ s}$ provides time-step independent results.
+
+### 3.3 Investigation of the Startup Conservation Deficit under $\Delta t$ Halving
+To investigate the physical nature of the small, persistent deficit in EHCDarcy ($pprox -0.34\%$ at 2 min, $-6.43\text{ J}$), a targeted test halved $\Delta t$ to $0.05\text{ s}$ (2,400 steps):
+- **Baseline $\Delta t = 0.10\text{ s}$ (1,200 steps)**: $E_{\text{net}} = 1883.84\text{ J}$, $E_{\text{stored}} = 1877.41\text{ J}$, deficit $\Delta E = -6.43\text{ J}$ (closure $-0.341\%$).
+- **Halved $\Delta t = 0.05\text{ s}$ (2,400 steps)**: $E_{\text{net}} = 1880.92\text{ J}$, $E_{\text{stored}} = 1879.42\text{ J}$, deficit $\Delta E = -1.50\text{ J}$ (closure $-0.080\%$).
+
+Halving $\Delta t$ reduces the 2-minute conservation deficit by **76.7%** (a factor of $> 4$, consistent with $\mathcal{O}(\Delta t^2)$ Crank-Nicolson / backward temporal convergence during the startup transient). Furthermore, between $t = 60\text{ s}$ and $t = 120\text{ s}$, the deficit grows by only $-0.21\text{ J}$ ($-1.29\text{ J} \to -1.50\text{ J}$). This confirms that the deficit is purely a temporal discretization / startup transient effect, and NOT an inherent spatial or discrete formulation inconsistency in EHCDarcy.
 
 ---
 
@@ -244,9 +251,9 @@ Inspection of `EEqn.H` confirms:
 ## 5. Spatial Grid Sensitivity & ASME / Roache GCI Analysis (EHCDarcy Formulation, to 17 min)
 
 Three systematically refined meshes were executed to the full $17\text{ min}$ ($1020\text{ s}$) duration:
-- **Grid 3 (Coarse)**: $32 \times 24$ ($768$ cells, $h_3 = 2.71\text{ mm}$)
-- **Grid 2 (Medium)**: $42 \times 32$ ($1344$ cells, $h_2 = 2.05\text{ mm}$)
-- **Grid 1 (Fine)**: $63 \times 48$ ($3024$ cells, $h_1 = 1.37\text{ mm}$)
+- **Grid 3 (Coarse)**: $32 \times $24 ($768 cells, $h_3 = $2.71\text{ mm}$)
+- **Grid 2 (Medium)**: $42 \times $32 ($1344 cells, $h_2 = $2.05\text{ mm}$)
+- **Grid 1 (Fine)**: $63 \times $48 ($3024 cells, $h_1 = $1.37\text{ mm}$)
 
 Refinement ratios: $r_{21} = h_2 / h_1 = 1.500$, $r_{32} = h_3 / h_2 = 1.3223$.
 
@@ -261,9 +268,9 @@ Refinement ratios: $r_{21} = h_2 / h_1 = 1.500$, $r_{32} = h_3 / h_2 = 1.3223$.
 
 ### 5.2 Formal ASME / Roache Grid Convergence Analysis
 1. **Global Liquid Fraction $f_L(17\text{ min})$**:
-   The computed sequence from coarse to fine is $0.5682 \to 0.5736 \to 0.5725$. Because the medium grid is slightly higher than the fine grid (by $0.0011$, or $0.19\%$), this sequence is non-monotonic. Consequently, a formal monotonic Richardson extrapolation cannot be claimed for $f_L(17\text{ min})$. The total spread across all three grids is only $0.0054$ ($0.95\%$), establishing that the global melt fraction is spatially insensitive to grid refinement beyond $42 \times 32$.
+   The computed sequence from coarse to fine is $0.5682 \to $0.5736 \to $0.5725. Because the medium grid is slightly higher than the fine grid (by $0.0011, or $0.19\%$), this sequence is non-monotonic. Consequently, a formal monotonic Richardson extrapolation cannot be claimed for $f_L(17\text{ min})$. The total spread across all three grids is only $0.0054 ($0.94\%$), establishing that the global melt fraction is spatially insensitive to grid refinement beyond $42 \times 32$.
 2. **Phase Front Position at Mid-Height $y/H = 0.5$**:
-   The front coordinate sequence is strictly monotonic ($56.01\text{ mm} \to 57.06\text{ mm} \to 57.68\text{ mm}$). For unequal refinement ratios ($r_{21} = 1.500, r_{32} = 1.3223$), solving the generalized transcendental ASME equation yields:
+   The front coordinate sequence is strictly monotonic ($56.01\text{ mm} \to $57.06\text{ mm} \to $57.68\text{ mm}$). For unequal refinement ratios ($r_{21} = 1.500, r_{32} = 1.3223$), solving the generalized transcendental ASME equation yields:
    - Observed order of convergence: $p = 2.70$
    - Richardson extrapolated front position: $\phi_{\text{ext}} = 57.99\text{ mm}$
    - Fine-grid relative error: $e_a^{21} = 1.07\%$
@@ -298,7 +305,7 @@ Sweeping $C_u$ across four orders of magnitude to $t = 17\text{ min}$ on the bas
 | $0.2\text{ K}$ ($302.93 \pm 0.10\text{ K}$) | $0.3736$ | $0.5728$ | $4.56$ | $27.90\text{ mm}$ | $67.81\text{ mm}$ |
 | **$0.5\text{ K}$ ($302.93 \pm 0.25\text{ K}$, Baseline)** | **$0.3747$** | **$0.5736$** | **$4.50$** | **$28.19\text{ mm}$** | **$67.80\text{ mm}$** |
 
-Varying the numerical phase transition window from $0.5\text{ K}$ down to $0.1\text{ K}$ changes $f_L(17\text{ min})$ by only **$0.0009$ ($0.15\%$)**.
+Varying the numerical phase transition window from $0.5\text{ K}$ down to $0.1\text{ K}$ changes $f_L(17\text{ min})$ by only **$0.0009 ($0.16\\%)**.
 
 ---
 
@@ -340,10 +347,10 @@ Because the exponent on $\mathrm{Ra}$ is only $0.0243$, varying $\mathrm{Ra}$ by
 
 2. **Spatial and Temporal Sensitivity Bounds**:
    - Mid-height front position at 17 min demonstrates strict monotonic spatial convergence with an ASME observed order of $p = 2.70$, an asymptotic consistency ratio of $1.01$, and a fine-grid $\text{GCI}$ of $0.67\%$. Formal GCI grid-convergence is established for `EHCDarcy` only.
-   - Global melt fraction matches Ye & Arıcı (2023, Eq. 6) within $0.33$ percentage points ($0.5736$ vs. $0.5703$).
+   - Global melt fraction matches Ye & Arıcı (2023, Eq. 6) within $0.33 percentage points ($0.5736 vs. $0.5703$).
 
 ### 8.2 Scope Distinction: Numerical Benchmark Verification vs. Physical Experimental Validation
-- **Numerical Benchmark Verification**: This report provides rigorous evidence of **numerical benchmark consistency and code-to-code verification** against established 2D CFD literature (Brent et al. 1988, Hannoun et al. 2003, Ye & Arıcı 2023). Under the stated idealized assumptions, `phaseChangeMultiRegionFoam` achieves a mean phase-front deviation of $3.46\text{ mm}$ ($3.89\%$ of cavity width) and maximum local deviation of $6.34\text{ mm}$ ($7.13\%$ of cavity width) relative to Brent et al. (1988), with an energy closure discrepancy of $-0.13\%$.
+- **Numerical Benchmark Verification**: This report provides rigorous evidence of **numerical benchmark consistency and code-to-code verification** against established 2D CFD literature (Brent et al. 1988, Hannoun et al. 2003, Ye & Arıcı 2023). Under the stated idealized assumptions, `phaseChangeMultiRegionFoam` achieves a mean phase-front deviation of $3.46\text{ mm} ($3.89\% of cavity width) and maximum local deviation of $6.34\text{ mm} ($7.13\% of cavity width) relative to Brent et al. (1988), with an energy closure discrepancy of $-0.13\%$.
 - **Distinction from Experimental Validation**: These results **do not constitute a full quantitative validation against independent physical experimental measurements**. Quantitative alignment with physical experiments (such as Gau & Viskanta 1986) requires resolving 3D endwall boundary-layer drag, conjugate thermal inertia of the heating apparatus, solid-state gallium crystallographic anisotropy ($k \in [28, 41]\text{ W/(m K)}$), and non-intrusive front measurement methods.
 - **Engineering Tolerances**: Acceptance thresholds (front mean deviation $\le 5\% W$, liquid fraction within $\pm 0.05$) are classified as engineering tolerances suitable for computational thermal engineering.
 

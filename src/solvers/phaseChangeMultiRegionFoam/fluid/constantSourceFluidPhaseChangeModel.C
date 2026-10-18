@@ -52,7 +52,11 @@ Foam::constantSourceFluidPhaseChangeModel::constantSourceFluidPhaseChangeModel
         (
             "massSourceVal",
             dimMass/dimVolume/dimTime,
-            dict_.getOrDefault<scalar>("massSource", 0.0)
+            dict_.lookupOrDefault<scalar>
+            (
+                "massSource",
+                dict_.lookupOrDefault<scalar>("speciesSource", 0.0)
+            )
         )
     ),
     energySource_
@@ -88,7 +92,11 @@ Foam::constantSourceFluidPhaseChangeModel::constantSourceFluidPhaseChangeModel
         (
             "speciesSourceVal",
             dimMass/dimVolume/dimTime,
-            dict_.getOrDefault<scalar>("speciesSource", 1e-3)
+            dict_.lookupOrDefault<scalar>
+            (
+                "speciesSource",
+                dict_.lookupOrDefault<scalar>("massSource", 0.0)
+            )
         )
     )
 {

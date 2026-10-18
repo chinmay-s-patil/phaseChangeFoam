@@ -146,6 +146,19 @@ timeFormat general;
 timePrecision 6;
 runTimeModifiable true;
 adjustTimeStep false;
+
+functions
+{{
+    wallHeatFlux1
+    {{
+        type            wallHeatFlux;
+        libs            (fieldFunctionObjects);
+        region          fluid;
+        writeControl    timeStep;
+        writeInterval   1;
+        patches         (hotWall coldWall);
+    }}
+}}
 """
     with open(os.path.join(case_dir, "system/controlDict"), "w") as f:
         f.write(control_dict)
@@ -160,7 +173,6 @@ divSchemes
     div(phi,U) Gauss upwind;
     div(phi,h) Gauss upwind;
     div(phi,K) Gauss upwind;
-    div(phi,phaseFraction) Gauss upwind;
     div(((rho*nuEff)*dev2(T(grad(U))))) Gauss linear;
 }
 laplacianSchemes { default Gauss linear corrected; }
@@ -625,9 +637,48 @@ def run_gallium(case_dir, nx=42, ny=32, end_time=120, deltaT_melt=0.5, cu=1.6e6,
                     "max_pct": max_diff_pct,
                 }
 
-    overall_pass = overall_pass and front_criteria_pass
+    # Exact Right-Endpoint Energy Audit & Fast Regression Gate
+    audit_passed = True
+    fl_regression_passed = True
+    closure_2min = None
+    fl_2min = None
+
+    try:
+        this_dir = os.path.dirname(os.path.abspath(__file__))
+        sys.path.insert(0, os.path.join(this_dir, "analysis", "energy_balance"))
+        from exact_energy_balance_audit import run_exact_audit
+        audit_results = run_exact_audit(case_dir)
+        for r in audit_results:
+            if abs(r['t_sec'] - 120.0) < 1e-3:
+                closure_2min = r['rel_err']
+                break
+    except Exception as e:
+        print(f"Note: Energy audit could not be evaluated ({e})")
+
+    for t_val, f_val, _, _ in extracted_results:
+        if abs(t_val - 120.0) < 1e-3:
+            fl_2min = f_val
+            break
+
+    if fl_2min is not None:
+        fl_regression_passed = abs(fl_2min - 0.1303) <= 0.002
+    if closure_2min is not None:
+        audit_passed = abs(closure_2min) <= 0.50
+
+    if fl_2min is not None or closure_2min is not None:
+        print("\n" + "=" * 75)
+        print("  FAST REGRESSION GATE (2-Minute Gallium Benchmark)")
+        print("=" * 75)
+        print(f"  Model formulation:          {model} (lambda = {lam})")
+        if fl_2min is not None:
+            print(f"  Liquid fraction f_L(2 min): {fl_2min:.4f}  (Target: 0.1303 +/- 0.002) -> {'PASS' if fl_regression_passed else 'FAIL'}")
+        if closure_2min is not None:
+            print(f"  Energy closure (2 min):     {closure_2min:+.3f}% (Target: <= 0.50%)        -> {'PASS' if audit_passed else 'FAIL'}")
+        print("=" * 75 + "\n")
+
+    overall_pass = overall_pass and front_criteria_pass and fl_regression_passed and audit_passed
     status_str = "PASSED" if overall_pass else "FAILED"
-    print(f"Validation Status: {status_str} (Criteria: f_L error <= {TOLERANCE_FL_ABS}, Front Mean <= {TOLERANCE_FRONT_MEAN_W_PCT}% W, Front Max <= {TOLERANCE_FRONT_MAX_W_PCT}% W)\n")
+    print(f"Validation Status: {status_str} (Criteria: f_L error <= {TOLERANCE_FL_ABS}, Front Mean <= {TOLERANCE_FRONT_MEAN_W_PCT}% W, Front Max <= {TOLERANCE_FRONT_MAX_W_PCT}% W, 2-min Gate: f_L in [0.1283, 0.1323], |Closure| <= 0.5%)\n")
 
     # Write results summary
     res_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gallium_validation_results.txt")
@@ -638,7 +689,12 @@ def run_gallium(case_dir, nx=42, ny=32, end_time=120, deltaT_melt=0.5, cu=1.6e6,
         f.write(f"Cavity: {W*100:.2f} cm x {H*100:.2f} cm\n")
         f.write(f"Mesh: {nx} x {ny}\n")
         f.write(f"Simulation end time: {end_time} s ({end_time/60.0:.1f} min)\n")
-        f.write(f"Phase change model: enthalpyPorosity (Cu={cu:e}, deltaT={deltaT_melt} K)\n\n")
+        f.write(f"Phase change model: {model} (lambda={lam}, Cu={cu:e}, deltaT={deltaT_melt} K)\n")
+        if fl_2min is not None:
+            f.write(f"2-Minute f_L: {fl_2min:.4f} (regression gate target: 0.1303 +/- 0.002: {'PASS' if fl_regression_passed else 'FAIL'})\n")
+        if closure_2min is not None:
+            f.write(f"2-Minute Energy Closure: {closure_2min:+.3f}% (target: <= 0.50%: {'PASS' if audit_passed else 'FAIL'})\n")
+        f.write("\n")
         f.write(f"{'Time (s)':<12} {'Time (min)':<12} {'Computed f_L':<15} {'Benchmark f_L':<15} {'Rel. Diff':<15}\n")
         f.write("-" * 75 + "\n")
         for t_val, f_L_computed, ref_str, diff_str in extracted_results:

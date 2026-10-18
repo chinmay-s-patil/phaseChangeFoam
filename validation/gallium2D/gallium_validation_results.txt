@@ -8,41 +8,32 @@ End Time: 1020 s (17.0 min)
 
 Time (s)   Time (min)   Brent (1988)    Enthalpy-Por     EHCDarcy         Delta(EHC-EP)  
 ----------------------------------------------------------------------------------------
-60.0       1.00         -               0.0918           0.0894           -0.0023        
-120.0      2.00         0.1102          0.1340           0.1303           -0.0037        
-180.0      3.00         -               0.1697           0.1648           -0.0049        
-240.0      4.00         -               0.2028           0.1967           -0.0061        
-300.0      5.00         -               0.2347           0.2273           -0.0074        
-360.0      6.00         0.2346          0.2659           0.2573           -0.0086        
-420.0      7.00         -               0.2968           0.2869           -0.0099        
-480.0      8.00         -               0.3275           0.3163           -0.0112        
-540.0      9.00         -               0.3580           0.3456           -0.0125        
-600.0      10.00        0.3465          0.3884           0.3747           -0.0138        
-660.0      11.00        -               0.4187           0.4036           -0.0151        
-720.0      12.00        -               0.4488           0.4323           -0.0165        
-780.0      13.00        -               0.4787           0.4609           -0.0178        
-840.0      14.00        -               0.5085           0.4893           -0.0192        
-900.0      15.00        -               0.5381           0.5176           -0.0205        
-960.0      16.00        -               0.5676           0.5457           -0.0219        
-1020.0     17.00        0.5334          0.5967           0.5736           -0.0231        
+60.0       1.00         -               0.0894           0.0894           +0.0000        
+120.0      2.00         0.1102          0.1303           0.1303           +0.0000        
+180.0      3.00         -               -                0.1648           -              
+240.0      4.00         -               -                0.1967           -              
+300.0      5.00         -               -                0.2273           -              
+360.0      6.00         0.2346          -                0.2573           -              
+420.0      7.00         -               -                0.2869           -              
+480.0      8.00         -               -                0.3163           -              
+540.0      9.00         -               -                0.3456           -              
+600.0      10.00        0.3465          -                0.3747           -              
+660.0      11.00        -               -                0.4036           -              
+720.0      12.00        -               -                0.4323           -              
+780.0      13.00        -               -                0.4609           -              
+840.0      14.00        -               -                0.4893           -              
+900.0      15.00        -               -                0.5176           -              
+960.0      16.00        -               -                0.5457           -              
+1020.0     17.00        0.5334          -                0.5736           -              
 ----------------------------------------------------------------------------------------
 ACCURACY METRICS vs BRENT ET AL. (1988):
-  Enthalpy-Porosity Mean Relative Error:      14.73%
-  EHCDarcy Mean Relative Error:               10.89%
-  Enthalpy-Porosity Mean Absolute Error:      0.0401 (4.01 percentage points)
-  EHCDarcy Mean Absolute Error:               0.0278 (2.78 percentage points)
-  Relative Improvement by EHCDarcy:           30.7% reduction in discrepancy
+  Enthalpy-Porosity Mean Relative Error:      18.25%
+  EHCDarcy Mean Relative Error:               18.25%
+  Enthalpy-Porosity Mean Absolute Error:      0.0201 (2.01 percentage points)
+  EHCDarcy Mean Absolute Error:               0.0201 (2.01 percentage points)
+  Relative Improvement by EHCDarcy:           0.0% reduction in discrepancy
 
 MELT FRONT PROFILE DEVIATIONS vs BRENT ET AL. (1988):
   t = 2 min (120 s):
-    Enthalpy-Porosity: Mean = 1.95 mm (2.19% W), Max = 2.54 mm (2.85% W)
+    Enthalpy-Porosity: Mean = 1.67 mm (1.88% W), Max = 2.29 mm (2.58% W)
     EHCDarcy:          Mean = 1.67 mm (1.88% W), Max = 2.29 mm (2.58% W)
-  t = 6 min (360 s):
-    Enthalpy-Porosity: Mean = 2.60 mm (2.93% W), Max = 3.88 mm (4.37% W)
-    EHCDarcy:          Mean = 1.87 mm (2.11% W), Max = 3.18 mm (3.58% W)
-  t = 10 min (600 s):
-    Enthalpy-Porosity: Mean = 3.51 mm (3.95% W), Max = 5.62 mm (6.32% W)
-    EHCDarcy:          Mean = 2.35 mm (2.65% W), Max = 4.12 mm (4.63% W)
-  t = 17 min (1020 s):
-    Enthalpy-Porosity: Mean = 5.43 mm (6.11% W), Max = 9.74 mm (10.95% W)
-    EHCDarcy:          Mean = 3.46 mm (3.89% W), Max = 6.34 mm (7.13% W)

@@ -74,7 +74,7 @@
         thermo.correct();
         if (pcmModel.active())
         {
-            pcmModel.postEnergySolve(he);
+            pcmModel.postEnergySolve(he, finalIter);
             thermo.correct();
             pcmModel.applyKappaToThermo();
         }

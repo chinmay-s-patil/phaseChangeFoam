@@ -22,6 +22,9 @@
    - [Solid Region Integration](#solid-region-c-integration)
 7. [Physics Caveats & Numerical Considerations](#physics-caveats--numerical-considerations)
 8. [Utilities, Tutorials, & Verification Suite](#utilities-tutorials--verification-suite)
+9. [Validation Ladder & Benchmark Verification](#validation-ladder--benchmark-verification)
+   - [Rung 1: de Vahl Davis (1983) 2D Natural Convection](#rung-1-de-vahl-davis-1983-2d-natural-convection-ra--105)
+   - [Rung 2: 2D Pure Gallium Melting Benchmark (Brent et al. 1988)](#rung-2-2d-pure-gallium-melting-benchmark-brent-et-al-1988)
 
 ---
 
@@ -518,3 +521,41 @@ python3 verification/leeModel/runTest.py
 ```
 
 Covered test cases include analytical ODE rate verification ($< 10^{-7}$ error), Clausius-Clapeyron pressure dependence at 200 kPa, explicit mass and thermal limits, outer-corrector invariance across $nOuterCorrectors \in [1..4]$, heated boiling plateau energy conservation ($0.0000\%$ error), and time-step convergence scaling.
+
+---
+
+## Validation Ladder & Benchmark Verification
+
+The repository includes a hierarchical validation ladder with pre-fixed quantitative acceptance gates:
+
+```bash
+# Run complete validation ladder:
+python3 validation/runAll.py
+
+# Run fast regression gate suite (~35s):
+python3 validation/runAll.py --fast
+```
+
+### Rung 1: de Vahl Davis (1983) 2D Natural Convection ($\mathrm{Ra} = 10^5$)
+- **Directory**: [`validation/deVahlDavis2D/`](validation/deVahlDavis2D/)
+- **Physics**: Laminar natural convection circulation in an air cavity heated from the side.
+- **Target**: Benchmark mean Nusselt number $\overline{\mathrm{Nu}} = 4.519 \pm 5\%$ (passes in ~2s).
+
+### Rung 2: 2D Pure Gallium Melting Benchmark (Brent et al. 1988)
+- **Directory**: [`validation/gallium2D/`](validation/gallium2D/)
+- **Documentation**: [`validation/gallium2D/README.md`](validation/gallium2D/README.md)
+- **Authoritative Analysis Report**: [`validation/gallium2D/analysis/ANALYSIS_REPORT.md`](validation/gallium2D/analysis/ANALYSIS_REPORT.md)
+- **Physics**: Coupled solid-liquid phase change, Stefan condition, Carman-Kozeny Darcy mushy-zone damping, and low-Prandtl liquid metal natural convection ($\mathrm{Ra} \approx 6 \times 10^5$, $\mathrm{Pr} = 0.0216$, $\mathrm{Ste} = 0.039$).
+
+#### Benchmark Highlights & Formulation Recommendations:
+- **Recommended Default Formulation (`EHCDarcy`)**:
+  - Direct path-integral effective heat capacity $C_p^{\text{eff}}(T)$ with Carman-Kozeny Darcy drag damping.
+  - Discrete energy conservation ($|\epsilon_{\text{energy}}| \le 0.38\%$) achieved with only $n_{\text{outer}} = 3$ ($15.6\text{ s}$ CPU time), monotonically bounded, and $-0.13\%$ over the full 17-minute transient.
+  - $3.6\times$ cheaper in CPU execution time and requires $75\%$ fewer outer passes than Enthalpy-Porosity.
+- **Alternative Formulation (`enthalpyPorosity`)**:
+  - Requires code-default **`lambda 1.0`** (exact Newton step) and **$n_{\text{outer}} \ge 12$** ($56.6\text{ s}$ CPU time) to reliably damp Newton oscillations and settle within $\le 0.5\%$ energy closure.
+  - Never use tutorial under-relaxation $\lambda = 0.2$ in production runs (causes massive $+7.35\%$ energy non-conservation).
+- **Exact Right-Endpoint Energy Audit**:
+  - Fully step-resolved audit integrating discrete boundary heat flux $\sum \dot{Q}(t_n)\,\Delta t_n$ against domain-integrated sensible and latent storage, proving discrete energy conservation matching OpenFOAM's implicit backward-Euler operator.
+- **Fast 2-Minute Regression Gate**:
+  - Integrated into `runTest.py` and `runAll.py`: verifies $f_L(2\text{ min}) \in [0.1283, 0.1323]$ and $|\epsilon_{\text{energy}}| \le 0.5\%$.

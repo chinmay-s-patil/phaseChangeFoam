@@ -35,7 +35,8 @@ Foam::enthalpyPorosityPhaseChangeModel::enthalpyPorosityPhaseChangeModel
     q_(0.001),
     Cp_(1000.0),
     kSolid_(1.0),
-    kLiquid_(1.0)
+    kLiquid_(1.0),
+    convergenceTol_(0.01)
 {
     readEPDict();
 
@@ -114,10 +115,14 @@ void Foam::enthalpyPorosityPhaseChangeModel::readEPDict()
         if
         (
             key != "type"
+         && key != "phaseChangeMode"
+         && key != "meltingModel"
          && key != "active"
          && key != "forward"
          && key != "porosity"
          && key != "lambda"
+         && key != "convergenceTol"
+         && key != "tolerance"
          && key != "thermophysical"
          && key != "density"
          && key != "direction"
@@ -126,7 +131,7 @@ void Foam::enthalpyPorosityPhaseChangeModel::readEPDict()
         {
             FatalIOErrorInFunction(pcDict)
                 << "Unknown key '" << key << "' in phaseChange dictionary for model 'enthalpyPorosity'.\n"
-                << "Allowed keys are: type, active, forward, porosity, lambda, thermophysical, density, direction, convection."
+                << "Allowed keys are: phaseChangeMode, meltingModel, type, active, forward, porosity, lambda, convergenceTol, tolerance, thermophysical, density, direction, convection."
                 << exit(FatalIOError);
         }
     }
@@ -201,6 +206,13 @@ void Foam::enthalpyPorosityPhaseChangeModel::readEPDict()
             << "Relaxation factor 'lambda' (" << lambda_ << ") must be in range (0, 1]."
             << exit(FatalIOError);
     }
+
+    // 6. Read convergence tolerance on max|Delta f| at final outer corrector
+    convergenceTol_ = pcDict.lookupOrDefault<scalar>
+    (
+        "convergenceTol",
+        pcDict.lookupOrDefault<scalar>("tolerance", 0.01)
+    );
 
     // 6. Parallel-safe helper to evaluate background thermo properties across processors
     auto getThermoCp = [&]() -> scalar
@@ -453,7 +465,12 @@ Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::latentHe
         dimensionedScalar("zero", dimEnergy/dimVolume/dimTime, 0.0)
     );
 
-    if (!active_ || L_ <= 0.0)
+    const word ddtName =
+        mesh_.schemesDict().found("ddtSchemes")
+      ? mesh_.schemesDict().subDict("ddtSchemes").lookupOrDefault<word>("default", "Euler")
+      : word("Euler");
+
+    if (!active_ || L_ <= 0.0 || ddtName == "none" || ddtName == "steadyState")
     {
         return tSu;
     }
@@ -519,6 +536,8 @@ Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::momentum
         coeffCells[celli] = Cu_ * sqr(1.0 - f) / (pow3(f) + q_);
     }
 
+    coeff.correctBoundaryConditions();
+
     if (mesh_.time().outputTime())
     {
         tCoeff.ref().write();
@@ -534,7 +553,11 @@ Foam::tmp<Foam::volScalarField> Foam::enthalpyPorosityPhaseChangeModel::k() cons
 }
 
 
-void Foam::enthalpyPorosityPhaseChangeModel::postEnergySolve(volScalarField& he)
+void Foam::enthalpyPorosityPhaseChangeModel::postEnergySolve
+(
+    volScalarField& he,
+    const bool finalIter
+)
 {
     if (!active_)
     {
@@ -547,13 +570,30 @@ void Foam::enthalpyPorosityPhaseChangeModel::postEnergySolve(volScalarField& he)
     const scalar window = Tl_ - Ts_;
     const scalar denom = (window > SMALL ? (L_/Cp_ + window) : (L_/Cp_));
 
+    scalar maxDeltaF = 0.0;
     forAll(f, i)
     {
         const scalar Tf = Ts_ + f[i]*window;
         const scalar fNew = min(max(f[i] + lambda_*(T[i] - Tf)/denom, 0.0), 1.0);
-        // Note: do not subtract L_*(fNew - f) from sensible enthalpy he;
-        // latent heat is already accounted for via latentHeatSource() in EEqn / hEqn.
+        const scalar deltaF = mag(fNew - f[i]);
+        if (deltaF > maxDeltaF)
+        {
+            maxDeltaF = deltaF;
+        }
         f[i] = fNew;
+    }
+
+    reduce(maxDeltaF, maxOp<scalar>());
+
+    if (finalIter && (maxDeltaF > convergenceTol_))
+    {
+        WarningInFunction
+            << "At time " << mesh_.time().timeName()
+            << " s, region '" << mesh_.name()
+            << "': max|Delta f| = " << maxDeltaF
+            << " at final outer corrector exceeds tolerance (" << convergenceTol_ << ")."
+            << " Enthalpy-porosity latent update may not be converged; consider increasing nOuterCorrectors."
+            << endl;
     }
 
     // Update boundary conditions of f from patch T (do not apply enthalpy correction on boundaries)

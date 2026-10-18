@@ -27,7 +27,7 @@ endTime         3600;      // 1 hour simulation
 
 deltaT          0.1;
 
-writeControl    adjustableTime;
+writeControl    adjustableRunTime;
 
 writeInterval   60;        // Save output every 60 seconds
 

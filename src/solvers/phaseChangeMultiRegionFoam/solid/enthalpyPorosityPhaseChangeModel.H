@@ -21,7 +21,7 @@ namespace Foam
 
  Description
     Voller–Prakash Enthalpy-Porosity phase change model.
-    Uses source-based latent energy advection L*[ddt(rho,f) + div(phi,f)],
+    Uses source-based latent energy formulation L*ddt(rho,f),
     implicit Darcy momentum drag fvm::Sp, and a post-energy-solve Newton
     liquid fraction update with enthalpy correction h -= L*df.
 \*---------------------------------------------------------------------------*/
@@ -42,6 +42,7 @@ private:
     scalar Cp_;     // Single specific heat capacity [J/(kg K)]
     scalar kSolid_; // Solid thermal conductivity [W/(m K)]
     scalar kLiquid_;// Liquid thermal conductivity [W/(m K)]
+    scalar convergenceTol_; // Convergence tolerance on max|Delta f| at final outer corrector
 
     void readEPDict();
 
@@ -90,7 +91,7 @@ public:
     virtual tmp<volScalarField> k() const override;
 
     //- Post-energy-solve Newton liquid fraction update and enthalpy adjustment
-    virtual void postEnergySolve(volScalarField& he) override;
+    virtual void postEnergySolve(volScalarField& he, const bool finalIter = false) override;
 
     //- Re-apply effective thermal conductivity override to thermo database
     virtual void applyKappaToThermo() override;

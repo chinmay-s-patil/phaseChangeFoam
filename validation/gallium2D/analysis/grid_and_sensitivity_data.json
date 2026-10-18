@@ -79,6 +79,25 @@
     "brent_schedule": {
       "f_L_60s_sim": 0.0824,
       "f_L_60s_brent": 0.11
+    },
+    "energy_deficit_dt_halving": {
+      "dt_0.10s": {
+        "dt": 0.10,
+        "steps": 1200,
+        "E_net_J": 1883.84,
+        "E_stored_J": 1877.41,
+        "deficit_J": -6.43,
+        "closure_pct": -0.341
+      },
+      "dt_0.05s": {
+        "dt": 0.05,
+        "steps": 2400,
+        "E_net_J": 1880.92,
+        "E_stored_J": 1879.42,
+        "deficit_J": -1.50,
+        "closure_pct": -0.080
+      },
+      "deficit_reduction_pct": 76.67
     }
   },
   "darcy_cu_sweep": [
