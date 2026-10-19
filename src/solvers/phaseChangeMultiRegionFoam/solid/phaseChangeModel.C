@@ -399,7 +399,18 @@ void Foam::phaseChangeModel::readDict()
         Tuf_ = freezeDict.get<scalar>("T_upperBound");
         Lf_  = freezeDict.get<scalar>("latentHeat");
 
-        if (Tuf_ < Tlf_)
+        if (modeLower == "ehc" || modeLower == "ehcdarcy")
+        {
+            if (Tuf_ <= Tlf_)
+            {
+                FatalIOErrorInFunction(freezeDict)
+                    << "T_upperBound (" << Tuf_ << ") must be strictly greater than "
+                    << "T_lowerBound (" << Tlf_ << ") in reverse/freezing block for region "
+                    << mesh_.name() << " with model '" << modeName << "' (isothermal phase change not supported for EHC/EHCDarcy)."
+                    << exit(FatalIOError);
+            }
+        }
+        else if (Tuf_ < Tlf_)
         {
             FatalIOErrorInFunction(freezeDict)
                 << "T_upperBound (" << Tuf_ << ") must be greater than or equal to "
@@ -434,7 +445,18 @@ void Foam::phaseChangeModel::readDict()
         Tum_ = meltDict.get<scalar>("T_upperBound");
         Lm_  = meltDict.get<scalar>("latentHeat");
 
-        if (Tum_ < Tlm_)
+        if (modeLower == "ehc" || modeLower == "ehcdarcy")
+        {
+            if (Tum_ <= Tlm_)
+            {
+                FatalIOErrorInFunction(meltDict)
+                    << "T_upperBound (" << Tum_ << ") must be strictly greater than "
+                    << "T_lowerBound (" << Tlm_ << ") in forward/melting block for region "
+                    << mesh_.name() << " with model '" << modeName << "' (isothermal phase change not supported for EHC/EHCDarcy)."
+                    << exit(FatalIOError);
+            }
+        }
+        else if (Tum_ < Tlm_)
         {
             FatalIOErrorInFunction(meltDict)
                 << "T_upperBound (" << Tum_ << ") must be greater than or equal to "
@@ -456,7 +478,18 @@ void Foam::phaseChangeModel::readDict()
             Tuf_ = freezeDict.lookupOrDefault<scalar>("T_upperBound", Tum_);
             Lf_  = freezeDict.lookupOrDefault<scalar>("latentHeat", Lm_);
 
-            if (Tuf_ < Tlf_)
+            if (modeLower == "ehc" || modeLower == "ehcdarcy")
+            {
+                if (Tuf_ <= Tlf_)
+                {
+                    FatalIOErrorInFunction(freezeDict)
+                        << "T_upperBound (" << Tuf_ << ") must be strictly greater than "
+                        << "T_lowerBound (" << Tlf_ << ") in reverse/freezing block for region "
+                        << mesh_.name() << " with model '" << modeName << "' (isothermal phase change not supported for EHC/EHCDarcy)."
+                        << exit(FatalIOError);
+                }
+            }
+            else if (Tuf_ < Tlf_)
             {
                 FatalIOErrorInFunction(freezeDict)
                     << "T_upperBound (" << Tuf_ << ") must be greater than or equal to "

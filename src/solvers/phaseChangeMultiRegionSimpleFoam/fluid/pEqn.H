@@ -34,8 +34,9 @@
 
         if (phaseChange.active())
         {
-            // Subtract mass source from RHS: div(phi) = S_m => laplacian(p) = div(phiHbyA) - S_m
-            p_rghEqn -= phaseChange.massSource();
+            // Continuity: div(phi) = S_m => laplacian(p) = div(phiHbyA) - S_m
+            // In OpenFOAM, p_rghEqn is (lap - div == 0), so subtracting S_m from RHS adds S_m to equation matrix:
+            p_rghEqn += phaseChange.massSource();
         }
 
         p_rghEqn.setReference

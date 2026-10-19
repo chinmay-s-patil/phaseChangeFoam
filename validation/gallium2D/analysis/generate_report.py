@@ -15,6 +15,7 @@ import sys
 import json
 import shutil
 import numpy as np
+import re
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ENERGY_DIR = os.path.join(SCRIPT_DIR, "energy_balance")
@@ -153,12 +154,12 @@ def format_scorecard_table(sc):
     # f_L 17m
     s_ep = "**PASSED**" if abs(ep_lam1.get("f_L_17m", 0) - BRENT_FL_17M) <= TOL_FL else "**FAIL**"
     s_ehc = "**PASSED**" if abs(ehc.get("f_L_17m", 0) - BRENT_FL_17M) <= TOL_FL else "**FAIL**"
-    rows.append(f"| **$f_L$ at $t = 17\\text{{ min}}$** (Brent: ${BRENT_FL_17M:.4f}$) | $\\pm 0.05$ | {fmt_fl(ep_n8)} | {fmt_fl(ep_n12)} | **{fmt_fl(ep_lam1)}** | **{fmt_fl(ehc)}** | {s_ep} | {s_ehc} |")
+    rows.append(f"| **$f_L$ at $t = 17\\text{{ min}}$** (Brent: {BRENT_FL_17M:.4f}) | $\\pm 0.05$ | {fmt_fl(ep_n8)} | {fmt_fl(ep_n12)} | **{fmt_fl(ep_lam1)}** | **{fmt_fl(ehc)}** | {s_ep} | {s_ehc} |")
 
     # Ye & Arici
     s_ep = "**PASSED**" if abs(ep_lam1.get("f_L_17m", 0) - YE_ARICI_FL_17M) <= 0.03 else "**FAIL**"
     s_ehc = "**PASSED**" if abs(ehc.get("f_L_17m", 0) - YE_ARICI_FL_17M) <= 0.03 else "**FAIL**"
-    rows.append(f"| **Ye & Arıcı (2023) Eq. 6** (${YE_ARICI_FL_17M:.4f}$) | $\\pm 0.03$ | {fmt_ya(ep_n8)} | {fmt_ya(ep_n12)} | **{fmt_ya(ep_lam1)}** | **{fmt_ya(ehc)}** | {s_ep} | {s_ehc} |")
+    rows.append(f"| **Ye & Arıcı (2023) Eq. 6** ({YE_ARICI_FL_17M:.4f}) | $\\pm 0.03$ | {fmt_ya(ep_n8)} | {fmt_ya(ep_n12)} | **{fmt_ya(ep_lam1)}** | **{fmt_ya(ehc)}** | {s_ep} | {s_ehc} |")
 
     return "\n".join(rows)
 
@@ -247,7 +248,8 @@ def format_dt_table(dt_list):
     rows.append("| Uniform Time Step | Total Steps (120 s) | $f_L(60\\text{ s})$ | $f_L(120\\text{ s})$ | Mid-Height Front $x_{\\text{front}}(120\\text{ s})$ |")
     rows.append("| :--- | :---: | :---: | :---: | :---: |")
     for d in dt_list:
-        rows.append(f"| ${d['label']}$ | {d['steps']:,} | ${d['f_L_60s']:.4f}$ | ${d['f_L_120s']:.4f}$ | ${d['front_mid_mm']:.2f}\\text{{ mm}}$ |")
+        lbl = f"$\\Delta t = {d['dt']:.3f}\\text{{ s}}$ (Baseline)" if "Baseline" in d.get("label", "") else f"$\\Delta t = {d['dt']:.3f}\\text{{ s}}$"
+        rows.append(f"| {lbl} | {d['steps']:,} | ${d['f_L_60s']:.4f}$ | ${d['f_L_120s']:.4f}$ | ${d['front_mid_mm']:.2f}\\text{{ mm}}$ |")
     return "\n".join(rows)
 
 def get_sweep_entry(sweep, model, lam, n_outer):
@@ -258,6 +260,53 @@ def get_sweep_entry(sweep, model, lam, n_outer):
             if lam is not None and r.get("lambda") is not None and abs(r["lambda"] - lam) < 1e-3:
                 return r
     return {}
+
+
+def validate_markdown_quality(content: str):
+    """
+    Validates markdown report output against corruption, control characters,
+    unbalanced LaTeX math delimiters, and broken escape sequences.
+    Fails generation with an informative error if defects are found.
+    """
+    # 1. Check for control characters (ASCII < 32 except newline, CR, tab)
+    ctrl_chars = [(i, ord(c), hex(ord(c))) for i, c in enumerate(content) if ord(c) < 32 and c not in '\n\r\t']
+    if ctrl_chars:
+        raise ValueError(f"Quality check failed: {len(ctrl_chars)} control character(s) detected: {ctrl_chars[:5]}")
+
+    # 2. Check for double-escaped percent signs in output text (e.g. \\%)
+    if (chr(92) + chr(92) + '%') in content:
+        raise ValueError("Quality check failed: Double-escaped percent sign (\\\\%) found in report text.")
+
+    # 3. Strip code blocks and inline code before math delimiter checks
+    stripped = re.sub(r'```.*?```', '', content, flags=re.DOTALL)
+    stripped = re.sub(r'`.*?`', '', stripped)
+
+    # 4. Check display math ($$) balance
+    dd_matches = list(re.finditer(r'\$\$', stripped))
+    if len(dd_matches) % 2 != 0:
+        raise ValueError(f"Quality check failed: Unbalanced display math ($$) delimiters ({len(dd_matches)} found).")
+
+    # Remove display math blocks before checking inline $
+    no_display = re.sub(r'\$\$.*?\$\$', '', stripped, flags=re.DOTALL)
+
+    # 5. Check inline math ($) balance per line
+    unbalanced_lines = []
+    for line_num, line in enumerate(no_display.splitlines(), start=1):
+        if line.count('$') % 2 != 0:
+            unbalanced_lines.append((line_num, line.count('$'), line.strip()[:80]))
+
+    if unbalanced_lines:
+        msg = f"Quality check failed: Unbalanced inline math ($) delimiters on {len(unbalanced_lines)} line(s):\n"
+        for lnum, cnt, snip in unbalanced_lines[:5]:
+            msg += f"  Line {lnum} ({cnt} '$'): {snip}\n"
+        raise ValueError(msg)
+
+    # Total inline $ balance
+    total_inline_dollars = no_display.count('$')
+    if total_inline_dollars % 2 != 0:
+        raise ValueError(f"Quality check failed: Total inline math ($) count is odd ({total_inline_dollars}).")
+
+    print(f"Quality check passed: 0 control chars, {len(dd_matches)//2} display math blocks, {total_inline_dollars//2} inline math spans.")
 
 def generate_report():
     print("Loading simulation and audit data...")
@@ -416,7 +465,7 @@ Inspection of the script source revealed a sign convention error in net boundary
 # Historical bug in exact_energy_balance_audit.py (now resolved):
 enet = ein - eout  # eout was already negative in OpenFOAM wallHeatFlux.dat!
 ```
-In OpenFOAM's `wallHeatFlux` function object, heat entering the fluid domain is signed positive, while heat leaving across the isothermal cold boundary ($T_{{\\text{{fluid}}}} > T_{{\\text{{cold}}}} = 301.45\\text{{ K}}$) produces a negative patch integral ($\\dot{{Q}}_{{\\text{{cold, raw}}}} < 0$). Subtracting a negative cumulative energy (`ein - (-eout) = ein + eout`) double-counted outward cold-wall heat loss as an artificial heat injection into the domain. At 17 min, cumulative cold-wall loss is ${cold_loss_17m:.2f}\\text{{ J}}$; adding rather than subtracting this loss inflated apparent net input to ${buggy_net_17m:.2f}\\text{{ J}}$, producing the spurious ${buggy_surplus_17m:+.2f}\\text{{ J}}$ (${buggy_err_17m:+.2f}\\%$) deficit against domain stored energy (${r17['E_stored']:.2f}\\text{{ J}}$).
+In OpenFOAM's `wallHeatFlux` function object, heat entering the fluid domain is signed positive, while heat leaving across the isothermal cold boundary ($T_{{\\text{{fluid}}}} > T_{{\\text{{cold}}}} = 301.45\\text{{ K}}$) produces a negative patch integral ($\\dot{{Q}}_{{\\text{{cold, raw}}}} < 0$). Subtracting a negative cumulative energy (`ein - (-eout) = ein + eout`) double-counted outward cold-wall heat loss as an artificial heat injection into the domain. At 17 min, cumulative cold-wall loss is {cold_loss_17m:.2f} J; adding rather than subtracting this loss inflated apparent net input to {buggy_net_17m:.2f} J, producing the spurious {buggy_surplus_17m:+.2f} J ({buggy_err_17m:+.2f}%) deficit against domain stored energy ({r17['E_stored']:.2f} J).
 
 When the physically correct definition is enforced ($E_{{\\text{{net, in}}}} = E_{{\\text{{hot}}}} - E_{{\\text{{cold, out}}}} = E_{{\\text{{hot}}}} + E_{{\\text{{cold, raw}}}}$):
 - At $t = 2\\text{{ min}}$: $E_{{\\text{{net, in}}}} = {r2['E_in_hot']:.2f} - {r2['E_out_cold']:.2f} = {r2['E_net']:.2f}\\text{{ J}}$, $E_{{\\text{{stored}}}} = {r2['E_stored']:.2f}\\text{{ J}} \\implies \\Delta E = \\mathbf{{{r2['surplus']:+.2f}\\text{{ J}}}}$ ($\\mathbf{{{r2['rel_err']:+.2f}\\%}}$).
@@ -457,8 +506,8 @@ $$\\Delta E(t) = E_{{\\text{{stored}}}}(t) - E_{{\\text{{net, in}}}}(t), \\quad 
 {ep_history_md}
 
 *Latent Enthalpy Reconciliation at $t = 17\\text{{ min}}$*:  
-For EHCDarcy, direct cell summation yields $E_{{\\text{{lat}}}} = \\sum \\rho V_{{\\text{{cell}}}} L \\alpha = {r17['E_lat']:.2f}\\text{{ J}}$, matching $m L f_L = {TOTAL_LATENT_CAPACITY:.2f} \\times {ehc.get('f_L_17m', 0.573613):.7f} = {TOTAL_LATENT_CAPACITY * ehc.get('f_L_17m', 0.573613):.2f}\\text{{ J}}$.  
-For EP ($\\lambda = 1.0, n_{{\\text{{outer}}}}=8$), direct cell summation yields ${histories.get('ep_lam1.0_n8', [{}])[-1].get('E_lat', 0.0):.2f}\\text{{ J}}$, matching $m L f_L = {TOTAL_LATENT_CAPACITY:.2f} \\times {ep_lam1.get('f_L_17m', 0.574523):.7f} = {TOTAL_LATENT_CAPACITY * ep_lam1.get('f_L_17m', 0.574523):.2f}\\text{{ J}}$. Both formulations reconcile latent enthalpy with liquid fraction to $0.01\\text{{ J}}$.
+For EHCDarcy, direct cell summation yields $E_{{\text{{lat}}}} = \\sum \\rho V_{{\\text{{cell}}}} L \\alpha = {r17['E_lat']:.2f}\text{{ J}}$, matching $m L f_L = {TOTAL_LATENT_CAPACITY:.2f} \\times {ehc.get('f_L_17m', 0.573613):.7f} = {TOTAL_LATENT_CAPACITY * ehc.get('f_L_17m', 0.573613):.2f}\\text{{ J}}$.  
+For EP ($\\lambda = 1.0, n_{{\\text{{outer}}}}=8$), direct cell summation yields $E_{{\\text{{lat}}}} = {histories.get('ep_lam1.0_n8', [{}])[-1].get('E_lat', 0.0):.2f}\\text{{ J}}$, matching $m L f_L = {TOTAL_LATENT_CAPACITY:.2f} \\times {ep_lam1.get('f_L_17m', 0.574523):.7f} = {TOTAL_LATENT_CAPACITY * ep_lam1.get('f_L_17m', 0.574523):.2f}\\text{{ J}}$. Both formulations reconcile latent enthalpy with liquid fraction to $0.01\\text{{ J}}$.
 
 ---
 
@@ -475,14 +524,14 @@ To decouple physical modeling capabilities from under-relaxation artifacts and r
 1. **Newton Step Relaxation Dynamics ($\\lambda = 1.0$)**:  
    Under code-default $\\lambda = 1.0$, the discrete energy closure error exhibits a damped, oscillatory convergence path:
    $$\\epsilon_{{\\text{{energy}}}}(2\\text{{ min}}): \\quad {ep1_str}$$
-   At low corrector counts ($n \\le 3$), enthalpy-porosity exhibits large positive surpluses (${ep_n2['rel_err']:+.1f}\\%$ at $n=2$, ${ep_n3['rel_err']:+.1f}\\%$ at $n=3$) because the explicit latent heat update lags the rapid early conduction surge. As $n$ increases, the scheme overcorrects into a negative deficit (${ep_n5['rel_err']:+.1f}\\%$ at $n=5$), crosses zero near $n=7\\text{{--}}8$ (${ep_n8_sweep['rel_err']:+.2f}\\%$ at $n=8$), and asymptotically stabilizes below $0.5\\%$ for $n \\ge 12$ (${ep_n12_sweep['rel_err']:+.2f}\\%$ at $n=12$, ${ep_n16['rel_err']:+.2f}\\%$ at $n=16$).
+   At low corrector counts ($n \\le 3$), enthalpy-porosity exhibits large positive surpluses ({ep_n2['rel_err']:+.1f}% at $n=2$, {ep_n3['rel_err']:+.1f}% at $n=3$) because the explicit latent heat update lags the rapid early conduction surge. As $n$ increases, the scheme overcorrects into a negative deficit ({ep_n5['rel_err']:+.1f}% at $n=5$), crosses zero near $n=7\\text{{--}}8$ ({ep_n8_sweep['rel_err']:+.2f}% at $n=8$), and asymptotically stabilizes below $0.5\\%$ for $n \\ge 12$ ({ep_n12_sweep['rel_err']:+.2f}% at $n=12$, {ep_n16['rel_err']:+.2f}% at $n=16$).
 2. **EHCDarcy Monotonicity and Rapid Convergence (from $n_{{\\text{{outer}}}} \\ge 3$)**:  
    In contrast, `EHCDarcy` incorporates latent heat directly into the left-hand matrix capacity via a path-integral effective heat capacity $C_p^{{\\text{{eff}}}}(T)$. As a result:
    $$\\epsilon_{{\\text{{energy}}}}(2\\text{{ min}}): \\quad {ehc_str}$$
-   While EHCDarcy exhibits an initial sign transition from ${ehc_n2['rel_err']:+.2f}\\%$ at $n=2$ (${ehc_n2.get('cpu_time', ehc_n2.get('clock_time', 0.0)):.2f}\\text{{ s}}$ CPU) to ${ehc_n3['rel_err']:+.2f}\\%$ at $n_{{\\text{{outer}}}} = 3$ (${ehc_n3.get('cpu_time', ehc_n3.get('clock_time', 0.0)):.2f}\\text{{ s}}$ CPU), it is **strictly monotonic and bounded within $[{ehc_n3['rel_err']:+.2f}\\%, {ehc_n8['rel_err']:+.2f}\\%]$ for all $n_{{\\text{{outer}}}} \\ge 3$** (${ehc_n4['rel_err']:+.2f}\\%$ at $n=4$, ${ehc_n5['rel_err']:+.2f}\\%$ at $n=5$, ${ehc_n8['rel_err']:+.2f}\\%$ at $n=8$), completely avoiding the large under-damped sign oscillations seen in EP.
+   While EHCDarcy exhibits an initial sign transition from {ehc_n2['rel_err']:+.2f}% at $n=2$ ({ehc_n2.get('cpu_time', ehc_n2.get('clock_time', 0.0)):.2f} s CPU) to {ehc_n3['rel_err']:+.2f}% at $n_{{\\text{{outer}}}} = 3$ ({ehc_n3.get('cpu_time', ehc_n3.get('clock_time', 0.0)):.2f} s CPU), it is **strictly monotonic and bounded within $[{ehc_n3['rel_err']:+.2f}\\%, {ehc_n8['rel_err']:+.2f}\\%]$ for all $n_{{\\text{{outer}}}} \\ge 3$** ({ehc_n4['rel_err']:+.2f}% at $n=4$, {ehc_n5['rel_err']:+.2f}% at $n=5$, {ehc_n8['rel_err']:+.2f}% at $n=8$), completely avoiding the large under-damped sign oscillations seen in EP.
 3. **Computational Efficiency & Outer Corrector Cost**:  
-   Per outer iteration pass, both formulations incur virtually identical CPU execution times ($\\approx 4.2\\text{{--}}4.3\\text{{ ms}}$ per outer-corrector pass of the whole mesh, or $\\approx 3.2\\,\\mu\\text{{s}}$ per cell per pass; e.g. at $n_{{\\text{{outer}}}}=3$, EHCDarcy requires ${ehc_n3.get('cpu_time', ehc_n3.get('clock_time', 0.0)):.2f}\\text{{ s}}$ for 3,600 outer passes vs. ${ep_n3.get('cpu_time', ep_n3.get('clock_time', 0.0)):.2f}\\text{{ s}}$ for EP).  
-   However, `EHCDarcy` achieves verified discrete energy closure ($\\le 0.4\\%$) with only $n_{{\\text{{outer}}}} = 3$ (closure error ${ehc_n3['rel_err']:+.2f}\\%$, CPU time ${ehc_n3.get('cpu_time', ehc_n3.get('clock_time', 0.0)):.2f}\\text{{ s}}$). Enthalpy-Porosity at $\\lambda = 1.0$ requires $n_{{\\text{{outer}}}} \\ge 12$ (CPU time ${ep_n12_sweep.get('cpu_time', ep_n12_sweep.get('clock_time', 0.0)):.2f}\\text{{ s}}$, 14,400 passes) to reliably settle below $\\le 0.5\\%$ closure (${ep_n12_sweep['rel_err']:+.2f}\\%$). Consequently, EHCDarcy achieves equivalent energy conservation in **$25\\%$ of the outer corrector passes and $3.6\\times$ less CPU time (${ehc_n3.get('cpu_time', ehc_n3.get('clock_time', 0.0)):.2f}\\text{{ s}}$ vs. ${ep_n12_sweep.get('cpu_time', ep_n12_sweep.get('clock_time', 0.0)):.2f}\\text{{ s}}$)**, confirming that EHCDarcy is substantially more economical for fluid-region melting.
+   Per outer iteration pass, both formulations incur virtually identical CPU execution times ($\\approx 4.2\\text{{--}}4.3\\text{{ ms}}$ per outer-corrector pass of the whole mesh, or $\\approx 3.2\\,\\mu\\text{{s}}$ per cell per pass; e.g. at $n_{{\\text{{outer}}}}=3$, EHCDarcy requires {ehc_n3.get('cpu_time', ehc_n3.get('clock_time', 0.0)):.2f} s for 3,600 outer passes vs. {ep_n3.get('cpu_time', ep_n3.get('clock_time', 0.0)):.2f} s for EP).  
+   However, `EHCDarcy` achieves verified discrete energy closure ($\\le 0.4\\%$) with only $n_{{\\text{{outer}}}} = 3$ (closure error {ehc_n3['rel_err']:+.2f}%, CPU time {ehc_n3.get('cpu_time', ehc_n3.get('clock_time', 0.0)):.2f} s). Enthalpy-Porosity at $\\lambda = 1.0$ requires $n_{{\\text{{outer}}}} \\ge 12$ (CPU time {ep_n12_sweep.get('cpu_time', ep_n12_sweep.get('clock_time', 0.0)):.2f} s, 14,400 passes) to reliably settle below $\\le 0.5\\%$ closure ({ep_n12_sweep['rel_err']:+.2f}%). Consequently, EHCDarcy achieves equivalent energy conservation in **$25\\%$ of the outer corrector passes and $3.6\\times$ less CPU time ({ehc_n3.get('cpu_time', ehc_n3.get('clock_time', 0.0)):.2f} s vs. {ep_n12_sweep.get('cpu_time', ep_n12_sweep.get('clock_time', 0.0)):.2f} s)**, confirming that EHCDarcy is substantially more economical for fluid-region melting.
 
 ---
 
@@ -503,14 +552,14 @@ To establish rigorous temporal convergence, uniform time steps were executed to 
 
 {dt_table_md}
 
-Refining $\\Delta t$ by a factor of 4 produces a change in $f_L(120\\text{{ s}})$ of only **${fL_dt_diff:.4f} (${fL_dt_pct:.2f}\\\\%)** and shifts the mid-height melt front by only **${front_dt_diff:.2f}\\text{{ mm}} (${front_dt_pct:.2f}\\\\%)**. The baseline time step $\\Delta t = 0.1\\text{{ s}}$ provides time-step independent results.
+Refining $\\Delta t$ by a factor of 4 produces a change in $f_L(120\\text{{ s}})$ of only **{fL_dt_diff:.4f} ({fL_dt_pct:.2f}%)** and shifts the mid-height melt front by only **{front_dt_diff:.2f} mm ({front_dt_pct:.2f}%)**. The baseline time step $\\Delta t = 0.1\\text{{ s}}$ provides time-step independent results.
 
 ### 3.3 Investigation of the Startup Conservation Deficit under $\\Delta t$ Halving
-To investigate the physical nature of the small, persistent deficit in EHCDarcy ($\approx -0.34\\%$ at 2 min, ${dt010.get('deficit_J', -6.43):+.2f}\\text{{ J}}$), a targeted test halved $\\Delta t$ to $0.05\\text{{ s}}$ (2,400 steps):
+To investigate the physical nature of the small, persistent deficit in EHCDarcy ($\\approx -0.34\\%$ at 2 min, ${dt010.get('deficit_J', -6.43):+.2f}\\text{{ J}}$), a targeted test halved $\\Delta t$ to $0.05\\text{{ s}}$ (2,400 steps):
 - **Baseline $\\Delta t = 0.10\\text{{ s}}$ (1,200 steps)**: $E_{{\\text{{net}}}} = {dt010.get('E_net_J', 1883.84):.2f}\\text{{ J}}$, $E_{{\\text{{stored}}}} = {dt010.get('E_stored_J', 1877.41):.2f}\\text{{ J}}$, deficit $\\Delta E = {dt010.get('deficit_J', -6.43):+.2f}\\text{{ J}}$ (closure ${dt010.get('closure_pct', -0.341):+.3f}\\%$).
 - **Halved $\\Delta t = 0.05\\text{{ s}}$ (2,400 steps)**: $E_{{\\text{{net}}}} = {dt005.get('E_net_J', 1880.92):.2f}\\text{{ J}}$, $E_{{\\text{{stored}}}} = {dt005.get('E_stored_J', 1879.42):.2f}\\text{{ J}}$, deficit $\\Delta E = {dt005.get('deficit_J', -1.50):+.2f}\\text{{ J}}$ (closure ${dt005.get('closure_pct', -0.080):+.3f}\\%$).
 
-Halving $\\Delta t$ reduces the 2-minute conservation deficit by **{dt_halving.get('deficit_reduction_pct', 76.67):.1f}%** (a factor of $> 4$, consistent with $\\mathcal{{O}}(\\Delta t^2)$ Crank-Nicolson / backward temporal convergence during the startup transient). Furthermore, between $t = 60\\text{{ s}}$ and $t = 120\\text{{ s}}$, the deficit grows by only $-0.21\\text{{ J}}$ ($-1.29\\text{{ J}} \\to -1.50\\text{{ J}}$). This confirms that the deficit is purely a temporal discretization / startup transient effect, and NOT an inherent spatial or discrete formulation inconsistency in EHCDarcy.
+Halving $\\Delta t$ reduces the 2-minute conservation deficit by **{dt_halving.get('deficit_reduction_pct', 76.67):.1f}%** (a factor of $> 4$, demonstrating that the deficit falls faster than first order during the startup transient). Furthermore, between $t = 60\\text{{ s}}$ and $t = 120\\text{{ s}}$, the deficit grows by only $-0.21\\text{{ J}}$ ($-1.29\\text{{ J}} \\to -1.50\\text{{ J}}$). This confirms that the deficit is purely a temporal discretization / startup transient effect, and NOT an inherent spatial or discrete formulation inconsistency in EHCDarcy.
 
 ---
 
@@ -535,9 +584,9 @@ Inspection of `EEqn.H` confirms:
 ## 5. Spatial Grid Sensitivity & ASME / Roache GCI Analysis (EHCDarcy Formulation, to 17 min)
 
 Three systematically refined meshes were executed to the full $17\\text{{ min}}$ ($1020\\text{{ s}}$) duration:
-- **Grid 3 (Coarse)**: ${g3['nx']} \\times ${g3['ny']} (${g3['cells']} cells, $h_3 = ${g3['h_mm']:.2f}\\text{{ mm}}$)
-- **Grid 2 (Medium)**: ${g2['nx']} \\times ${g2['ny']} (${g2['cells']} cells, $h_2 = ${g2['h_mm']:.2f}\\text{{ mm}}$)
-- **Grid 1 (Fine)**: ${g1['nx']} \\times ${g1['ny']} (${g1['cells']} cells, $h_1 = ${g1['h_mm']:.2f}\\text{{ mm}}$)
+- **Grid 3 (Coarse)**: ${g3['nx']} \\times {g3['ny']}$ ({g3['cells']} cells, $h_3 = {g3['h_mm']:.2f}\\text{{ mm}}$)
+- **Grid 2 (Medium)**: ${g2['nx']} \\times {g2['ny']}$ ({g2['cells']} cells, $h_2 = {g2['h_mm']:.2f}\\text{{ mm}}$)
+- **Grid 1 (Fine)**: ${g1['nx']} \\times {g1['ny']}$ ({g1['cells']} cells, $h_1 = {g1['h_mm']:.2f}\\text{{ mm}}$)
 
 Refinement ratios: $r_{{21}} = h_2 / h_1 = {gci['r21']:.3f}$, $r_{{32}} = h_3 / h_2 = {gci['r32']:.4f}$.
 
@@ -548,14 +597,14 @@ Refinement ratios: $r_{{21}} = h_2 / h_1 = {gci['r21']:.3f}$, $r_{{32}} = h_3 / 
 
 ### 5.2 Formal ASME / Roache Grid Convergence Analysis
 1. **Global Liquid Fraction $f_L(17\\text{{ min}})$**:
-   The computed sequence from coarse to fine is ${g3['f_L_17m']:.4f} \\to ${g2['f_L_17m']:.4f} \\to ${g1['f_L_17m']:.4f}. Because the medium grid is slightly higher than the fine grid (by ${grid_fl_diff_med_fine:.4f}, or ${grid_fl_diff_med_fine_pct:.2f}\\%$), this sequence is non-monotonic. Consequently, a formal monotonic Richardson extrapolation cannot be claimed for $f_L(17\\text{{ min}})$. The total spread across all three grids is only ${grid_fl_spread:.4f} (${grid_fl_spread_pct:.2f}\\%$), establishing that the global melt fraction is spatially insensitive to grid refinement beyond $42 \\times 32$.
+   The computed sequence from coarse to fine is ${g3['f_L_17m']:.4f} \\to {g2['f_L_17m']:.4f} \\to {g1['f_L_17m']:.4f}$. Because the medium grid is slightly higher than the fine grid (by {grid_fl_diff_med_fine:.4f}, or {grid_fl_diff_med_fine_pct:.2f}%), this sequence is non-monotonic. Consequently, a formal monotonic Richardson extrapolation cannot be claimed for $f_L(17\\text{{ min}})$. The total spread across all three grids is only {grid_fl_spread:.4f} ({grid_fl_spread_pct:.2f}%), establishing that the global melt fraction is spatially insensitive to grid refinement beyond $42 \\times 32$.
 2. **Phase Front Position at Mid-Height $y/H = 0.5$**:
-   The front coordinate sequence is strictly monotonic (${g3['x_front_y0.5_mm']:.2f}\\text{{ mm}} \\to ${g2['x_front_y0.5_mm']:.2f}\\text{{ mm}} \\to ${g1['x_front_y0.5_mm']:.2f}\\text{{ mm}}$). For unequal refinement ratios ($r_{{21}} = {gci['r21']:.3f}, r_{{32}} = {gci['r32']:.4f}$), solving the generalized transcendental ASME equation yields:
+   The front coordinate sequence is strictly monotonic (${g3['x_front_y0.5_mm']:.2f}\\text{{ mm}} \\to {g2['x_front_y0.5_mm']:.2f}\\text{{ mm}} \\to {g1['x_front_y0.5_mm']:.2f}\\text{{ mm}}$). For unequal refinement ratios ($r_{{21}} = {gci['r21']:.3f}, r_{{32}} = {gci['r32']:.4f}$), solving the generalized transcendental ASME equation yields:
    - Observed order of convergence: $p = {gci['observed_order_p']:.2f}$
    - Richardson extrapolated front position: $\\phi_{{\\text{{ext}}}} = {gci['extrapolated_front_mm']:.2f}\\text{{ mm}}$
    - Fine-grid relative error: $e_a^{{21}} = {gci['relative_error_fine_pct']:.2f}\\%$
-   - **Fine-Grid Convergence Index ($\\text{{GCI}}_{{\\text{{fine}}}}^{{21}}$)**: **${gci['gci_fine_pct']:.2f}\\%$**
-   - **Medium-Grid Convergence Index ($\\text{{GCI}}_{{\\text{{med}}}}^{{32}}$)**: **${gci['gci_med_pct']:.2f}\\%$**
+   - **Fine-Grid Convergence Index ($\\text{{GCI}}_{{\\text{{fine}}}}^{{21}}$)**: **{gci['gci_fine_pct']:.2f}%**
+   - **Medium-Grid Convergence Index ($\\text{{GCI}}_{{\\text{{med}}}}^{{32}}$)**: **{gci['gci_med_pct']:.2f}%**
    - **Asymptotic Range Consistency Ratio**:
      $$\\frac{{\\mathrm{{GCI}}_{{\\mathrm{{med}}}}^{{32}}}}{{r_{{21}}^p \\, \\mathrm{{GCI}}_{{\\text{{fine}}}}^{{21}}}} = \\frac{{{gci['gci_med_pct']:.2f}\\%}}{{{gci['r21']:.3f}^{{{gci['observed_order_p']:.2f}}} \\times {gci['gci_fine_pct']:.2f}\\%}} \\approx \\mathbf{{{gci['consistency_ratio']:.2f}}}$$
      The consistency ratio is within $1\\%$ of theoretical asymptotic limit $1.00$.
@@ -575,7 +624,7 @@ Sweeping $C_u$ across four orders of magnitude to $t = 17\\text{{ min}}$ on the 
 
 {win_table_md}
 
-Varying the numerical phase transition window from ${win_base['deltaT']}\\text{{ K}}$ down to ${win_fine['deltaT']}\\text{{ K}}$ changes $f_L(17\\text{{ min}})$ by only **${win_fL_diff:.4f} (${win_fL_pct:.2f}\\\\%)**.
+Varying the numerical phase transition window from ${win_base['deltaT']}\\text{{ K}}$ down to ${win_fine['deltaT']}\\text{{ K}}$ changes $f_L(17\\text{{ min}})$ by only **{win_fL_diff:.4f} ({win_fL_pct:.2f}%)**.
 
 ---
 
@@ -609,18 +658,18 @@ Because the exponent on $\\mathrm{{Ra}}$ is only $0.0243$, varying $\\mathrm{{Ra
 
 ### 8.1 Summary of Methodological Resolutions
 1. **Energy-Balance Audit and Boundary Accounting Resolutions**:
-   - **Unified $\\le 2.0\\%$ Acceptance Target**: A single strict criterion of $|\\epsilon_{{\\text{{energy}}}}| \\le 2.0\\%$ across all times ($t \\le 17\\text{{ min}}$) is enforced. `EHCDarcy` achieves complete energy closure across the entire transient (${ehc.get('closure_17m', -0.13):.2f}\\%$ to ${ehc.get('closure_2m', -0.34):.2f}\\%$, well within tolerance).
+   - **Unified $\\le 2.0\\%$ Acceptance Target**: A single strict criterion of $|\\epsilon_{{\\text{{energy}}}}| \\le 2.0\\%$ across all times ($t \\le 17\\text{{ min}}$) is enforced. `EHCDarcy` achieves complete energy closure across the entire transient ({ehc.get('closure_17m', -0.13):.2f}% to {ehc.get('closure_2m', -0.34):.2f}%, well within tolerance).
    - **Historical Audit Sign Bug**: In earlier versions of `exact_energy_balance_audit.py`, subtracting negative raw cold-wall heat flux double-counted cold-wall heat loss as an artificial heat source, creating false deficits ($-1.26\\%$ to $-5.86\\%$). Correcting to $E_{{\\text{{net}}}} = E_{{\\text{{hot}}}} - E_{{\\text{{cold, out}}}}$ resolved true physical closure.
    - **Discrete Right-Endpoint Quadrature**: OpenFOAM's implicit backward-Euler operator evaluates flux discretely at the new time step $t^n$. Adopting the right-endpoint sum $\\sum \\dot{{Q}}(t_n)\\,\\Delta t_n$ eliminates the spurious $+3.63\\text{{ J}}$ trapezoidal offset caused by the early conduction surge peak, bringing discrete energy conservation to within $< 0.35\\%$.
-   - **Enthalpy-Porosity Newton Relaxation ($\\lambda$)**: Tutorial under-relaxation ($\\lambda = 0.2$) caused severe non-conservation (${ep_tut_n8.get('closure_2m', 7.35):+.2f}\\%$ at 2 min, ${ep_tut_n8.get('closure_17m', 7.49):+.2f}\\%$ at 17 min). Setting code-default $\\lambda = 1.0$ at $n_{{\\text{{outer}}}}=8$ achieves ${ep_lam1.get('closure_2m', -0.06):+.2f}\\%$ at 2 min and ${ep_lam1.get('closure_17m', -0.10):+.2f}\\%$ at 17 min. However, EP exhibits under-damped Newton oscillations and fails at low outer correctors ($n_{{\\text{{outer}}}} \\le 5$), whereas `EHCDarcy` conserves energy down to $n_{{\\text{{outer}}}}=3$ (${ehc_n3['rel_err']:+.2f}\\%$, CPU time ${ehc_n3.get('cpu_time', ehc_n3.get('clock_time', 0.0)):.2f}\\text{{ s}}$).
+   - **Enthalpy-Porosity Newton Relaxation ($\\lambda$)**: Tutorial under-relaxation ($\\lambda = 0.2$) caused severe non-conservation ({ep_tut_n8.get('closure_2m', 7.35):+.2f}% at 2 min, {ep_tut_n8.get('closure_17m', 7.49):+.2f}% at 17 min). Setting code-default $\\lambda = 1.0$ at $n_{{\\text{{outer}}}}=8$ achieves {ep_lam1.get('closure_2m', -0.06):+.2f}% at 2 min and {ep_lam1.get('closure_17m', -0.10):+.2f}% at 17 min. However, EP exhibits under-damped Newton oscillations and fails at low outer correctors ($n_{{\\text{{outer}}}} \\le 5$), whereas `EHCDarcy` conserves energy down to $n_{{\\text{{outer}}}}=3$ ({ehc_n3['rel_err']:+.2f}%, CPU time {ehc_n3.get('cpu_time', ehc_n3.get('clock_time', 0.0)):.2f} s).
    - **Coarse Integration Artifact**: The coarse $1601.5\\text{{ J}}$ script underestimated first-minute delivery by $229.66\\text{{ J}}$ due to temporal undersampling of the early conduction surge. Temporal undersampling accounts for $99.97\\%$ of the coarse gross discrepancy.
 
 2. **Spatial and Temporal Sensitivity Bounds**:
-   - Mid-height front position at 17 min demonstrates strict monotonic spatial convergence with an ASME observed order of $p = {gci['observed_order_p']:.2f}$, an asymptotic consistency ratio of ${gci['consistency_ratio']:.2f}$, and a fine-grid $\\text{{GCI}}$ of ${gci['gci_fine_pct']:.2f}\\%$. Formal GCI grid-convergence is established for `EHCDarcy` only.
-   - Global melt fraction matches Ye & Arıcı (2023, Eq. 6) within ${abs(ehc.get('f_L_17m', 0.5736) - YE_ARICI_FL_17M)*100:.2f} percentage points (${ehc.get('f_L_17m', 0.5736):.4f} vs. ${YE_ARICI_FL_17M:.4f}$).
+   - Mid-height front position at 17 min demonstrates strict monotonic spatial convergence with an ASME observed order of $p = {gci['observed_order_p']:.2f}$, an asymptotic consistency ratio of {gci['consistency_ratio']:.2f}, and a fine-grid $\\text{{GCI}}$ of {gci['gci_fine_pct']:.2f}%. Formal GCI grid-convergence is established for `EHCDarcy` only.
+   - Global melt fraction matches Ye & Arıcı (2023, Eq. 6) within {abs(ehc.get('f_L_17m', 0.5736) - YE_ARICI_FL_17M)*100:.2f} percentage points ({ehc.get('f_L_17m', 0.5736):.4f} vs. {YE_ARICI_FL_17M:.4f}).
 
 ### 8.2 Scope Distinction: Numerical Benchmark Verification vs. Physical Experimental Validation
-- **Numerical Benchmark Verification**: This report provides rigorous evidence of **numerical benchmark consistency and code-to-code verification** against established 2D CFD literature (Brent et al. 1988, Hannoun et al. 2003, Ye & Arıcı 2023). Under the stated idealized assumptions, `phaseChangeMultiRegionFoam` achieves a mean phase-front deviation of ${ehc.get('front_mean_17m', 3.46):.2f}\\text{{ mm}} (${(ehc.get('front_mean_17m', 3.46)/W_MM)*100:.2f}\\% of cavity width) and maximum local deviation of ${ehc.get('front_max_17m', 6.34):.2f}\\text{{ mm}} (${(ehc.get('front_max_17m', 6.34)/W_MM)*100:.2f}\\% of cavity width) relative to Brent et al. (1988), with an energy closure discrepancy of ${ehc.get('closure_17m', -0.13):.2f}\\%$.
+- **Numerical Benchmark Verification**: This report provides rigorous evidence of **numerical benchmark consistency and code-to-code verification** against established 2D CFD literature (Brent et al. 1988, Hannoun et al. 2003, Ye & Arıcı 2023). Under the stated idealized assumptions, `phaseChangeMultiRegionFoam` achieves a mean phase-front deviation of {ehc.get('front_mean_17m', 3.46):.2f} mm ({(ehc.get('front_mean_17m', 3.46)/W_MM)*100:.2f}% of cavity width) and maximum local deviation of {ehc.get('front_max_17m', 6.34):.2f} mm ({(ehc.get('front_max_17m', 6.34)/W_MM)*100:.2f}% of cavity width) relative to Brent et al. (1988), with an energy closure discrepancy of {ehc.get('closure_17m', -0.13):.2f}%.
 - **Distinction from Experimental Validation**: These results **do not constitute a full quantitative validation against independent physical experimental measurements**. Quantitative alignment with physical experiments (such as Gau & Viskanta 1986) requires resolving 3D endwall boundary-layer drag, conjugate thermal inertia of the heating apparatus, solid-state gallium crystallographic anisotropy ($k \\in [28, 41]\\text{{ W/(m K)}}$), and non-intrusive front measurement methods.
 - **Engineering Tolerances**: Acceptance thresholds (front mean deviation $\\le 5\\% W$, liquid fraction within $\\pm 0.05$) are classified as engineering tolerances suitable for computational thermal engineering.
 
@@ -657,6 +706,8 @@ To preserve complete arithmetic traceability for how the initial post-processing
    &= \\mathbf{{214.8780\\text{{ J}}}} \\approx \\mathbf{{214.88\\text{{ J}}}}
    \\end{{aligned}}$$
 """
+
+    validate_markdown_quality(report_content)
 
     with open(REPORT_PATH, 'w') as f:
         f.write(report_content)

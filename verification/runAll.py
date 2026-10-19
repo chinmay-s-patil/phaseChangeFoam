@@ -22,6 +22,7 @@ SUITES = [
     "phaseChange1D_porosity/runTest.py",
     "phaseChange1D_unequalCp/runTest.py",
     "phaseChange1D_variableK/runTest.py",
+    "steadyMassSource1D/runTest.py",
 ]
 
 def main():

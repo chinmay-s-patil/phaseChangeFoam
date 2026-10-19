@@ -720,6 +720,50 @@ phaseChange {
     pass_t16 = (res16.returncode != 0 and "nOuterCorrectors" in out16)
     print(f"Test 16 Fluid Region PCM nOuterCorrectors < 2 FatalError Check: {'PASS' if pass_t16 else 'FAIL'}")
 
+    # Test 17: EHC equal bounds (isothermal window) FatalIOError Check
+    print("\n--- Test 17: EHC Equal Bounds (Isothermal Window) FatalIOError Check ---")
+    c17_dir = os.path.join(base_dir, "case_ehc_equal_bounds")
+    setup_base_case(c17_dir)
+    with open(os.path.join(c17_dir, "constant/pcm/phaseChangeDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange {
+    type EHC;
+    active true;
+    forward { T_lowerBound 300.0; T_upperBound 300.0; latentHeat 100000.0; }
+}
+""")
+    res17 = run_cmd(f"cd {c17_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=True)
+    out17 = res17.stdout + res17.stderr
+    pass_t17 = (res17.returncode != 0 and "must be strictly greater than" in out17 and "isothermal phase change not supported" in out17)
+    print(f"Test 17 EHC Equal Bounds FatalIOError Check: {'PASS' if pass_t17 else 'FAIL'}")
+
+    # Test 18: EnthalpyPorosity equal bounds (isothermal window) Clean Execution Check
+    print("\n--- Test 18: EnthalpyPorosity Equal Bounds (Isothermal Window) Clean Run Check ---")
+    c18_dir = os.path.join(base_dir, "case_ep_equal_bounds")
+    setup_base_case(c18_dir)
+    with open(os.path.join(c18_dir, "constant/pcm/phaseChangeDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange {
+    type enthalpyPorosity;
+    active true;
+    convection { suppress true; }
+    forward { T_lowerBound 300.0; T_upperBound 300.0; latentHeat 100000.0; }
+}
+""")
+    res18 = run_cmd(f"cd {c18_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=True)
+    out18 = res18.stdout + res18.stderr
+    pass_t18 = (res18.returncode == 0)
+    print(f"Test 18 EP Equal Bounds Clean Run Check: {'PASS' if pass_t18 else 'FAIL'}")
+
+    # Clean up test directories
+    for d in [c1_dir, c2_dir, c3_dir, c4_dir, c5_dir, c6_dir, c7_dir, c7b_dir, c8_dir, c9_dir, c10_dir, c16_dir, c17_dir, c18_dir]:
+        if os.path.exists(d):
+            shutil.rmtree(d, ignore_errors=True)
+
     print("\n=======================================================")
     print("      MODEL FEATURES & VALIDATION SUMMARY             ")
     print("=======================================================")
@@ -739,10 +783,12 @@ phaseChange {
     print(f"Test 14 (non-hysteresis multi-curve rejection): {'PASS' if pass_t14 else 'FAIL'}")
     print(f"Test 15 (custom mode kappa vs kSolid check)   : {'PASS' if pass_t15 else 'FAIL'}")
     print(f"Test 16 (fluid region PCM nOuterCorrectors check): {'PASS' if pass_t16 else 'FAIL'}")
+    print(f"Test 17 (EHC equal bounds FatalIOError check)  : {'PASS' if pass_t17 else 'FAIL'}")
+    print(f"Test 18 (EP equal bounds clean run check)     : {'PASS' if pass_t18 else 'FAIL'}")
 
     all_pass = (pass_t1 and pass_t2 and pass_t3 and pass_t4 and pass_t5 and pass_t6 and
                 pass_t7 and pass_t8 and pass_t9 and pass_t10 and pass_t11 and pass_t12 and
-                pass_t13 and pass_t14 and pass_t15 and pass_t16)
+                pass_t13 and pass_t14 and pass_t15 and pass_t16 and pass_t17 and pass_t18)
     if all_pass:
         print("\nALL MODEL FEATURE & ERROR TESTS PASSED SUCCESSFULLY!")
     else:

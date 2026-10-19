@@ -566,6 +566,7 @@ void Foam::enthalpyPorosityPhaseChangeModel::postEnergySolve
 
     const scalarField& T = thermo_.T().primitiveField();
     scalarField& f = phaseFraction_.primitiveFieldRef();
+    scalarField& heCells = he.primitiveFieldRef();
 
     const scalar window = Tl_ - Ts_;
     const scalar denom = (window > SMALL ? (L_/Cp_ + window) : (L_/Cp_));
@@ -580,10 +581,22 @@ void Foam::enthalpyPorosityPhaseChangeModel::postEnergySolve
         {
             maxDeltaF = deltaF;
         }
+
+        if (finalIter)
+        {
+            heCells[i] -= L_*(fNew - f[i]);
+        }
+
         f[i] = fNew;
     }
 
     reduce(maxDeltaF, maxOp<scalar>());
+
+    if (finalIter)
+    {
+        he.correctBoundaryConditions();
+        const_cast<basicThermo&>(thermo_).correct();
+    }
 
     if (finalIter && (maxDeltaF > convergenceTol_))
     {
