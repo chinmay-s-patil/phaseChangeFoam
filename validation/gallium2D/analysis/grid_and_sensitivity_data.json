@@ -1,0 +1,184 @@
+{
+  "grid_study": {
+    "grids": [
+      {
+        "name": "Coarse (Grid 3)",
+        "nx": 32,
+        "ny": 24,
+        "cells": 768,
+        "h_mm": 2.71,
+        "f_L_10m": 0.3698,
+        "f_L_17m": 0.5682,
+        "x_front_y0.2_mm": 29.18,
+        "x_front_y0.5_mm": 56.01,
+        "x_front_y0.8_mm": 66.75
+      },
+      {
+        "name": "Medium (Grid 2)",
+        "nx": 42,
+        "ny": 32,
+        "cells": 1344,
+        "h_mm": 2.05,
+        "f_L_10m": 0.3747,
+        "f_L_17m": 0.5736,
+        "x_front_y0.2_mm": 28.19,
+        "x_front_y0.5_mm": 57.06,
+        "x_front_y0.8_mm": 67.80
+      },
+      {
+        "name": "Fine (Grid 1)",
+        "nx": 63,
+        "ny": 48,
+        "cells": 3024,
+        "h_mm": 1.37,
+        "f_L_10m": 0.3760,
+        "f_L_17m": 0.5725,
+        "x_front_y0.2_mm": 27.58,
+        "x_front_y0.5_mm": 57.68,
+        "x_front_y0.8_mm": 66.87
+      }
+    ],
+    "gci_front_mid": {
+      "r21": 1.500,
+      "r32": 1.3223,
+      "observed_order_p": 2.70,
+      "extrapolated_front_mm": 57.99,
+      "relative_error_fine_pct": 1.07,
+      "gci_fine_pct": 0.67,
+      "gci_med_pct": 2.04,
+      "consistency_ratio": 1.01
+    }
+  },
+  "temporal_study": {
+    "dt_cases": [
+      {
+        "dt": 0.100,
+        "label": "\\Delta t = 0.100\\text{ s} (Baseline)",
+        "steps": 1200,
+        "f_L_60s": 0.0886,
+        "f_L_120s": 0.1303,
+        "front_mid_mm": 13.62
+      },
+      {
+        "dt": 0.050,
+        "label": "\\Delta t = 0.050\\text{ s}",
+        "steps": 2400,
+        "f_L_60s": 0.0887,
+        "f_L_120s": 0.1305,
+        "front_mid_mm": 13.64
+      },
+      {
+        "dt": 0.025,
+        "label": "\\Delta t = 0.025\\text{ s}",
+        "steps": 4800,
+        "f_L_60s": 0.0888,
+        "f_L_120s": 0.1306,
+        "front_mid_mm": 13.65
+      }
+    ],
+    "brent_schedule": {
+      "f_L_60s_sim": 0.0824,
+      "f_L_60s_brent": 0.11
+    },
+    "energy_deficit_dt_halving": {
+      "dt_0.10s": {
+        "dt": 0.10,
+        "steps": 1200,
+        "E_net_J": 1883.84,
+        "E_stored_J": 1877.41,
+        "deficit_J": -6.43,
+        "closure_pct": -0.341
+      },
+      "dt_0.05s": {
+        "dt": 0.05,
+        "steps": 2400,
+        "E_net_J": 1880.92,
+        "E_stored_J": 1879.42,
+        "deficit_J": -1.50,
+        "closure_pct": -0.080
+      },
+      "deficit_reduction_pct": 76.67
+    }
+  },
+  "darcy_cu_sweep": [
+    {
+      "Cu": 1.0e4,
+      "label": "$1.0 \\times 10^4$ (Weak damping)",
+      "f_L_10m": 0.3906,
+      "f_L_17m": 0.5987,
+      "Nu_hot": 4.74,
+      "x_front_y0.2_mm": 26.34,
+      "x_front_y0.8_mm": 72.26,
+      "tilt_ratio": 2.74
+    },
+    {
+      "Cu": 1.0e5,
+      "label": "$1.0 \\times 10^5$",
+      "f_L_10m": 0.3817,
+      "f_L_17m": 0.5848,
+      "Nu_hot": 4.62,
+      "x_front_y0.2_mm": 27.39,
+      "x_front_y0.8_mm": 69.93,
+      "tilt_ratio": 2.55
+    },
+    {
+      "Cu": 1.6e6,
+      "label": "**$1.6 \\times 10^6$ (Literature Baseline)**",
+      "f_L_10m": 0.3747,
+      "f_L_17m": 0.5736,
+      "Nu_hot": 4.50,
+      "x_front_y0.2_mm": 28.19,
+      "x_front_y0.8_mm": 67.80,
+      "tilt_ratio": 2.41
+    },
+    {
+      "Cu": 1.0e7,
+      "label": "$1.0 \\times 10^7$",
+      "f_L_10m": 0.3720,
+      "f_L_17m": 0.5694,
+      "Nu_hot": 4.47,
+      "x_front_y0.2_mm": 28.43,
+      "x_front_y0.8_mm": 66.77,
+      "tilt_ratio": 2.35
+    },
+    {
+      "Cu": 1.0e8,
+      "label": "$1.0 \\times 10^8$ (Severe damping)",
+      "f_L_10m": 0.3703,
+      "f_L_17m": 0.5667,
+      "Nu_hot": 4.44,
+      "x_front_y0.2_mm": 28.72,
+      "x_front_y0.8_mm": 66.14,
+      "tilt_ratio": 2.30
+    }
+  ],
+  "melting_window_sweep": [
+    {
+      "deltaT": 0.1,
+      "label": "$0.1\\text{ K}$ ($302.93 \\pm 0.05\\text{ K}$)",
+      "f_L_10m": 0.3738,
+      "f_L_17m": 0.5727,
+      "Nu_hot": 4.57,
+      "x_front_y0.2_mm": 27.81,
+      "x_front_y0.8_mm": 67.82
+    },
+    {
+      "deltaT": 0.2,
+      "label": "$0.2\\text{ K}$ ($302.93 \\pm 0.10\\text{ K}$)",
+      "f_L_10m": 0.3736,
+      "f_L_17m": 0.5728,
+      "Nu_hot": 4.56,
+      "x_front_y0.2_mm": 27.90,
+      "x_front_y0.8_mm": 67.81
+    },
+    {
+      "deltaT": 0.5,
+      "label": "**$0.5\\text{ K}$ ($302.93 \\pm 0.25\\text{ K}$, Baseline)**",
+      "f_L_10m": 0.3747,
+      "f_L_17m": 0.5736,
+      "Nu_hot": 4.50,
+      "x_front_y0.2_mm": 28.19,
+      "x_front_y0.8_mm": 67.80
+    }
+  ]
+}

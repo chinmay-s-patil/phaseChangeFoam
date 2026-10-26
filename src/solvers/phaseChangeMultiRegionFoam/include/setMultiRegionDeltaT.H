@@ -1,0 +1,95 @@
+/*---------------------------------------------------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     |
+    \\  /    A nd           | www.openfoam.com
+     \\/     M anipulation  |
+-------------------------------------------------------------------------------
+    Copyright (C) 2011 OpenFOAM Foundation
+-------------------------------------------------------------------------------
+License
+    This file is part of OpenFOAM.
+
+    OpenFOAM is free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    OpenFOAM is distributed in the hope that it will be useful, but WITHOUT
+    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+    FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+    for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
+
+Global
+    setMultiRegionDeltaT
+
+Description
+    Reset the timestep to maintain a constant maximum courant and
+    diffusion Numbers. Reduction of time-step is immediate, but
+    increase is damped to avoid unstable oscillations.
+
+\*---------------------------------------------------------------------------*/
+
+if (adjustTimeStep)
+{
+    if (CoNum == -GREAT)
+    {
+        CoNum = SMALL;
+    }
+
+    if (DiNum == -GREAT)
+    {
+        DiNum = SMALL;
+    }
+
+    scalar maxAlphaCo = runTime.controlDict().getOrDefault<scalar>("maxAlphaCo", 0.2);
+
+    scalar maxAlphaRate = 0.0;
+    forAll(solidRegions, i)
+    {
+        const phaseChangeModel& pcModel = phaseChangeModels[i];
+        if (pcModel.active())
+        {
+            scalar maxDAlpha = gMax(mag(pcModel.phaseFraction().primitiveField() - pcModel.phaseFractionOld().primitiveField()));
+            maxAlphaRate = max(maxAlphaRate, maxDAlpha / (runTime.deltaTValue() + SMALL));
+        }
+    }
+    forAll(fluidRegions, i)
+    {
+        const phaseChangeModel& pcmModel = pcmModelsFluid[i];
+        if (pcmModel.active())
+        {
+            scalar maxDAlpha = gMax(mag(pcmModel.phaseFraction().primitiveField() - pcmModel.phaseFractionOld().primitiveField()));
+            maxAlphaRate = max(maxAlphaRate, maxDAlpha / (runTime.deltaTValue() + SMALL));
+        }
+    }
+
+    scalar maxDeltaTFluid = maxCo/(CoNum + SMALL);
+    scalar maxDeltaTSolid = maxDi/(DiNum + SMALL);
+    scalar maxDeltaTAlpha = (maxAlphaRate > 1e-6) ? (maxAlphaCo / maxAlphaRate) : maxDeltaT;
+
+    scalar deltaTFluid =
+        min
+        (
+            min(maxDeltaTFluid, 1.0 + 0.1*maxDeltaTFluid),
+            1.2
+        );
+
+    scalar deltaTLimited = min(min(deltaTFluid, maxDeltaTSolid)*runTime.deltaTValue(), maxDeltaTAlpha);
+
+    runTime.setDeltaT
+    (
+        min
+        (
+            deltaTLimited,
+            maxDeltaT
+        )
+    );
+
+    Info<< "deltaT = " <<  runTime.deltaTValue() << endl;
+}
+
+// ************************************************************************* //

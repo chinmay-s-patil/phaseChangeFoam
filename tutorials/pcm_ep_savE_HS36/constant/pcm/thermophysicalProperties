@@ -1,0 +1,49 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant/pcm";
+    object      thermophysicalProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+thermoType
+{
+    type            heSolidThermo;
+    mixture         pureMixture;
+    transport       constIsotropic;
+    thermo          hConst;
+    equationOfState rhoConst;
+    energy          sensibleEnthalpy;
+}
+
+mixture
+{
+    specie
+    {
+        molWeight       200;       // Nominal inorganic PCM molecular weight
+    }
+    transport
+    {
+        kappa           0.50;      // Solid thermal conductivity reference [W/(m K)]
+    }
+    thermodynamics
+    {
+        Hf              0;
+        Cp              1980;      // Solid specific heat reference [J/(kg K)]
+    }
+    equationOfState
+    {
+        rho             1967;      // Solid density reference [kg/m^3]
+    }
+}
+
+// ************************************************************************* //

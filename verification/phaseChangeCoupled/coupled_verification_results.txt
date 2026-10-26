@@ -1,0 +1,25 @@
+=======================================================
+      COUPLED MULTI-REGION VERIFICATION RESULTS        
+=======================================================
+Test 1 (nOuterCorr = 10 Convergence): PASSED
+  - Concatenated T max difference    : 5.5990e-06 K
+  - Concatenated alpha max difference: 4.1183e-07
+  - Interface T discontinuity        : 3.0546e-01 K
+  - Coupled domain mean alpha        : 0.1934
+Test 2 (nOuterCorr = 1 FatalError)  : PASSED
+  - FatalError triggered as expected : True
+Test 3 (Coupled Write & Restart)    : PASSED
+  - Restart vs continuous max T diff : 9.9999e-10 K
+  - T_reversal calculated patch check: True
+Test 4 (Coupled EHC Energy Balance) : PASSED
+  - Initial Total Energy             : 6800.000000 J
+  - Final Total Energy               : 6799.616448 J
+  - Coupled Energy Relative Error    : 5.6405e-05
+Test 5 (Coupled k_eff Interface Flux): PASSED
+  - Expected Interface Flux          : 1600.00 W/m^2
+  - Simulated Interface Flux         : 1581.03 W/m^2
+  - Relative Flux Error              : 1.1858e-02
+  - Solid2 Interface Cell T          : 328.2609 K
+  - PCM Interface Cell T             : 329.8419 K
+-------------------------------------------------------
+ALL COUPLED MULTI-REGION VERIFICATION TESTS PASSED SUCCESSFULLY!
