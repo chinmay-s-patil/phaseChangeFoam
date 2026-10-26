@@ -1,0 +1,656 @@
+#!/usr/bin/env python3
+import os
+import sys
+import subprocess
+import shutil
+import re
+
+def find_solver():
+    user_appbin = os.environ.get("FOAM_USER_APPBIN")
+    if user_appbin:
+        path = os.path.join(user_appbin, "phaseChangeMultiRegionFoam")
+        if os.path.exists(path):
+            return path
+    path = shutil.which("phaseChangeMultiRegionFoam")
+    if path:
+        return path
+    home = os.environ.get("HOME", "/home/lavender")
+    matches = [
+        os.path.join(home, "OpenFOAM", "lavender-v2412/platforms/linux64GccDPInt32Opt/bin/phaseChangeMultiRegionFoam")
+    ]
+    for m in matches:
+        if os.path.exists(m):
+            return m
+    return "phaseChangeMultiRegionFoam"
+
+def run_cmd(cmd, cwd=None, allow_failure=False):
+    res = subprocess.run(cmd, shell=True, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if res.returncode != 0 and not allow_failure:
+        print(f"Error executing command: {cmd}\nSTDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}")
+        sys.exit(1)
+    return res
+
+def parse_openfoam_field(file_path, num_cells=50):
+    if not os.path.exists(file_path):
+        return []
+    with open(file_path, 'r') as f:
+        content = f.read()
+    idx = content.find("internalField")
+    if idx == -1:
+        return []
+    sub = content[idx:idx+200]
+    if "uniform" in sub and "nonuniform" not in sub:
+        val_str = sub.split("uniform")[1].split(";")[0].strip()
+        val = float(val_str)
+        return [val] * num_cells
+    start_paren = content.find("(", idx)
+    end_paren = content.find(")", start_paren)
+    if start_paren == -1 or end_paren == -1:
+        return []
+    block = content[start_paren+1:end_paren].strip()
+    return [float(x) for x in block.split()]
+
+def setup_single_region_case(base_dir):
+    os.chdir(base_dir)
+    run_cmd("rm -rf [1-9]* 0.* constant/pcm/polyMesh constant/polyMesh system/pcm system/solid2")
+
+    os.makedirs("system", exist_ok=True)
+    with open("system/blockMeshDict", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; object blockMeshDict; }
+scale 1;
+vertices (
+    (0 0 0) (0.10 0 0) (0.10 0.01 0) (0 0.01 0) (0 0 0.01) (0.10 0 0.01) (0.10 0.01 0.01) (0 0.01 0.01)
+);
+blocks (
+    hex (0 1 2 3 4 5 6 7) pcm (100 1 1) simpleGrading (1 1 1)
+);
+edges ();
+boundary (
+    pcm_cold { type patch; faces ((0 3 7 4)); }
+    pcm_hot { type patch; faces ((1 5 6 2)); }
+    emptyFaces { type empty; faces ((0 1 5 4) (3 2 6 7) (0 1 2 3) (4 5 6 7)); }
+);
+""")
+
+    with open("system/controlDict", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
+application phaseChangeMultiRegionFoam;
+startFrom startTime; startTime 0; stopAt endTime; endTime 2000; deltaT 2;
+writeControl runTime; writeInterval 2000; purgeWrite 0; writeFormat ascii; writePrecision 12;
+""")
+
+    with open("system/fvSchemes", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object fvSchemes; }
+ddtSchemes { default Euler; }
+gradSchemes { default Gauss linear; }
+divSchemes { default none; }
+laplacianSchemes { default Gauss linear corrected; }
+interpolationSchemes { default linear; }
+snGradSchemes { default corrected; }
+""")
+
+    with open("system/fvSolution", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object fvSolution; }
+PIMPLE { nOuterCorrectors 2; nNonOrthogonalCorrectors 0; nNonLinearCorrectors 20; nonLinearTolerance 1e-5; }
+solvers { "h.*" { solver PCG; preconditioner DIC; tolerance 1e-12; relTol 0; } }
+""")
+
+    os.makedirs("constant", exist_ok=True)
+    with open("constant/regionProperties", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant"; object regionProperties; }
+regions ( fluid () solid (pcm) porousFluid () porousSolid () );
+""")
+    with open("constant/g", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class uniformDimensionedVectorField; location "constant"; object g; }
+dimensions [0 1 -2 0 0 0 0]; value (0 0 0);
+""")
+
+    os.makedirs("constant/pcm", exist_ok=True)
+    with open("constant/pcm/radiationProperties", "w") as f:
+        f.write("FoamFile { version 2.0; format ascii; class dictionary; location \"constant/pcm\"; object radiationProperties; } radiationModel none;\n")
+    with open("constant/pcm/thermophysicalProperties", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object thermophysicalProperties; }
+thermoType { type heSolidThermo; mixture pureMixture; transport constIso; thermo hConst; equationOfState rhoConst; specie specie; energy sensibleEnthalpy; }
+mixture { specie { molWeight 100; } transport { kappa 2.00; } thermodynamics { Cp 2000; Hf 0; } equationOfState { rho 1000; } }
+""")
+    with open("constant/pcm/phaseChangeDict", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange
+{
+    active true; phaseChangeMode EHC;
+    melting { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 100000.0; }
+    freezing { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 100000.0; }
+    hysteresis { active true; }
+    density { model constant; rhoRef 1000.0; }
+    thermophysical { mode custom; CpSolid 2000.0; CpLiquid 2000.0; kSolid 2.0; kLiquid 0.50; }
+}
+""")
+
+    os.makedirs("system/pcm", exist_ok=True)
+    with open("system/pcm/fvSchemes", "w") as f: f.write(open("system/fvSchemes").read())
+    with open("system/pcm/fvSolution", "w") as f: f.write(open("system/fvSolution").read())
+
+    of_env = "source /usr/lib/openfoam/openfoam2412/etc/bashrc || source /usr/lib/openfoam/openfoam2406/etc/bashrc || true"
+    run_cmd(f"bash -c '{of_env}; blockMesh'")
+    run_cmd("mkdir -p constant/pcm")
+    run_cmd("cp -r constant/polyMesh constant/pcm/polyMesh 2>/dev/null || true")
+
+    os.makedirs("0/pcm", exist_ok=True)
+    with open("0/pcm/T", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object T; }
+dimensions [0 0 0 1 0 0 0]; internalField uniform 280.0;
+boundaryField {
+    pcm_cold { type fixedValue; value uniform 280.0; }
+    pcm_hot { type fixedValue; value uniform 350.0; }
+    emptyFaces { type empty; }
+}
+""")
+    with open("0/pcm/h", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object h; }
+dimensions [0 2 -2 0 0 0 0]; internalField uniform 560000;
+boundaryField {
+    pcm_cold { type fixedValue; value uniform 560000; }
+    pcm_hot { type fixedValue; value uniform 700000; }
+    emptyFaces { type empty; }
+}
+""")
+    with open("0/pcm/p", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object p; }
+dimensions [1 -1 -2 0 0 0 0]; internalField uniform 101325;
+boundaryField { ".*" { type calculated; value uniform 101325; } emptyFaces { type empty; } }
+""")
+
+
+def setup_coupled_case(base_dir, nOuterCorr=2, endTime=2000, writeInterval=2000):
+    os.chdir(base_dir)
+    run_cmd("rm -rf [1-9]* 0.* constant/pcm/polyMesh constant/solid2/polyMesh constant/polyMesh system/pcm system/solid2")
+
+    os.makedirs("system", exist_ok=True)
+    with open("system/blockMeshDict", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; object blockMeshDict; }
+scale 1;
+vertices (
+    (0 0 0) (0.05 0 0) (0.05 0.01 0) (0 0.01 0) (0 0 0.01) (0.05 0 0.01) (0.05 0.01 0.01) (0 0.01 0.01)
+    (0.05 0 0) (0.10 0 0) (0.10 0.01 0) (0.05 0.01 0) (0.05 0 0.01) (0.10 0 0.01) (0.10 0.01 0.01) (0.05 0.01 0.01)
+);
+blocks (
+    hex (0 1 2 3 4 5 6 7) pcm (50 1 1) simpleGrading (1 1 1)
+    hex (8 9 10 11 12 13 14 15) solid2 (50 1 1) simpleGrading (1 1 1)
+);
+edges ();
+boundary (
+    pcm_cold { type patch; faces ((0 3 7 4)); }
+    pcm_to_solid2 { type mappedWall; sampleMode nearestPatchFace; sampleRegion solid2; samplePatch solid2_to_pcm; faces ((1 5 6 2)); }
+    solid2_to_pcm { type mappedWall; sampleMode nearestPatchFace; sampleRegion pcm; samplePatch pcm_to_solid2; faces ((8 11 15 12)); }
+    solid2_hot { type patch; faces ((9 13 14 10)); }
+    emptyFaces { type empty; faces ((0 1 5 4) (3 2 6 7) (0 1 2 3) (4 5 6 7) (8 9 13 12) (11 10 14 15) (8 9 10 11) (12 13 14 15)); }
+);
+""")
+
+    with open("system/controlDict", "w") as f:
+        f.write(f"""
+FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object controlDict; }}
+application phaseChangeMultiRegionFoam;
+startFrom startTime; startTime 0; stopAt endTime; endTime {endTime}; deltaT 2;
+writeControl runTime; writeInterval {writeInterval}; purgeWrite 0; writeFormat ascii; writePrecision 12;
+""")
+
+    with open("system/fvSchemes", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object fvSchemes; }
+ddtSchemes { default Euler; }
+gradSchemes { default Gauss linear; }
+divSchemes { default none; }
+laplacianSchemes { default Gauss linear corrected; }
+interpolationSchemes { default linear; }
+snGradSchemes { default corrected; }
+""")
+
+    with open("system/fvSolution", "w") as f:
+        f.write(f"""
+FoamFile {{ version 2.0; format ascii; class dictionary; location "system"; object fvSolution; }}
+PIMPLE {{ nOuterCorrectors {nOuterCorr}; nNonOrthogonalCorrectors 0; nNonLinearCorrectors 20; nonLinearTolerance 1e-5; }}
+solvers {{ "h.*" {{ solver PCG; preconditioner DIC; tolerance 1e-12; relTol 0; }} }}
+""")
+
+    os.makedirs("constant", exist_ok=True)
+    with open("constant/regionProperties", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "constant"; object regionProperties; }
+regions ( fluid () solid (pcm solid2) porousFluid () porousSolid () );
+""")
+    with open("constant/g", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class uniformDimensionedVectorField; location "constant"; object g; }
+dimensions [0 1 -2 0 0 0 0]; value (0 0 0);
+""")
+
+    phaseChangeDictContent = """
+FoamFile { version 2.0; format ascii; class dictionary; location "constant/REGION"; object phaseChangeDict; }
+active true;
+phaseChange
+{
+    active true; phaseChangeMode EHC;
+    melting { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 100000.0; }
+    freezing { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 100000.0; }
+    hysteresis { active true; }
+    density { model constant; rhoRef 1000.0; }
+    thermophysical { mode custom; CpSolid 2000.0; CpLiquid 2000.0; kSolid 2.0; kLiquid 0.50; }
+}
+"""
+
+    for region in ["pcm", "solid2"]:
+        os.makedirs(f"constant/{region}", exist_ok=True)
+        with open(f"constant/{region}/radiationProperties", "w") as f:
+            f.write(f"FoamFile {{ version 2.0; format ascii; class dictionary; location \"constant/{region}\"; object radiationProperties; }} radiationModel none;\n")
+        with open(f"constant/{region}/thermophysicalProperties", "w") as f:
+            f.write(f"""
+FoamFile {{ version 2.0; format ascii; class dictionary; location "constant/{region}"; object thermophysicalProperties; }}
+thermoType {{ type heSolidThermo; mixture pureMixture; transport constIso; thermo hConst; equationOfState rhoConst; specie specie; energy sensibleEnthalpy; }}
+mixture {{ specie {{ molWeight 100; }} transport {{ kappa 2.00; }} thermodynamics {{ Cp 2000; Hf 0; }} equationOfState {{ rho 1000; }} }}
+""")
+        with open(f"constant/{region}/phaseChangeDict", "w") as f:
+            f.write(phaseChangeDictContent.replace("REGION", region))
+
+        os.makedirs(f"system/{region}", exist_ok=True)
+        with open(f"system/{region}/fvSchemes", "w") as f: f.write(open("system/fvSchemes").read())
+        with open(f"system/{region}/fvSolution", "w") as f: f.write(open("system/fvSolution").read())
+
+    # Create meshes
+    of_env = "source /usr/lib/openfoam/openfoam2412/etc/bashrc || source /usr/lib/openfoam/openfoam2406/etc/bashrc || true"
+    run_cmd(f"bash -c '{of_env}; blockMesh'")
+    run_cmd(f"bash -c '{of_env}; splitMeshRegions -cellZones -overwrite'")
+
+    # Set 0 fields for pcm
+    os.makedirs("0/pcm", exist_ok=True)
+    with open("0/pcm/T", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object T; }
+dimensions [0 0 0 1 0 0 0]; internalField uniform 280.0;
+boundaryField {
+    pcm_cold { type fixedValue; value uniform 280.0; }
+    pcm_to_solid2 { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 280.0; Tnbr T; kappaMethod lookup; kappa kEff; }
+    emptyFaces { type empty; }
+}
+""")
+    with open("0/pcm/h", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object h; }
+dimensions [0 2 -2 0 0 0 0]; internalField uniform 560000;
+boundaryField {
+    pcm_cold { type fixedValue; value uniform 560000; }
+    pcm_to_solid2 { type calculated; value uniform 560000; }
+    emptyFaces { type empty; }
+}
+""")
+    with open("0/pcm/p", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object p; }
+dimensions [1 -1 -2 0 0 0 0]; internalField uniform 101325;
+boundaryField { ".*" { type calculated; value uniform 101325; } emptyFaces { type empty; } }
+""")
+
+    # Set 0 fields for solid2
+    os.makedirs("0/solid2", exist_ok=True)
+    with open("0/solid2/T", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class volScalarField; location "0/solid2"; object T; }
+dimensions [0 0 0 1 0 0 0]; internalField uniform 280.0;
+boundaryField {
+    solid2_hot { type fixedValue; value uniform 350.0; }
+    solid2_to_pcm { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 280.0; Tnbr T; kappaMethod lookup; kappa kEff; }
+    emptyFaces { type empty; }
+}
+""")
+    with open("0/solid2/h", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class volScalarField; location "0/solid2"; object h; }
+dimensions [0 2 -2 0 0 0 0]; internalField uniform 560000;
+boundaryField {
+    solid2_hot { type fixedValue; value uniform 700000; }
+    solid2_to_pcm { type calculated; value uniform 560000; }
+    emptyFaces { type empty; }
+}
+""")
+    with open("0/solid2/p", "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class volScalarField; location "0/solid2"; object p; }
+dimensions [1 -1 -2 0 0 0 0]; internalField uniform 101325;
+boundaryField { ".*" { type calculated; value uniform 101325; } emptyFaces { type empty; } }
+""")
+
+def main():
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    print(f"=== Coupled Multi-Region PCM Phase Change Verification Test in {base_dir} ===")
+
+    solver_bin = find_solver()
+    of_env = "source /usr/lib/openfoam/openfoam2412/etc/bashrc || source /usr/lib/openfoam/openfoam2406/etc/bashrc || true"
+
+    # Reference: Single-region
+    print("\n--- Running Single-Region Reference Case ---")
+    single_dir = os.path.join(base_dir, "case_single")
+    os.makedirs(single_dir, exist_ok=True)
+    setup_single_region_case(single_dir)
+    run_cmd(f"cd {single_dir} && bash -c '{of_env}; {solver_bin}'")
+
+    T_single = parse_openfoam_field(os.path.join(single_dir, "2000/pcm/T"), num_cells=100)
+    a_single = parse_openfoam_field(os.path.join(single_dir, "2000/pcm/phaseFraction"), num_cells=100)
+
+    # Test 1: nOuterCorr = 10 (Valid coupled run)
+    print("\n--- Test 1: Coupled Solve with nOuterCorr = 10 ---")
+    case1_dir = os.path.join(base_dir, "case_coupled_nOuter10")
+    os.makedirs(case1_dir, exist_ok=True)
+    setup_coupled_case(case1_dir, nOuterCorr=10)
+    res1 = run_cmd(f"cd {case1_dir} && bash -c '{of_env}; {solver_bin}'")
+    
+    T_pcm_left = parse_openfoam_field(os.path.join(case1_dir, "2000/pcm/T"), num_cells=50)
+    a_pcm_left = parse_openfoam_field(os.path.join(case1_dir, "2000/pcm/phaseFraction"), num_cells=50)
+    T_pcm_right = parse_openfoam_field(os.path.join(case1_dir, "2000/solid2/T"), num_cells=50)
+    a_pcm_right = parse_openfoam_field(os.path.join(case1_dir, "2000/solid2/phaseFraction"), num_cells=50)
+
+    # The coupled case has two regions of 50 cells each
+    if T_pcm_left and T_pcm_right and T_single:
+        T_coupled = T_pcm_left + T_pcm_right  # concatenate
+        a_coupled = a_pcm_left + a_pcm_right
+        
+        max_dT = max(abs(Tc - Ts) for Tc, Ts in zip(T_coupled, T_single))
+        max_da = max(abs(ac - as_) for ac, as_ in zip(a_coupled, a_single))
+        
+        # Interface temperature continuity
+        T_interface_left = T_pcm_left[-1]  # last cell of left region
+        T_interface_right = T_pcm_right[0]  # first cell of right region  
+        interface_dT = abs(T_interface_left - T_interface_right)
+        
+        mean_a = sum(a_coupled) / len(a_coupled)
+        
+        pass_t1 = (max_dT < 0.05 and max_da < 0.005 and interface_dT < 0.5 and mean_a > 0.05)
+        
+        print(f"Single-region vs 2-region concatenated T max difference : {max_dT:.4e} K")
+        print(f"Single-region vs 2-region concatenated alpha max difference: {max_da:.4e}")
+        print(f"Interface cell T (pcm cell 50): {T_interface_left:.6f} K, (solid2 cell 1): {T_interface_right:.6f} K")
+        print(f"Interface T discontinuity: {interface_dT:.4e} K")
+        print(f"Coupled domain mean alpha = {mean_a:.4f}")
+    else:
+        pass_t1 = False
+        print("Failed to read fields.")
+
+    print(f"Test 1 Status: {'PASSED' if pass_t1 else 'FAILED'}")
+
+    # Test 2: nOuterCorr = 1 (Should trigger FatalError)
+    print("\n--- Test 2: Coupled Solve with nOuterCorr = 1 (Expecting FatalError) ---")
+    case2_dir = os.path.join(base_dir, "case_coupled_nOuter1")
+    os.makedirs(case2_dir, exist_ok=True)
+    setup_coupled_case(case2_dir, nOuterCorr=1)
+
+    res2 = run_cmd(f"cd {case2_dir} && bash -c '{of_env}; {solver_bin}'", allow_failure=True)
+    output_text = res2.stdout + res2.stderr
+    pass_t2 = ("Phase change is active in a fluid, coupled, or multi-region domain, but nOuterCorrectors = 1 < 2" in output_text)
+
+    print(f"nOuterCorr = 1 FatalError Triggered: {pass_t2}")
+    print(f"Test 2 Status: {'PASSED' if pass_t2 else 'FAILED'}")
+
+    # Test 3: Coupled Write-and-Restart
+    print("\n--- Test 3: Coupled Write-and-Restart (0..1000 s then 1000..2000 s) ---")
+    case3_dir = os.path.join(base_dir, "case_coupled_restart")
+    os.makedirs(case3_dir, exist_ok=True)
+    setup_coupled_case(case3_dir, nOuterCorr=10, endTime=1000, writeInterval=1000)
+    
+    # Run 0..1000 s
+    run_cmd(f"cd {case3_dir} && bash -c '{of_env}; {solver_bin}'")
+    
+    # Check that disk fields exist at t=1000 and T_reversal BC is 'calculated'
+    t1000_trev = os.path.join(case3_dir, "1000/pcm/T_reversal")
+    pass_t3_disk = os.path.exists(t1000_trev)
+    if pass_t3_disk:
+        with open(t1000_trev, 'r') as f:
+            trev_content = f.read()
+        pcm_to_solid2_calculated = re.search(r'pcm_to_solid2\s*\{[^}]*type\s+calculated\s*;', trev_content) is not None
+        print(f"1000/pcm/T_reversal field exists and pcm_to_solid2 patch is calculated: {pcm_to_solid2_calculated}")
+        pass_t3_disk = pass_t3_disk and pcm_to_solid2_calculated
+
+    # Update controlDict for restart: startFrom latestTime; endTime 2000;
+    with open(os.path.join(case3_dir, "system/controlDict"), "w") as f:
+        f.write("""
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
+application phaseChangeMultiRegionFoam;
+startFrom latestTime; stopAt endTime; endTime 2000; deltaT 2;
+writeControl runTime; writeInterval 1000; purgeWrite 0; writeFormat ascii; writePrecision 12;
+""")
+    
+    # Continue solve 1000..2000 s
+    run_cmd(f"cd {case3_dir} && bash -c '{of_env}; {solver_bin}'")
+
+    T_pcm_restart_left = parse_openfoam_field(os.path.join(case3_dir, "2000/pcm/T"), num_cells=50)
+    T_pcm_restart_right = parse_openfoam_field(os.path.join(case3_dir, "2000/solid2/T"), num_cells=50)
+    
+    if T_pcm_restart_left and T_pcm_restart_right and T_pcm_left and T_pcm_right:
+        T_restart = T_pcm_restart_left + T_pcm_restart_right
+        T_nonrestart = T_pcm_left + T_pcm_right
+        diff_restart = max(abs(tr - tnr) for tr, tnr in zip(T_restart, T_nonrestart))
+        print(f"Restart vs Non-restart T max difference at t=2000 s: {diff_restart:.4e} K")
+        pass_t3_solution = diff_restart < 0.01
+    else:
+        pass_t3_solution = False
+
+    pass_t3 = pass_t3_disk and pass_t3_solution
+    print(f"Test 3 Status: {'PASSED' if pass_t3 else 'FAILED'}")
+
+    # Test 4: Coupled Energy Balance Verification (Adiabatic boundaries)
+    print("\n--- Test 4: Coupled EHC Energy Balance Verification (Adiabatic Boundaries) ---")
+    case4_dir = os.path.join(base_dir, "case_coupled_energy_balance")
+    os.makedirs(case4_dir, exist_ok=True)
+    setup_coupled_case(case4_dir, nOuterCorr=10, endTime=1000, writeInterval=1000)
+
+    # Set adiabatic zeroGradient boundary conditions on outer walls for zero net flux
+    with open(os.path.join(case4_dir, "0/pcm/T"), "w") as f:
+        f.write("FoamFile { version 2.0; format ascii; class volScalarField; location \"0/pcm\"; object T; }\ndimensions [0 0 0 1 0 0 0]; internalField uniform 350.0;\nboundaryField { pcm_cold { type zeroGradient; } pcm_to_solid2 { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 350.0; Tnbr T; kappaMethod lookup; kappa kEff; } emptyFaces { type empty; } }\n")
+    with open(os.path.join(case4_dir, "0/pcm/h"), "w") as f:
+        f.write("FoamFile { version 2.0; format ascii; class volScalarField; location \"0/pcm\"; object h; }\ndimensions [0 2 -2 0 0 0 0]; internalField uniform 700000;\nboundaryField { pcm_cold { type zeroGradient; } pcm_to_solid2 { type calculated; value uniform 700000; } emptyFaces { type empty; } }\n")
+
+    with open(os.path.join(case4_dir, "0/solid2/T"), "w") as f:
+        f.write("FoamFile { version 2.0; format ascii; class volScalarField; location \"0/solid2\"; object T; }\ndimensions [0 0 0 1 0 0 0]; internalField uniform 280.0;\nboundaryField { solid2_hot { type zeroGradient; } solid2_to_pcm { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 280.0; Tnbr T; kappaMethod lookup; kappa kEff; } emptyFaces { type empty; } }\n")
+    with open(os.path.join(case4_dir, "0/solid2/h"), "w") as f:
+        f.write("FoamFile { version 2.0; format ascii; class volScalarField; location \"0/solid2\"; object h; }\ndimensions [0 2 -2 0 0 0 0]; internalField uniform 560000;\nboundaryField { solid2_hot { type zeroGradient; } solid2_to_pcm { type calculated; value uniform 560000; } emptyFaces { type empty; } }\n")
+
+    res4 = run_cmd(f"cd {case4_dir} && bash -c '{of_env}; {solver_bin}'")
+
+    T_pcm_c4 = parse_openfoam_field(os.path.join(case4_dir, "1000/pcm/T"), num_cells=50)
+    a_pcm_c4 = parse_openfoam_field(os.path.join(case4_dir, "1000/pcm/phaseFraction"), num_cells=50)
+    T_s2_c4 = parse_openfoam_field(os.path.join(case4_dir, "1000/solid2/T"), num_cells=50)
+    a_s2_c4 = parse_openfoam_field(os.path.join(case4_dir, "1000/solid2/phaseFraction"), num_cells=50)
+
+    # Calculate initial and final total energy (J)
+    # Vol = 1e-7 m^3 per cell, rho = 1000, Cp = 2000, L = 100000
+    # E_pcm_0 = 50 * 1e-7 * 1000 * (2000*350 + 100000) = 4000.0 J
+    # E_solid2_0 = 50 * 1e-7 * 1000 * (2000*280 + 0) = 2800.0 J
+    # Total E_0 = 6800.0 J
+    E0_total = 6800.0
+    cell_vol = 1e-7
+    rho = 1000.0
+    Cp = 2000.0
+    L = 100000.0
+
+    if T_pcm_c4 and a_pcm_c4 and T_s2_c4 and a_s2_c4:
+        E_pcm_final = sum(rho * cell_vol * (Cp * T_i + L * a_i) for T_i, a_i in zip(T_pcm_c4, a_pcm_c4))
+        E_s2_final = sum(rho * cell_vol * (Cp * T_j + L * a_j) for T_j, a_j in zip(T_s2_c4, a_s2_c4))
+        E_final_total = E_pcm_final + E_s2_final
+        rel_energy_err = abs(E_final_total - E0_total) / E0_total
+        print(f"Initial Total Energy : {E0_total:.6f} J")
+        print(f"Final Total Energy   : {E_final_total:.6f} J")
+        print(f"Coupled Energy Error : {rel_energy_err:.4e}")
+        pass_t4 = rel_energy_err < 1e-3
+    else:
+        pass_t4 = False
+        print("Failed to read fields for coupled energy balance test.")
+
+    print(f"Test 4 Status: {'PASSED' if pass_t4 else 'FAILED'}")
+
+    # Test 5: Coupled Interface with k_s != k_l in PCM (Verifying Interface Flux Uses k_eff)
+    print("\n--- Test 5: Coupled Interface with k_s != k_l in PCM (Verifying Interface Flux Uses k_eff) ---")
+    case5_dir = os.path.join(base_dir, "case_coupled_keff_flux")
+    os.makedirs(case5_dir, exist_ok=True)
+    setup_coupled_case(case5_dir, nOuterCorr=4, endTime=100, writeInterval=100)
+
+    # PCM with enthalpyPorosity mode: kSolid = 1.0, kLiquid = 4.0, while background transport kappa = 1.0
+    with open(os.path.join(case5_dir, "constant/pcm/thermophysicalProperties"), "w") as f:
+        f.write("""FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object thermophysicalProperties; }
+thermoType { type heSolidThermo; mixture pureMixture; transport constIso; thermo hConst; equationOfState rhoConst; specie specie; energy sensibleEnthalpy; }
+mixture { specie { molWeight 100; } transport { kappa 1.00; } thermodynamics { Cp 100; Hf 0; } equationOfState { rho 100; } }
+""")
+
+    with open(os.path.join(case5_dir, "constant/pcm/phaseChangeDict"), "w") as f:
+        f.write("""FoamFile { version 2.0; format ascii; class dictionary; location "constant/pcm"; object phaseChangeDict; }
+active true;
+phaseChange
+{
+    active true;
+    type enthalpyPorosity;
+    forward { T_lowerBound 300.0; T_upperBound 310.0; latentHeat 10000.0; }
+    density { model constant; rhoRef 100.0; }
+    thermophysical { mode custom; CpSolid 100.0; CpLiquid 100.0; kSolid 1.0; kLiquid 4.0; }
+}
+""")
+
+    with open(os.path.join(case5_dir, "constant/solid2/thermophysicalProperties"), "w") as f:
+        f.write("""FoamFile { version 2.0; format ascii; class dictionary; location "constant/solid2"; object thermophysicalProperties; }
+thermoType { type heSolidThermo; mixture pureMixture; transport constIso; thermo hConst; equationOfState rhoConst; specie specie; energy sensibleEnthalpy; }
+mixture { specie { molWeight 100; } transport { kappa 1.00; } thermodynamics { Cp 100; Hf 0; } equationOfState { rho 100; } }
+""")
+
+    with open(os.path.join(case5_dir, "constant/solid2/phaseChangeDict"), "w") as f:
+        f.write("""FoamFile { version 2.0; format ascii; class dictionary; location "constant/solid2"; object phaseChangeDict; }
+active false;
+""")
+
+    with open(os.path.join(case5_dir, "system/controlDict"), "w") as f:
+        f.write("""FoamFile { version 2.0; format ascii; class dictionary; location "system"; object controlDict; }
+application phaseChangeMultiRegionFoam;
+startFrom startTime; startTime 0; stopAt endTime; endTime 100; deltaT 1;
+writeControl runTime; writeInterval 100; purgeWrite 0; writeFormat ascii; writePrecision 12;
+""")
+
+    # Initial and boundary conditions: PCM cold side = 350 K (fully liquid, k_eff = 4.0), solid2 hot side = 250 K (k = 1.0)
+    # Coupled interface uses kappaMethod solidThermo to query thermo.kappa()
+    with open(os.path.join(case5_dir, "0/pcm/T"), "w") as f:
+        f.write("""FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object T; }
+dimensions [0 0 0 1 0 0 0]; internalField uniform 350.0;
+boundaryField {
+    pcm_cold { type fixedValue; value uniform 350.0; }
+    pcm_to_solid2 { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 350.0; Tnbr T; kappaMethod solidThermo; }
+    emptyFaces { type empty; }
+}
+""")
+    with open(os.path.join(case5_dir, "0/pcm/h"), "w") as f:
+        f.write("""FoamFile { version 2.0; format ascii; class volScalarField; location "0/pcm"; object h; }
+dimensions [0 2 -2 0 0 0 0]; internalField uniform 35000;
+boundaryField {
+    pcm_cold { type fixedValue; value uniform 35000; }
+    pcm_to_solid2 { type calculated; value uniform 35000; }
+    emptyFaces { type empty; }
+}
+""")
+
+    with open(os.path.join(case5_dir, "0/solid2/T"), "w") as f:
+        f.write("""FoamFile { version 2.0; format ascii; class volScalarField; location "0/solid2"; object T; }
+dimensions [0 0 0 1 0 0 0]; internalField uniform 250.0;
+boundaryField {
+    solid2_hot { type fixedValue; value uniform 250.0; }
+    solid2_to_pcm { type compressible::turbulentTemperatureRadCoupledMixed; value uniform 250.0; Tnbr T; kappaMethod solidThermo; }
+    emptyFaces { type empty; }
+}
+""")
+    with open(os.path.join(case5_dir, "0/solid2/h"), "w") as f:
+        f.write("""FoamFile { version 2.0; format ascii; class volScalarField; location "0/solid2"; object h; }
+dimensions [0 2 -2 0 0 0 0]; internalField uniform 25000;
+boundaryField {
+    solid2_hot { type fixedValue; value uniform 25000; }
+    solid2_to_pcm { type calculated; value uniform 25000; }
+    emptyFaces { type empty; }
+}
+""")
+
+    res5 = run_cmd(f"cd {case5_dir} && bash -c '{of_env}; {solver_bin}'")
+
+    T_s2_c5 = parse_openfoam_field(os.path.join(case5_dir, "100/solid2/T"), num_cells=50)
+    T_pcm_c5 = parse_openfoam_field(os.path.join(case5_dir, "100/pcm/T"), num_cells=50)
+
+    T_s2_interface_cell = T_s2_c5[0] if T_s2_c5 else 0.0
+    T_pcm_interface_cell = T_pcm_c5[-1] if T_pcm_c5 else 0.0
+
+    # Interface flux: q = k_solid2 * (T_s2_cell - 250.0) / (0.05 - 0.0005)
+    # Expected: q_expected = 1600.0 W/m^2 (vs 1000.0 W/m^2 if kappa override was erased)
+    q_flux_sim = 1.0 * (T_s2_interface_cell - 250.0) / (0.05 - 0.0005)
+    q_flux_expected = 1600.0
+    flux_err = abs(q_flux_sim - q_flux_expected) / q_flux_expected
+
+    print(f"PCM Interface Cell T    : {T_pcm_interface_cell:.3f} K")
+    print(f"Solid2 Interface Cell T : {T_s2_interface_cell:.3f} K (Analytical: ~329.2 K; with erased override: ~299.5 K)")
+    print(f"Computed Interface Flux : {q_flux_sim:.2f} W/m^2 (Expected: 1600.00 W/m^2; with erased override: 1000.00 W/m^2)")
+    print(f"Flux Relative Error     : {flux_err:.4e}")
+
+    # Pass if flux error < 2% and interface cell temperature is within 1.5 K of 329.2 K
+    # (Erased override would give flux error ~37.5% and T ~ 299.5 K)
+    pass_t5 = (flux_err < 0.02) and (abs(T_s2_interface_cell - 329.2) < 1.5)
+    print(f"Test 5 Status: {'PASSED' if pass_t5 else 'FAILED'}")
+
+    summary_lines = [
+        "=======================================================",
+        "      COUPLED MULTI-REGION VERIFICATION RESULTS        ",
+        "=======================================================",
+        f"Test 1 (nOuterCorr = 10 Convergence): {'PASSED' if pass_t1 else 'FAILED'}",
+        f"  - Concatenated T max difference    : {max_dT:.4e} K",
+        f"  - Concatenated alpha max difference: {max_da:.4e}",
+        f"  - Interface T discontinuity        : {interface_dT:.4e} K",
+        f"  - Coupled domain mean alpha        : {mean_a:.4f}",
+        f"Test 2 (nOuterCorr = 1 FatalError)  : {'PASSED' if pass_t2 else 'FAILED'}",
+        f"  - FatalError triggered as expected : {pass_t2}",
+        f"Test 3 (Coupled Write & Restart)    : {'PASSED' if pass_t3 else 'FAILED'}",
+        f"  - Restart vs continuous max T diff : {diff_restart:.4e} K",
+        f"  - T_reversal calculated patch check: {pass_t3_disk}",
+        f"Test 4 (Coupled EHC Energy Balance) : {'PASSED' if pass_t4 else 'FAILED'}",
+        f"  - Initial Total Energy             : {E0_total:.6f} J",
+        f"  - Final Total Energy               : {E_final_total:.6f} J",
+        f"  - Coupled Energy Relative Error    : {rel_energy_err:.4e}",
+        f"Test 5 (Coupled k_eff Interface Flux): {'PASSED' if pass_t5 else 'FAILED'}",
+        f"  - Expected Interface Flux          : {q_flux_expected:.2f} W/m^2",
+        f"  - Simulated Interface Flux         : {q_flux_sim:.2f} W/m^2",
+        f"  - Relative Flux Error              : {flux_err:.4e}",
+        f"  - Solid2 Interface Cell T          : {T_s2_interface_cell:.4f} K",
+        f"  - PCM Interface Cell T             : {T_pcm_interface_cell:.4f} K",
+        "-------------------------------------------------------"
+    ]
+
+    all_coupled_passed = pass_t1 and pass_t2 and pass_t3 and pass_t4 and pass_t5
+    if all_coupled_passed:
+        summary_lines.append("ALL COUPLED MULTI-REGION VERIFICATION TESTS PASSED SUCCESSFULLY!")
+    else:
+        summary_lines.append("COUPLED TEST FAILED!")
+
+    for line in summary_lines:
+        print(line)
+
+    results_file = os.path.join(base_dir, "coupled_verification_results.txt")
+    with open(results_file, "w") as f:
+        f.write("\n".join(summary_lines) + "\n")
+    print(f"\nSaved verification results to {results_file}")
+
+    if not all_coupled_passed:
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
+
+

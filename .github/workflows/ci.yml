@@ -1,0 +1,56 @@
+name: CI Verification
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  verification:
+    name: Run Python Verification Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy matplotlib pillow pyyaml
+
+      - name: Validate CITATION.cff
+        run: |
+          python3 -c "import yaml; yaml.safe_load(open('CITATION.cff'))"
+
+      - name: Verify Documentation Links
+        run: |
+          python3 -c "
+          import re, os, glob
+          files = glob.glob('docs/*.md') + ['README.md']
+          broken = []
+          for f in files:
+              content = open(f).read()
+              if 'file:///' in content:
+                  broken.append((f, 'contains file:/// absolute link'))
+              dirname = os.path.dirname(f)
+              links = re.findall(r'\[.*?\]\(([^)#:\s]+(?:#[^)]*)?)\)', content)
+              img_links = re.findall(r'!\[.*?\]\(([^)#:\s]+)\)', content)
+              for l in links + img_links:
+                  p = l.split('#')[0]
+                  if not p or p.startswith('http'):
+                      continue
+                  fp = os.path.normpath(os.path.join(dirname, p))
+                  if not os.path.exists(fp):
+                      broken.append((f, f'broken link: {l} -> {fp}'))
+          if broken:
+              for b in broken:
+                  print(b)
+              exit(1)
+          print('All links and media paths valid!')
+          "

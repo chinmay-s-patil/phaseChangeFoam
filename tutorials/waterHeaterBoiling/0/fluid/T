@@ -1,0 +1,48 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    location    "0/fluid";
+    object      T;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+dimensions      [0 0 0 1 0 0 0];
+
+internalField   uniform 365.0;     // Initial water temperature: 365 K (91.85 deg C)
+
+boundaryField
+{
+    // Interface coupled with the solid heater region
+    fluid_to_heater
+    {
+        type            compressible::turbulentTemperatureCoupledBaffleMixed;
+        Tnbr            T;
+        kappaMethod     fluidThermo;
+        value           uniform 365.0;
+    }
+
+    // Top outlet wall / atmosphere
+    top
+    {
+        type            inletOutlet;
+        inletValue      uniform 365.0;
+        value           uniform 365.0;
+    }
+
+    // Side walls
+    walls
+    {
+        type            zeroGradient;
+    }
+}
+
+// ************************************************************************* //

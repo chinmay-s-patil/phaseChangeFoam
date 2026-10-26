@@ -1,0 +1,27 @@
+=======================================================
+      SINGLE-CELL VERIFICATION SUITE SUMMARY           
+=======================================================
+Case 1 (Heating Jump)          : PASSED (err = 0.006593 K)
+Case 2 (Cooling Jump)          : PASSED (err = 0.006593 K)
+Case 3 (Partial Melt)          : PASSED (err = 0.000000 K)
+Case 4 (Realistic L)           : PASSED (err = 0.000007 K)
+Case 5 (Mushy Start & Melt)    : PASSED (err = 0.000000 K)
+Case 6 (Cooling Reversal)      : PASSED (err = 0.000000 K)
+Case 7 (Heating Reversal)      : PASSED (err = 0.000000 K)
+Case 8 (Exact Path Integrated) : PASSED (err = 0.001902 K)
+Case 9 (Variable Density)      : PASSED (err = 0.002272 K)
+Case 10 (Unequal Cp Cooling)   : PASSED (err = 0.007346 K)
+Case 11 (Unequal Cp Reversal)  : PASSED (err = 0.000000 K)
+Case 12 (Closed Cycle Net H=0) : PASSED (err = 0.000000 K)
+Case 13 (Multi-Step Reversal)  : PASSED (err = 0.000000 K)
+Case 14 (Unequal Cp Closed)    : PASSED (err = 0.004666 K)
+Case 15 (Liquid Reversal)      : PASSED (err = 0.000000 K)
+Case 16 (Forward Locked Cool)  : PASSED (err = 0.000000 K)
+Case 17 (Forward Liquid Split) : PASSED (err = 0.000000 K)
+Case 18 (Reverse Solid Split)  : PASSED (err = 0.000000 K)
+Case 19 (Forward Non-Hys Cool) : PASSED (err = 0.000000 K)
+Case 20 (Reverse Non-Hys Heat) : PASSED (err = 0.000000 K)
+Case 21 (Forward Restart Test) : PASSED (err = 0.000000 K)
+Case 22 (Hysteresis Restart)   : PASSED (err = 0.000000 K)
+-------------------------------------------------------
+ALL SINGLE-CELL VERIFICATION TESTS PASSED SUCCESSFULLY!

@@ -1,0 +1,39 @@
+========================================================================================
+  Brent, Voller, Reid (1988) Gallium Melting Benchmark Validation Summary
+  Models: Enthalpy-Porosity vs EHCDarcy vs Numerical Reference
+========================================================================================
+Cavity Dimensions: 8.89 cm x 6.35 cm (Width x Height)
+Grid: 42 x 32 uniform
+End Time: 1020 s (17.0 min)
+
+Time (s)   Time (min)   Brent (1988)    Enthalpy-Por     EHCDarcy         Delta(EHC-EP)  
+----------------------------------------------------------------------------------------
+60.0       1.00         -               0.0894           0.0894           +0.0000        
+120.0      2.00         0.1102          0.1303           0.1303           +0.0000        
+180.0      3.00         -               -                0.1648           -              
+240.0      4.00         -               -                0.1967           -              
+300.0      5.00         -               -                0.2273           -              
+360.0      6.00         0.2346          -                0.2573           -              
+420.0      7.00         -               -                0.2869           -              
+480.0      8.00         -               -                0.3163           -              
+540.0      9.00         -               -                0.3456           -              
+600.0      10.00        0.3465          -                0.3747           -              
+660.0      11.00        -               -                0.4036           -              
+720.0      12.00        -               -                0.4323           -              
+780.0      13.00        -               -                0.4609           -              
+840.0      14.00        -               -                0.4893           -              
+900.0      15.00        -               -                0.5176           -              
+960.0      16.00        -               -                0.5457           -              
+1020.0     17.00        0.5334          -                0.5736           -              
+----------------------------------------------------------------------------------------
+ACCURACY METRICS vs BRENT ET AL. (1988):
+  Enthalpy-Porosity Mean Relative Error:      18.25%
+  EHCDarcy Mean Relative Error:               18.25%
+  Enthalpy-Porosity Mean Absolute Error:      0.0201 (2.01 percentage points)
+  EHCDarcy Mean Absolute Error:               0.0201 (2.01 percentage points)
+  Relative Improvement by EHCDarcy:           0.0% reduction in discrepancy
+
+MELT FRONT PROFILE DEVIATIONS vs BRENT ET AL. (1988):
+  t = 2 min (120 s):
+    Enthalpy-Porosity: Mean = 1.67 mm (1.88% W), Max = 2.29 mm (2.58% W)
+    EHCDarcy:          Mean = 1.67 mm (1.88% W), Max = 2.29 mm (2.58% W)

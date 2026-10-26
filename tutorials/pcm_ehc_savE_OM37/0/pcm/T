@@ -1,0 +1,44 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    location    "0/pcm";
+    object      T;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+dimensions      [0 0 0 1 0 0 0];
+
+internalField   uniform 298.15;    // Initial solid PCM temperature: 25 °C (298.15 K)
+
+boundaryField
+{
+    // Heated bottom surface
+    bottom
+    {
+        type            fixedValue;
+        value           uniform 328.15; // 55 °C heating temperature (above 42 °C liquidus)
+    }
+
+    // Top surface
+    top
+    {
+        type            zeroGradient;
+    }
+
+    // Insulated side walls
+    walls
+    {
+        type            zeroGradient;
+    }
+}
+
+// ************************************************************************* //
