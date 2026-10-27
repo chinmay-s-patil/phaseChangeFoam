@@ -5,7 +5,7 @@
 [![Docker](https://github.com/chinmay-s-patil/phaseChangeFoam/actions/workflows/docker.yml/badge.svg)](https://github.com/chinmay-s-patil/phaseChangeFoam/actions/workflows/docker.yml)
 [![Docker image](https://img.shields.io/badge/docker%20image-ghcr.io%2Fchinmay--s--patil%2Fphasechangefoam-0085a0?logo=docker&logoColor=white)](https://github.com/chinmay-s-patil/phaseChangeFoam/pkgs/container/phasechangefoam)
 [![Release](https://img.shields.io/github/v/release/chinmay-s-patil/phaseChangeFoam?color=blue)](https://github.com/chinmay-s-patil/phaseChangeFoam/releases)
-[![License](https://img.shields.io/badge/license-GPL--3.0-green.svg)](LICENSE)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-green.svg)](LICENSE)
 
 `phaseChangeFoam` is a multi-region conjugate heat transfer (CHT) solver suite for OpenFOAM with integrated phase change physics. It provides solid-liquid phase change materials (PCM) with thermal hysteresis and Darcy mushy-zone drag, as well as species evaporation and boiling kinetics across coupled solid and fluid domains.
 
@@ -103,19 +103,6 @@ docker run --rm -it -v "$PWD":/home/openfoam/run -w /home/openfoam/run \
 
 ## Quick Start and Verification
 
-### Running a Tutorial Case
-
-Run the organic PCM melting tutorial (`pcm_ehc_savE_OM37`) with subcooling hysteresis:
-
-```bash
-cd tutorials/pcm_ehc_savE_OM37
-blockMesh -region pcm
-phaseChangeMultiRegionFoam
-```
-
-* **Expected runtime**: ~8 seconds on a single CPU core.
-* **Post-processing**: Open the case in ParaView (`paraFoam -region pcm` or touch `case.foam`) and view fields `pcm/phaseFraction` and `pcm/T` to observe the advancing melt front and phase state transitions.
-
 ### Running Test Suites
 
 ```bash
@@ -170,6 +157,6 @@ To cite the `phaseChangeFoam` software, see [`CITATION.cff`](CITATION.cff).
 
 ## License and Trademark Notice
 
-`phaseChangeFoam` is free software distributed under the GNU General Public License v3 ([`LICENSE`](LICENSE) or [GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.html)).
+`phaseChangeFoam` is free software licensed under GPL-3.0-or-later; see [`LICENSE`](LICENSE).
 
 *OPENFOAM® is a registered trade mark of OpenCFD Limited, producer and distributor of the OpenFOAM software via www.openfoam.com. This offering is not approved or endorsed by OpenCFD Limited.*

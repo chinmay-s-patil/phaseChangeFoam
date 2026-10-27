@@ -44,3 +44,5 @@ ideas/
 scratch/
 # src/solvers/phaseChangeMultiRegionSimpleFoam/
 validation/papers
+tutorials/
+log.tree
