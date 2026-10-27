@@ -103,6 +103,9 @@ docker run --rm -it -v "$PWD":/home/openfoam/run -w /home/openfoam/run \
 
 ## Quick Start and Verification
 
+> [!NOTE]
+> Tutorial cases and demonstration workflows are currently a work in progress and will be provided in a future release. Please refer to the verification and validation test suites below for runnable cases.
+
 ### Running Test Suites
 
 ```bash
@@ -126,7 +129,7 @@ Detailed reference documentation is versioned in the `docs/` directory:
 | :--- | :--- |
 | [`docs/models.md`](docs/models.md) | Governing equations, thermodynamic consistency, species evaporation, and PCM formulations |
 | [`docs/dictionary.md`](docs/dictionary.md) | Keyword reference tables, minimal templates per model, and solver controls |
-| [`docs/tutorials.md`](docs/tutorials.md) | Setup walkthroughs for boiling and PCM melting cases with manufacturer datasheets |
+| [`docs/tutorials.md`](docs/tutorials.md) | Tutorial status note (work in progress) |
 | [`docs/validation.md`](docs/validation.md) | Verification ladder, Brent gallium melting benchmark, and Roache GCI spatial study |
 | [`docs/development.md`](docs/development.md) | Code architecture, PIMPLE execution sequence, Picard loop, and adding new models |
 
