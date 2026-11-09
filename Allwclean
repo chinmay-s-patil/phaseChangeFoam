@@ -1,0 +1,9 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Chinmay S Patil
+cd "${0%/*}" || exit 1
+
+echo "Cleaning phaseChangeFoam..."
+( cd src/solvers/phaseChangeMultiRegionFoam && wclean )
+( cd src/solvers/phaseChangeMultiRegionSimpleFoam && wclean )
+( cd src/utilities/writePCDict && wclean )

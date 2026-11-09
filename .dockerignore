@@ -1,0 +1,16 @@
+.git
+.github
+**/Make/linux*
+Make/linux*
+*.o
+*.so
+*.dep
+[1-9]*
+0.*
+!0/
+dynamicCode/
+log.*
+*.log
+__pycache__/
+*.pyc
+.pytest_cache/

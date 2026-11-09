@@ -1,0 +1,22 @@
+version = 1
+SPDX-PackageName = "phaseChangeFoam"
+SPDX-PackageSupplier = "Chinmay S Patil"
+SPDX-PackageDownloadLocation = "https://github.com/chinmay-s-patil/phaseChangeFoam"
+
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Chinmay S Patil"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
+[[annotations]]
+path = "src/solvers/*/Make/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2011-2016 OpenFOAM Foundation", "2017-2019,2022 OpenCFD Ltd.", "2026 Chinmay S Patil"]
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
+[[annotations]]
+path = "validation/gallium2D/reference_data/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Chinmay S Patil (digitised from Brent, Voller & Reid, 1988)"
+SPDX-License-Identifier = "GPL-3.0-or-later"

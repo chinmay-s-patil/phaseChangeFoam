@@ -1,0 +1,48 @@
+=======================================================
+      LEE FLUID PHASE CHANGE VERIFICATION RESULTS      
+=======================================================
+Test 1 (Quantitative Evaporation)      : PASSED
+  - Species Mass Sum |sum Yi - 1|       : 2.01e-13
+  - Interspecies Mass Balance |dYl+dYv| : 2.01e-13
+  - Numerical deltaYl                   : -3.67144600e-06
+  - Analytic deltaYl increment rel error: 5.467087e-08
+  - Numerical deltaT                    : -0.008297 K
+  - Analytic deltaT increment rel error : 5.949510e-08
+Test 2 (Quantitative Condensation)     : PASSED
+  - Species Mass Sum |sum Yi - 1|       : 2.03e-14
+  - Interspecies Mass Balance |dYl+dYv| : 2.04e-14
+  - Numerical deltaYv                   : -7.04810400e-06
+  - Analytic deltaYv increment rel error: 2.891515e-09
+  - Numerical deltaT                    : 0.015929 K
+  - Analytic deltaT increment rel error : 3.768350e-10
+Test 3 (Clausius-Clapeyron Tsat(p))    : PASSED
+  - Analytical Tsat(200 kPa)            : 393.5422 K
+  - Sub-saturated (390 K) evap prevented: True
+  - Super-saturated rate rel error      : 1.482009e-08
+Test 4 (High C*dt Limiter Boundary)    : PASSED
+  - Mass limiter non-negative           : True (Yl = 0.196969)
+  - Thermal limiter T >= Tsat           : True (T = 373.1500 K)
+Test 5 (Missing Species Guardrail)     : PASSED
+  - FatalIOError triggered              : True
+Test 6 (Evap Outer-Corrector Invar.)   : PASSED
+  - Invariance across nOuter in [2,3,4] : True
+  - Final T                             : 373.150000 K
+Test 7 (Cond Outer-Corrector Invar.)   : PASSED
+  - Invariance across nOuter in [2,3,4] : True
+  - Final T                             : 373.150000 K
+Test 8 (Heated Pot Energy Balance)     : PASSED
+  - Total Heat Injected                 : 300000.00 J/m^3
+  - Total Energy Stored                 : 300000.00 J/m^3
+  - Discrete Energy Balance Rel Error   : 0.0000%
+  - Plateau Offset dt-Halving Ratio     : 0.5000 (Expected: 0.5000)
+Test 8b (Liquid Exhaustion/Superheat)  : PASSED
+  - Exhaustion Final Yl                 : 0.000000
+  - Superheated Final T                 : 543.5526 K
+  - Energy Balance Rel Error            : 0.000000%
+Test 9 (Unequal-Cp Enthalpy Cons.)     : PASSED
+  - Species Mass Sum |sum Yi - 1|       : 2.01e-13
+  - Initial E_abs                       : 110945.214728 J/m^3
+  - Final E_abs                         : 110944.584397 J/m^3
+  - Absolute Enthalpy Rel Error         : 5.681456e-06
+-------------------------------------------------------
+All Lee model verification tests passed.

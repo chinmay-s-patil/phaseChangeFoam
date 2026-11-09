@@ -1,0 +1,35 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Chinmay S Patil
+#------------------------------------------------------------------------------
+# Script
+#     Allclean
+#
+# Description
+#     Cleans solver build artifacts, verification run cases, and validation
+#     benchmark suites across the entire repository.
+#------------------------------------------------------------------------------
+cd "${0%/*}" || exit 1
+
+echo "========================================"
+echo " Cleaning phaseChangeFoam Repository"
+echo "========================================"
+
+# 1. Clean solver binaries and compilation objects
+if [ -f "./Allwclean" ]; then
+    ./Allwclean
+fi
+
+# 2. Clean verification cases, time steps, and temporary caches
+if [ -f "./verification/Allclean" ]; then
+    ./verification/Allclean
+fi
+
+# 3. Clean validation benchmark run cases and parameter sweeps
+if [ -f "./validation/Allclean" ]; then
+    ./validation/Allclean
+fi
+
+echo "========================================"
+echo " Repository clean completed."
+echo "========================================"

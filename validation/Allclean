@@ -1,0 +1,57 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Chinmay S Patil
+#------------------------------------------------------------------------------
+# Script
+#     Allclean
+#
+# Description
+#     Removes all generated simulation run directories, time steps, meshes,
+#     logs, and temporary caches across the validation test suite.
+#------------------------------------------------------------------------------
+cd "${0%/*}" || exit 1
+
+echo "Cleaning validation run directories and temporary files..."
+
+# 1. Rung benchmark case directories
+for dir in */case; do
+    if [ -d "$dir" ]; then
+        echo "  Removing $dir"
+        rm -rf "$dir"
+    fi
+done
+
+# 2. Gallium 2D detailed analysis run suites
+analysis="gallium2D/analysis"
+if [ -d "$analysis" ]; then
+    for target in \
+        "$analysis"/study_17min \
+        "$analysis"/energy_audit_exact \
+        "$analysis"/case_ehcDarcy \
+        "$analysis"/case_schemes_limitedLinear \
+        "$analysis"/dt_convergence_study \
+        "$analysis"/test_energy \
+        "$analysis"/energy_balance/sweep_runs \
+        "$analysis"/energy_balance/case_audit_* \
+        "$analysis"/energy_balance/ep_relaxation_study/ep_lam* \
+        "$analysis"/energy_balance/ep_relaxation_study/case_* \
+        "$analysis"/dt_sensitivity/case_* \
+        "$analysis"/parameter_sensitivity/case_*
+    do
+        for d in $target; do
+            if [ -d "$d" ]; then
+                echo "  Removing $d"
+                rm -rf "$d"
+            fi
+        done
+    done
+fi
+
+# 3. Clean any stray case directories or caches
+find . -mindepth 2 -maxdepth 4 -type d -name "case*" -not -path "*/papers/*" -exec rm -rf {} + 2>/dev/null
+find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null
+find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null
+find . -type f -name "log.*" -exec rm -f {} + 2>/dev/null
+find . -type f -name "*.log" -not -path "*/papers/*" -exec rm -f {} + 2>/dev/null
+
+echo "Validation suite cleaned successfully."

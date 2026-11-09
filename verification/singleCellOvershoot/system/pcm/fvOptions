@@ -1,0 +1,13 @@
+
+FoamFile { version 2.0; format ascii; class dictionary; location "system/pcm"; object fvOptions; }
+heatSource
+{
+    type            scalarSemiImplicitSource;
+    active          true;
+    selectionMode   all;
+    volumeMode      specific;
+    injectionRateSuSp
+    {
+        h           (2.4e6 0);
+    }
+}

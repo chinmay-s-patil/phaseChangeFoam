@@ -1,0 +1,57 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Chinmay S Patil
+#------------------------------------------------------------------------------
+# Script
+#     Allclean
+#
+# Description
+#     Removes all generated simulation run directories, time steps, meshes,
+#     logs, and temporary caches across the verification test suites.
+#------------------------------------------------------------------------------
+cd "${0%/*}" || exit 1
+
+echo "Cleaning verification run directories and temporary files..."
+
+# 1. Remove subcase and test run directories
+for dir in \
+    */case* \
+    */*/case* \
+    */test_* \
+    singleCellOvershoot_run* \
+    */singleCellOvershoot_run*
+do
+    if [ -d "$dir" ]; then
+        echo "  Removing $dir"
+        rm -rf "$dir"
+    fi
+done
+
+# 2. Remove OpenFOAM time directories in test suites (protecting initial 0/)
+for suite in *; do
+    if [ -d "$suite" ]; then
+        # Remove directories starting with 1-9 (e.g. 100, 2000, etc.)
+        for time_dir in "$suite"/[1-9]*; do
+            if [ -d "$time_dir" ]; then
+                rm -rf "$time_dir"
+            fi
+        done
+        # Remove non-zero decimal time directories (e.g. 0.01, 0.1, etc., preserving 0)
+        for time_dir in "$suite"/0.*; do
+            if [ -d "$time_dir" ]; then
+                rm -rf "$time_dir"
+            fi
+        done
+    fi
+done
+
+# 3. Clean postProcessing, processor directories, logs, and caches
+find . -type d -name "postProcessing" -exec rm -rf {} + 2>/dev/null
+find . -type d -name "processor*" -exec rm -rf {} + 2>/dev/null
+find . -type d -name "dynamicCode" -exec rm -rf {} + 2>/dev/null
+find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null
+find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null
+find . -type f -name "log.*" -exec rm -f {} + 2>/dev/null
+find . -type f -name "*.log" -exec rm -f {} + 2>/dev/null
+
+echo "Verification suite cleaned successfully."
