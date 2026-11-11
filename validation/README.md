@@ -8,39 +8,29 @@ For the complete verification and validation methodology, quantitative results, 
 
 ## Validation Hierarchy
 
-```
-[ Rung 5: 3D Pure Gallium Cavity Melting ]
-Gau & Viskanta (1986)
-Physical experimental validation screening with no-slip sidewall braking
-Transient solver: phaseChangeMultiRegionFoam
-               ▲
-               │  (Physical experimental validation)
-               │
-[ Rung 4: 2D Gallium Melting Benchmark ]
-Brent, Voller, Reid (1988) / Ye & Arıcı (2023)
-Coupled phase change, Darcy mushy drag, natural convection (Ra ≈ 6.06e5, Pr = 0.0216, Ste = 0.039)
-Transient solver: phaseChangeMultiRegionFoam
-               ▲
-               │  (Coupled convection-diffusion phase change)
-               │
-[ Rung 3: 2D Pure Tin Melting ]
-Bertrand et al. (1999) / Hannoun et al. (2003)
-Liquid metal melting benchmark (Ra = 2.50e5, Pr = 0.02, Ste = 0.01)
-Transient solver: phaseChangeMultiRegionFoam
-               ▲
-               │  (Low-Prandtl number liquid metal regime)
-               │
-[ Rung 2: EHC Cyclic Thermal Hysteresis ]
-Direction-dependent melting and freezing loop with 5 K hysteresis window
-State-variable subcooling tracking and discrete energy conservation
-Transient solver: phaseChangeMultiRegionFoam
-               ▲
-               │  (Hysteresis path state logic)
-               │
-[ Rung 1: Natural Convection Cavity ]
-de Vahl Davis (1983)
-Pure buoyancy circulation (Ra = 10^5, Pr = 0.71) in square cavity
-Steady-state solver: phaseChangeMultiRegionSimpleFoam
+```mermaid
+flowchart BT
+    R1["<b>Rung 1: Natural Convection Cavity</b><br/><br/>de Vahl Davis (1983)<br/>Pure buoyancy circulation in a square cavity<br/>Ra = 10⁵, Pr = 0.71<br/><br/><b>Steady-state solver:</b><br/>phaseChangeMultiRegionSimpleFoam"]
+
+    R2["<b>Rung 2: EHC Cyclic Thermal Hysteresis</b><br/><br/>Direction-dependent melting and freezing loop<br/>5 K hysteresis window<br/>State-variable subcooling tracking<br/>Discrete energy conservation<br/><br/><b>Transient solver:</b><br/>phaseChangeMultiRegionFoam"]
+
+    R3["<b>Rung 3: 2D Pure Tin Melting</b><br/><br/>Bertrand et al. (1999) / Hannoun et al. (2003)<br/>Liquid metal melting benchmark<br/>Ra = 2.50 × 10⁵, Pr = 0.02, Ste = 0.01<br/><br/><b>Transient solver:</b><br/>phaseChangeMultiRegionFoam"]
+
+    R4["<b>Rung 4: 2D Gallium Melting Benchmark</b><br/><br/>Brent, Voller, Reid (1988) / Ye &amp; Arıcı (2023)<br/>Coupled phase change, Darcy mushy drag,<br/>and natural convection<br/>Ra ≈ 6.06 × 10⁵, Pr = 0.0216, Ste = 0.039<br/><br/><b>Transient solver:</b><br/>phaseChangeMultiRegionFoam"]
+
+    R5["<b>Rung 5: 3D Pure Gallium Cavity Melting</b><br/><br/>Gau &amp; Viskanta (1986)<br/>Physical experimental validation screening<br/>with no-slip sidewall braking<br/><br/><b>Transient solver:</b><br/>phaseChangeMultiRegionFoam"]
+
+    R1 -->|"Hysteresis path state logic"| R2
+    R2 -->|"Low-Prandtl number liquid metal regime"| R3
+    R3 -->|"Coupled convection-diffusion phase change"| R4
+    R4 -->|"Physical experimental validation"| R5
+
+    classDef steady fill:#e8f1ff,stroke:#3973ac,color:#17365d,stroke-width:2px
+    classDef transient fill:#eaf5eb,stroke:#4b8b52,color:#234d27,stroke-width:2px
+    class R1 steady
+    class R2,R3,R4,R5 transient
+
+    linkStyle default stroke:#777,stroke-width:2px
 ```
 
 ---

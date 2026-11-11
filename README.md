@@ -5,6 +5,7 @@
 [![Docker](https://github.com/chinmay-s-patil/phaseChangeFoam/actions/workflows/docker.yml/badge.svg)](https://github.com/chinmay-s-patil/phaseChangeFoam/actions/workflows/docker.yml)
 [![Docker image](https://img.shields.io/badge/docker%20image-ghcr.io%2Fchinmay--s--patil%2Fphasechangefoam-0085a0?logo=docker&logoColor=white)](https://github.com/chinmay-s-patil/phaseChangeFoam/pkgs/container/phasechangefoam)
 [![Release](https://img.shields.io/github/v/release/chinmay-s-patil/phaseChangeFoam?color=blue)](https://github.com/chinmay-s-patil/phaseChangeFoam/releases)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24093440.svg)](https://doi.org/10.5281/zenodo.24093440)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-green.svg)](LICENSE)
 
 `phaseChangeFoam` is a multi-region conjugate heat transfer (CHT) solver suite for OpenFOAM with integrated phase change physics. It provides solid-liquid phase change materials (PCM) with thermal hysteresis and Darcy mushy-zone drag, as well as species evaporation and boiling kinetics across coupled solid and fluid domains.
@@ -196,7 +197,7 @@ For full quantitative tables, ASME GCI grid studies, and parametric sweeps ($\De
 
 ### Citation
 
-If you use `phaseChangeFoam` in your research or publications, please cite it as detailed in [`CITATION.cff`](CITATION.cff):
+If you use `phaseChangeFoam` in your research or publications, please cite it as detailed in [`CITATION.cff`](CITATION.cff) (DOI: [10.5281/zenodo.24093440](https://doi.org/10.5281/zenodo.24093440)):
 
 ```bibtex
 @software{patil2026phasechangefoam,
@@ -204,7 +205,9 @@ If you use `phaseChangeFoam` in your research or publications, please cite it as
   title        = {{phaseChangeFoam}: Multi-Region Phase Change and Conjugate Heat Transfer Suite for {OpenFOAM}},
   version      = {0.1.0},
   year         = {2026},
-  url          = {https://github.com/chinmay-s-patil/phaseChangeFoam}
+  publisher    = {Zenodo},
+  doi          = {10.5281/zenodo.24093440},
+  url          = {https://doi.org/10.5281/zenodo.24093440}
 }
 ```
 
